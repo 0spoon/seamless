@@ -115,20 +115,72 @@
   </section>
   {{end}}
 
-  {{/* The knowledge sky: every active memory as a star, one galaxy per scope.
-       Brightness is use; twinkling means it reached an agent in the last day;
-       the page script flares a star the moment an injection names it. */}}
+  {{/* The knowledge sky: a star chart of every active memory (constellation.go).
+       Angle is scope, radius is when it last surfaced to an agent -- the core is
+       the last 24 hours, the rim belt never -- colour is kind, size is demand.
+       The readout beside it states the same numbers as text; static/sky.js adds
+       search, filters, the selection card, and the live beams. Everything the
+       script creates lives in the data-live-skip nodes, so a live morph updates
+       the chart and the counts without wiping what the owner is doing. */}}
   {{with .Sky}}
-  <section class="ov2-panel sky-panel" aria-label="Knowledge sky">
+  <section class="ov2-panel sky-panel" id="sky" aria-label="Knowledge sky">
     <header class="ov2-panel-head">
       <h2>Knowledge sky</h2>
-      <span class="sky-sub">{{if lt .Shown .Total}}the {{.Shown}} most used of {{.Total}} active memories{{else}}{{.Total}} active memor{{if eq .Total 1}}y{{else}}ies{{end}}{{end}} &middot; brighter stars are used more &middot; they flare as they reach an agent</span>
+      <span class="sky-sub">{{.Total}} active memor{{if eq .Total 1}}y{{else}}ies{{end}}, each placed by when it last reached an agent</span>
       <a href="/console/memories">Memories {{icon "arrow-right"}}</a>
     </header>
-    <div class="sky" data-sky>{{.SVG}}</div>
+    <div class="sky-body">
+      <div class="sky-chart">
+        {{.SVG}}
+        <div class="sky-tip" data-live-skip hidden></div>
+      </div>
+      <aside class="sky-side" aria-label="Sky readout">
+        <div class="sky-find" data-live-skip>
+          <label class="sky-search">{{icon "search"}}<input type="search" data-sky-q placeholder="Find a memory" autocomplete="off" spellcheck="false" aria-label="Find a memory by name, description, tag, or scope"></label>
+        </div>
+        <div class="sky-view" data-live-skip aria-live="polite"></div>
+        <div class="sky-summary">
+          <h3 class="sky-eyebrow">Last surfaced to an agent</h3>
+          <div class="sky-bands">
+            {{range .Bands}}
+            <button type="button" class="sky-band" data-sky-band="{{.Band}}" data-b="{{.Band}}" aria-pressed="false">
+              <i class="sky-swatch" data-b="{{.Band}}"></i>
+              <span class="sky-band-l">{{.Label}}</span>
+              <span class="sky-bar"><i data-b="{{.Band}}" style="width:{{.W}}%"></i></span>
+              <b>{{.N}}</b>
+            </button>
+            {{end}}
+          </div>
+          {{if .Stale}}
+          <button type="button" class="sky-stale" data-sky-stale aria-pressed="false">
+            {{icon "timer"}}<span><strong>{{.Stale}}</strong> going stale</span><small>not surfaced in {{.StaleDays}} days</small>
+          </button>
+          {{end}}
+          <h3 class="sky-eyebrow">Scopes <span>{{len .Scopes}}</span></h3>
+          <div class="sky-scopes">
+            {{range .Scopes}}
+            <button type="button" class="sky-scope" data-sky-scope="{{.Slug}}" data-name="{{.Name}}"{{with .Href}} data-href="{{.}}"{{end}} aria-pressed="false">
+              <span class="sky-scope-name">{{.Name}}</span>
+              <b>{{.N}}</b>
+              <span class="sky-mix" aria-hidden="true">{{range .Segs}}<i data-b="{{.Band}}" style="width:{{.W}}%"></i>{{end}}</span>
+            </button>
+            {{end}}
+          </div>
+        </div>
+      </aside>
+    </div>
     <footer class="sky-legend">
-      {{range $.Data.MemByKind}}<a href="/console/memories?q={{.Kind}}" class="sky-kind"><i class="kdot" data-kind="{{.Kind}}"></i>{{.Kind}}<b>{{.N}}</b></a>{{end}}
+      <div class="sky-kinds" role="group" aria-label="Show only these kinds">
+        {{range .Kinds}}<button type="button" class="sky-kind" data-sky-kind="{{.Kind}}" aria-pressed="false"><i class="kdot" data-kind="{{.Kind}}"></i>{{.Kind}}<b>{{.N}}</b></button>{{end}}
+      </div>
+      <div class="sky-key" aria-hidden="true">
+        <span><svg viewBox="-9 -6 18 12"><circle class="k-dot" cx="-5" r="1.6"/><circle class="k-dot" cx="3" r="3.8"/></svg>bigger: agents pull it more</span>
+        <span><svg viewBox="-6 -6 12 12"><circle class="k-hollow" r="3.2"/></svg>never surfaced</span>
+        <span><svg viewBox="-6 -6 12 12"><circle class="k-dot" r="2.2"/><circle class="k-ring" r="4.8"/></svg>starred</span>
+        <span><svg viewBox="-6 -6 12 12"><circle class="k-dot" r="1.8"/><path class="k-spk" d="M-5 0H5M0 -5V5"/></svg>new today</span>
+      </div>
     </footer>
+    <template id="sky-icons">{{icon "x"}}{{icon "arrow-right"}}{{icon "star"}}{{icon "timer"}}{{icon "folder-open"}}</template>
   </section>
   {{end}}
 
@@ -268,54 +320,6 @@
   document.addEventListener('seam:content-updated', sync);
   sync();
 })();
-(function () {
-  'use strict';
-  /* The knowledge sky: a glass name tag follows the pointer over a star, and
-     a star flares when a live injection names it (seam:event carries every SSE
-     frame; retrieval.injected lists the surfaced memories in payload.item_ids).
-     Delegated to the document -- the live morph can replace the SVG. */
-  var tip = null;
-  function hide() { if (tip) { tip.remove(); tip = null; } }
-  document.addEventListener('mouseover', function (e) {
-    var star = e.target.closest ? e.target.closest('.sky .star') : null;
-    if (!star) return;
-    hide();
-    tip = document.createElement('div');
-    tip.className = 'sky-tip';
-    var name = document.createElement('strong');
-    name.textContent = star.getAttribute('data-name') || '';
-    var meta = document.createElement('span');
-    meta.textContent = star.getAttribute('data-meta') || '';
-    tip.appendChild(name);
-    tip.appendChild(meta);
-    tip.style.setProperty('--c', star.style.fill || 'var(--brand)');
-    document.body.appendChild(tip);
-    var r = star.getBoundingClientRect();
-    var x = Math.min(window.innerWidth - tip.offsetWidth - 12, Math.max(12, r.left + r.width / 2 - tip.offsetWidth / 2));
-    tip.style.left = x + 'px';
-    tip.style.top = Math.max(12, r.top - tip.offsetHeight - 12) + 'px';
-  });
-  document.addEventListener('mouseout', function (e) {
-    if (e.target.closest && e.target.closest('.sky .star')) hide();
-  });
-  window.addEventListener('scroll', hide, { passive: true });
-  function flare(id) {
-    var sky = document.querySelector('[data-sky]');
-    if (!sky || !id) return;
-    var star = sky.querySelector('.star[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
-    if (!star) return;
-    star.classList.remove('flare');
-    void star.getBoundingClientRect();
-    star.classList.add('flare');
-    setTimeout(function () { star.classList.remove('flare'); }, 1800);
-  }
-  document.addEventListener('seam:event', function (e) {
-    var d = e.detail || {};
-    if (d.kind !== 'retrieval.injected' && d.kind !== 'memory.read') return;
-    var ids = d.itemIds || (d.itemId ? [d.itemId] : []);
-    if (!Array.isArray(ids)) return;
-    ids.slice(0, 24).forEach(function (id, i) { setTimeout(function () { flare(String(id)); }, i * 70); });
-  });
-})();
 </script>
+<script src="/console/static/sky.js"></script>
 {{end}}

@@ -8698,15 +8698,29 @@ The landing page and the health check. It carries:
   `session_end`, attributed through the reporting session's harness and model.
   Warning tones appear only when reports exist; an empty rail is a positive
   "No mishaps reported" state.
-- **Knowledge sky** - every active memory drawn as a star, one galaxy per
-  project scope (global included), coloured by kind with a counted legend
-  beneath. A star's size and brightness follow its use (utility first, then
-  injections); memories that reached an agent in the last day twinkle; and a
-  star flares the moment a live injection names it. The layout is a pure
-  function of the memories and their stats, so a live refresh moves nothing
-  that did not change. Hover names a star; clicking opens it in Memories. The
-  sky draws at most the 600 most-used memories and says so when it does. It is
-  HTML only - the JSON answer carries no sky.
+- **Knowledge sky** - a star chart of every active memory, with no cap. Each
+  project scope (global included) owns a wedge sized by its share of memories,
+  largest first. Distance from the centre is when the memory last surfaced to an
+  agent: the core holds the last 24 hours, rings mark 7 and 45 days (the same
+  fresh and stale lines the memory reader and the "going stale" card use), and
+  the rim belt holds memories that have never surfaced. Colour is kind; size is
+  demand (the query-gated utility score, so a big star is one agents pull, not
+  one the briefing merely shows). Hollow stars have never surfaced, a ring marks
+  a starred memory, spikes mark one written today, and today's stars twinkle.
+  Beside the chart, a readout states the same picture as text: each ring's
+  count, the going-stale count (always equal to the attention card's), and every
+  scope with its ring mix as a bar. Point at a star for its name and description
+  (the pointer snaps to the nearest star); click it for a card with its facts and
+  a link to open it; double-click to open it directly. Type in **Find a memory**
+  to light only the matches (name, description, tag, scope, or kind) and list
+  them, with the arrow keys and Enter to step through; click a ring, the going-
+  stale line, a scope, or a kind chip to filter the same way, and point at one
+  to preview it. When an injection or a read lands on the live stream, each
+  memory it names sends a beam into the core, and the refresh that follows
+  glides the star to its new ring; a newly written memory appears with a flare.
+  A star keeps its place while its scope and ring are unchanged, so a refresh
+  moves only what changed, and search, filters, and the selection survive it.
+  It is HTML only - the JSON answer carries no sky.
 - **Recent activity** - the last twelve events, each linking to its detail page.
 
 The four judged vitals at the top (memory reach, knowledge continuity, context

@@ -174,6 +174,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/static/charts.js", s.serveChartsJS)
 	handle("GET /console/static/navigation.js", s.serveNavigationJS)
 	handle("GET /console/static/shell.js", s.serveShellJS)
+	handle("GET /console/static/sky.js", s.serveSkyJS)
 	handle("GET /console/static/favicon.svg", s.serveFavicon)
 	handle("GET /console/login", s.loginForm)
 	handle("POST /console/login", s.parseForm(formBodySmall, s.loginSubmit))
@@ -531,6 +532,14 @@ func (s *Service) serveShellJS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_, _ = w.Write(shellJS)
+}
+
+// serveSkyJS serves the knowledge sky's page script, loaded by the Overview
+// only: search, filters, and the live layer over the server-drawn chart.
+func (s *Service) serveSkyJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = w.Write(skyJS)
 }
 
 func (s *Service) serveFavicon(w http.ResponseWriter, _ *http.Request) {

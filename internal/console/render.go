@@ -40,6 +40,9 @@ var navigationJS []byte
 //go:embed static/shell.js
 var shellJS []byte
 
+//go:embed static/sky.js
+var skyJS []byte
+
 //go:embed static/favicon.svg
 var faviconSVG []byte
 

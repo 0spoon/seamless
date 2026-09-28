@@ -153,6 +153,7 @@ func TestDataRefreshClients_NeverReloadDocument(t *testing.T) {
 		"layout":     string(layout),
 		"navigation": string(navigationJS),
 		"library":    string(libraryJS),
+		"sky":        string(skyJS),
 	} {
 		require.NotContains(t, source, "location.reload(", "%s must keep data refreshes inside the current document", name)
 	}
