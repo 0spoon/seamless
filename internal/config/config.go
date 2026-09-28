@@ -229,6 +229,72 @@ func (b Briefing) Validate() error {
 	return nil
 }
 
+// BriefingPreset is a named, whole-struct briefing recipe the console offers as
+// one choice. A preset sets every knob in Briefing and nothing else: the token
+// budget (budgets.max_briefing_tokens) is config-only and no preset touches it.
+type BriefingPreset struct {
+	// Key is the stable identifier ("lean", "balanced", "rich").
+	Key string
+	// Label is the owner-facing name.
+	Label string
+	// Intent is one line saying who the preset is for.
+	Intent string
+	// Briefing is the full recipe.
+	Briefing Briefing
+}
+
+// BriefingPresets returns the presets, leanest first, freshly allocated so no
+// caller can mutate a shared table. Balanced is Defaults().Briefing exactly (a
+// test asserts it), so a fresh installation is on a named preset from the start.
+func BriefingPresets() []BriefingPreset {
+	return []BriefingPreset{
+		{
+			Key: "lean", Label: "Lean",
+			Intent: "A short briefing: the rules that bind, the freshest memories, and little else.",
+			Briefing: Briefing{
+				ConstraintMaxFull: 2, ConventionMaxFull: 2,
+				MemoryMaxItems: 12, MemoryMaxAgeDays: 60,
+				FindingsCount: 2, FindingsMaxAgeDays: 30,
+				ReadyTasksShown: 2, PendingPlanMaxDays: 7, StageUnknownMaxAgeDays: 7,
+				SiblingFindingsCount: 1, IncludeParentMemories: true, IncludeSiblingMemories: false,
+				UtilityWeight: 0.4, UtilityMode: "auto", HardCapMultiplier: 2,
+			},
+		},
+		{
+			Key: "balanced", Label: "Balanced",
+			Intent:   "The defaults: enough context to start well without crowding the session.",
+			Briefing: Defaults().Briefing,
+		},
+		{
+			Key: "rich", Label: "Rich",
+			Intent: "More of everything: more rules in full, more recent work, and the family's memories too.",
+			Briefing: Briefing{
+				ConstraintMaxFull: 6, ConventionMaxFull: 6,
+				MemoryMaxItems: 0, MemoryMaxAgeDays: 0,
+				FindingsCount: 5, FindingsMaxAgeDays: 0,
+				ReadyTasksShown: 5, PendingPlanMaxDays: 14, StageUnknownMaxAgeDays: 14,
+				SiblingFindingsCount: 3, IncludeParentMemories: true, IncludeSiblingMemories: true,
+				UtilityWeight: 0.4, UtilityMode: "auto", HardCapMultiplier: 2,
+			},
+		},
+	}
+}
+
+// MatchBriefingPreset reports which preset b is exactly, if any. An empty
+// utility_mode means "auto" (the briefing treats them alike), so it matches as
+// auto; every other knob must be equal.
+func MatchBriefingPreset(b Briefing) (BriefingPreset, bool) {
+	if b.UtilityMode == "" {
+		b.UtilityMode = "auto"
+	}
+	for _, p := range BriefingPresets() {
+		if p.Briefing == b {
+			return p, true
+		}
+	}
+	return BriefingPreset{}, false
+}
+
 // Features toggles the OPTIONAL features -- the parts of Seamless the owner can
 // switch on and off. Optional features ship OFF: a fresh installation exposes
 // none of them until the owner enables one in the console (Settings -> Features)

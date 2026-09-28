@@ -701,3 +701,47 @@ func TestLoadFrom_ExpandsHomeInTLSPaths(t *testing.T) {
 	require.Equal(t, filepath.Join(home, "certs", "k.pem"), cfg.TLS.KeyFile)
 	require.Equal(t, filepath.Join(home, "certs", "ca.pem"), cfg.TLS.CAFile)
 }
+
+func TestBriefingPresets(t *testing.T) {
+	presets := BriefingPresets()
+	require.Len(t, presets, 3)
+	require.Equal(t, []string{"lean", "balanced", "rich"},
+		[]string{presets[0].Key, presets[1].Key, presets[2].Key}, "leanest first")
+	require.Equal(t, Defaults().Briefing, presets[1].Briefing, "Balanced is the defaults exactly")
+	for _, p := range presets {
+		require.NoError(t, p.Briefing.Validate(), p.Key)
+		require.NotEmpty(t, p.Label, p.Key)
+		require.NotEmpty(t, p.Intent, p.Key)
+		// The token budget lives in Budgets, not Briefing: a preset cannot move it.
+		got, ok := MatchBriefingPreset(p.Briefing)
+		require.True(t, ok, p.Key)
+		require.Equal(t, p.Key, got.Key)
+	}
+	// Presets are ordered by how much they put in.
+	require.Less(t, presets[0].Briefing.ConstraintMaxFull, presets[1].Briefing.ConstraintMaxFull)
+	require.Less(t, presets[1].Briefing.ConstraintMaxFull, presets[2].Briefing.ConstraintMaxFull)
+
+	// Fresh copies: mutating one never reaches the table.
+	presets[1].Briefing.FindingsCount = 99
+	require.Equal(t, Defaults().Briefing, BriefingPresets()[1].Briefing)
+}
+
+func TestMatchBriefingPreset(t *testing.T) {
+	b := Defaults().Briefing
+	p, ok := MatchBriefingPreset(b)
+	require.True(t, ok)
+	require.Equal(t, "balanced", p.Key)
+
+	// An empty utility mode means auto and still matches.
+	b.UtilityMode = ""
+	p, ok = MatchBriefingPreset(b)
+	require.True(t, ok)
+	require.Equal(t, "balanced", p.Key)
+
+	// One knob off is a custom recipe.
+	b.FindingsCount++
+	_, ok = MatchBriefingPreset(b)
+	require.False(t, ok)
+	_, ok = MatchBriefingPreset(Briefing{})
+	require.False(t, ok)
+}

@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -211,8 +212,90 @@ type settingsData struct {
 	// LevelCards are the Experience section's three levels, the one in force
 	// marked, each with its generated list of what it shows.
 	LevelCards []levelCard `json:"-"`
+	// BriefingPresets are the Briefing section's one-choice recipes, the one
+	// the effective values equal marked; none marked means Custom.
+	BriefingPresets []briefingPresetCard `json:"-"`
+	// CustomizeOpen opens the Briefing section's full form by default: at
+	// Advanced every knob is one glance away, below it the presets lead.
+	CustomizeOpen bool `json:"-"`
 	// Setup is the Your setup section's plain-language facts.
 	Setup setupPanel `json:"-"`
+}
+
+// briefingPresetCard is one preset as the Briefing section offers it.
+type briefingPresetCard struct {
+	Key     string
+	Label   string
+	Intent  string
+	Summary string
+	// Values is the preset as form field -> value JSON: the page fills the
+	// form from it, and compares the form against it to mark the match live.
+	Values string
+	// Selected marks the preset the effective values equal.
+	Selected bool
+}
+
+// briefingPresetCards builds the preset cards, marking the one current equals.
+func briefingPresetCards(current config.Briefing) []briefingPresetCard {
+	match, matched := config.MatchBriefingPreset(current)
+	presets := config.BriefingPresets()
+	out := make([]briefingPresetCard, 0, len(presets))
+	for _, p := range presets {
+		values, err := json.Marshal(briefingFormValues(p.Briefing))
+		if err != nil {
+			// A map of numbers, bools, and strings always encodes; keep the
+			// card rather than fail the page if that ever stops being true.
+			values = []byte("{}")
+		}
+		out = append(out, briefingPresetCard{
+			Key: p.Key, Label: p.Label, Intent: p.Intent, Summary: briefingPresetSummary(p.Briefing),
+			Values: string(values), Selected: matched && match.Key == p.Key,
+		})
+	}
+	return out
+}
+
+// briefingFormValues maps a briefing onto the Briefing form's field names --
+// the same names settingsBriefingSave reads, so a preset fills exactly the
+// fields the save submits.
+func briefingFormValues(b config.Briefing) map[string]any {
+	mode := b.UtilityMode
+	if mode == "" {
+		mode = "auto"
+	}
+	return map[string]any{
+		"constraint_max_full":        b.ConstraintMaxFull,
+		"convention_max_full":        b.ConventionMaxFull,
+		"memory_max_age_days":        b.MemoryMaxAgeDays,
+		"memory_max_items":           b.MemoryMaxItems,
+		"findings_count":             b.FindingsCount,
+		"findings_max_age_days":      b.FindingsMaxAgeDays,
+		"ready_tasks_shown":          b.ReadyTasksShown,
+		"pending_plan_max_days":      b.PendingPlanMaxDays,
+		"stage_unknown_max_age_days": b.StageUnknownMaxAgeDays,
+		"hard_cap_multiplier":        b.HardCapMultiplier,
+		"sibling_findings_count":     b.SiblingFindingsCount,
+		"include_parent_memories":    b.IncludeParentMemories,
+		"include_sibling_memories":   b.IncludeSiblingMemories,
+		"utility_weight":             b.UtilityWeight,
+		"utility_mode":               mode,
+	}
+}
+
+// briefingPresetSummary names the numbers that set a preset apart, generated
+// from its values so the copy can never promise a number the preset lacks.
+func briefingPresetSummary(b config.Briefing) string {
+	parts := []string{plural(b.ConstraintMaxFull, "full constraint", "full constraints")}
+	if b.MemoryMaxItems > 0 {
+		parts = append(parts, plural(b.MemoryMaxItems, "memory line", "memory lines"))
+	} else {
+		parts = append(parts, "memory lines up to the budget")
+	}
+	parts = append(parts, plural(b.FindingsCount, "recent finding", "recent findings"))
+	if b.IncludeSiblingMemories {
+		parts = append(parts, "family memories")
+	}
+	return strings.Join(parts, " \u00b7 ")
 }
 
 // setupPanel is the Your setup section: what a non-technical owner can check
@@ -333,6 +416,8 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 			Section:                section.ID,
 			Subnav:                 settingsSubnav(lvl.Level, section.ID),
 			LevelCards:             levelCards(featuresCfg, lvl.Level),
+			BriefingPresets:        briefingPresetCards(briefing),
+			CustomizeOpen:          lvl.Level >= levelAdvanced,
 			Setup:                  s.setupData(ctx),
 		},
 	}

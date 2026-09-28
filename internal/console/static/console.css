@@ -6097,3 +6097,47 @@ html:not(.js) [data-form-discard] { display: none; }
   .level-welcome-cards, .experience-extras { grid-template-columns: minmax(0, 1fr); }
   .level-welcome-head { flex-direction: column; }
 }
+
+/* ---- Briefing presets and the Customize disclosure (console levels) ----------
+   Three one-choice recipes lead the section; the full grouped form lives in a
+   disclosure (open by default at Advanced). A preset only fills the form -- the
+   save bar does the saving -- and editing any knob re-marks the match. */
+.brief-presets { margin: 0 0 14px; padding: 0; border: 0; min-width: 0; }
+.brief-presets legend { margin-bottom: 8px; padding: 0; color: var(--faint); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase; }
+.brief-preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.brief-preset {
+  position: relative; display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 12px 13px;
+  border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer;
+  background: color-mix(in oklab, var(--ink) 3%, var(--surface-solid));
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.brief-preset:hover { border-color: color-mix(in oklab, var(--brand) 40%, var(--border)); }
+.brief-preset input { position: absolute; opacity: 0; pointer-events: none; }
+.brief-preset:has(input:checked) {
+  border-color: color-mix(in oklab, var(--brand) 55%, var(--border));
+  background: linear-gradient(180deg, color-mix(in oklab, var(--brand) 14%, var(--surface-solid)), color-mix(in oklab, var(--brand) 6%, var(--surface-solid)));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand) 25%, transparent);
+}
+.brief-preset:has(input:focus-visible) { box-shadow: var(--shadow-focus); }
+.brief-preset-name { font-family: var(--font-display); font-size: var(--text-base); font-weight: 650; color: var(--ink); }
+.brief-preset-intent { color: var(--ink-2); font-size: var(--text-xs); line-height: 1.45; }
+.brief-preset-summary { margin-top: 2px; color: var(--faint); font-family: var(--font-mono); font-size: 10.5px; line-height: 1.5; }
+.brief-preset-custom {
+  display: flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 8px 11px; border-radius: var(--radius-sm);
+  border: 1px dashed color-mix(in oklab, var(--pop) 40%, var(--border)); color: var(--muted); font-size: var(--text-xs);
+}
+.brief-preset-custom[hidden] { display: none; }
+.brief-preset-custom .ico { width: 14px; height: 14px; color: var(--pop); }
+.brief-customize { margin: 0 0 4px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.brief-customize > summary {
+  display: flex; align-items: center; gap: 8px; padding: 10px 13px; cursor: pointer; list-style: none;
+  color: var(--ink-2); font-size: var(--text-sm); font-weight: 600;
+}
+.brief-customize > summary::-webkit-details-marker { display: none; }
+.brief-customize > summary .ico { width: 15px; height: 15px; color: var(--muted); }
+.brief-customize > summary small { color: var(--faint); font-weight: 500; font-size: var(--text-xs); }
+.brief-customize[open] > summary { border-bottom: 1px solid var(--border); }
+.brief-customize > .briefing-groups { padding: 12px; }
+@media (max-width: 900px) {
+  .brief-preset-grid { grid-template-columns: minmax(0, 1fr); }
+}

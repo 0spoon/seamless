@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -796,4 +797,98 @@ func TestSettingsSections_SaveBarAndLegacyAnchors(t *testing.T) {
 	require.Contains(t, css, ".js form:not(.is-dirty) > .settings-savebar { display: none; }")
 	require.Contains(t, css, ".settings-subnav")
 	require.Contains(t, css, "@media (max-width: 720px)")
+}
+
+// Briefing presets: one choice for Standard, every knob a disclosure away. The
+// server marks the preset the effective values equal (else Custom), and the
+// Customize form is open by default only at Advanced.
+func TestBriefingSection_PresetsAndCustomize(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	svc, err := New(Config{DB: db, APIKey: testKey, BriefingCfg: config.Defaults().Briefing, Level: "standard"})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+	ctx := context.Background()
+
+	checked := regexp.MustCompile(`name="briefing-preset" value="([a-z]+)" form="briefing-preset-picker" data-preset-values="[^"]*" checked`)
+	selected := func(page string) []string {
+		var out []string
+		for _, m := range checked.FindAllStringSubmatch(page, -1) {
+			out = append(out, m[1])
+		}
+		return out
+	}
+
+	page := getPeek(t, mux, "/console/settings?s=briefing").Body.String()
+	require.Equal(t, []string{"balanced"}, selected(page), "the defaults are the Balanced preset")
+	for _, key := range []string{"lean", "balanced", "rich"} {
+		require.Contains(t, page, `value="`+key+`" form="briefing-preset-picker"`)
+	}
+	require.Contains(t, page, `<p class="brief-preset-custom" data-preset-custom hidden>`)
+	require.Contains(t, page, `<details class="brief-customize">`, "closed at Standard")
+	require.Contains(t, page, "Protected context stays protected.")
+	require.Contains(t, page, "2 full constraints · 12 memory lines · 2 recent findings", "Lean's numbers are generated")
+	require.Contains(t, page, "6 full constraints · memory lines up to the budget · 5 recent findings · family memories")
+	for _, field := range []string{"constraint_max_full", "convention_max_full", "memory_max_age_days", "memory_max_items",
+		"findings_count", "findings_max_age_days", "ready_tasks_shown", "pending_plan_max_days",
+		"stage_unknown_max_age_days", "hard_cap_multiplier", "sibling_findings_count", "include_parent_memories",
+		"include_sibling_memories", "utility_weight", "utility_mode"} {
+		require.Contains(t, page, `name="`+field+`"`, "the form still carries every knob")
+		require.Contains(t, page, `&#34;`+field+`&#34;:`, "each preset carries every knob the form submits")
+	}
+
+	// Saving Lean's values through the one route marks Lean.
+	lean := config.BriefingPresets()[0].Briefing
+	form := url.Values{}
+	for name, v := range briefingFormValues(lean) {
+		switch x := v.(type) {
+		case bool:
+			if x {
+				form.Set(name, "1")
+			}
+		default:
+			form.Set(name, fmt.Sprint(x))
+		}
+	}
+	rr := postForm(mux, "/console/settings/briefing", form.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	eff, _, err := store.BriefingConfig(ctx, db, config.Defaults().Briefing)
+	require.NoError(t, err)
+	require.Equal(t, lean, eff, "the form round-trips the preset exactly")
+	page = getPeek(t, mux, "/console/settings?s=briefing").Body.String()
+	require.Equal(t, []string{"lean"}, selected(page))
+
+	// One knob off is Custom: no preset marked, the Custom note shown.
+	lean.FindingsCount = 9
+	require.NoError(t, store.SetBriefingConfig(ctx, db, lean))
+	page = getPeek(t, mux, "/console/settings?s=briefing").Body.String()
+	require.Empty(t, selected(page))
+	require.Contains(t, page, `<p class="brief-preset-custom" data-preset-custom>`)
+
+	// At Advanced the full form is open by default.
+	require.NoError(t, store.SetConsoleLevel(ctx, db, "advanced", store.ConsoleLevelChosen))
+	page = getPeek(t, mux, "/console/settings?s=briefing").Body.String()
+	require.Contains(t, page, `<details class="brief-customize" open>`)
+
+	source, err := templateFS.ReadFile("templates/settings.html")
+	require.NoError(t, err)
+	require.Contains(t, string(source), "function syncPresets()", "an edit re-marks the matching preset")
+	require.Contains(t, string(source), `<form id="briefing-preset-picker" hidden></form>`,
+		"the radios never submit with the briefing form")
+}
+
+func TestBriefingPresetCards_MatchTheConfigTable(t *testing.T) {
+	cards := briefingPresetCards(config.Defaults().Briefing)
+	require.Len(t, cards, len(config.BriefingPresets()))
+	for i, p := range config.BriefingPresets() {
+		require.Equal(t, p.Key, cards[i].Key)
+		var values map[string]any
+		require.NoError(t, json.Unmarshal([]byte(cards[i].Values), &values))
+		require.Len(t, values, 15, "every knob the form submits")
+	}
+	require.True(t, cards[1].Selected)
+	require.False(t, cards[0].Selected)
+	require.False(t, cards[2].Selected)
 }
