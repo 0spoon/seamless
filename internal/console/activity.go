@@ -199,6 +199,8 @@ func eventSummary(e core.Event) string {
 			return "optional features reset to the file configuration"
 		}
 		return "optional features changed" + featureStateSuffix(p)
+	case eventLevelChanged:
+		return levelChangeSummary(p)
 	case core.EventTaskTransition:
 		if to := payloadStr(p, "to"); to != "" {
 			return "task -> " + to
@@ -270,6 +272,26 @@ func payloadInt(p map[string]any, key string) int {
 		return int(v)
 	}
 	return 0
+}
+
+// levelChangeSummary renders a level_changed payload as one ledger line. A
+// payload missing its levels says less rather than inventing one.
+func levelChangeSummary(p map[string]any) string {
+	from, to := payloadStr(p, "from"), payloadStr(p, "to")
+	if reset, _ := p["reset"].(bool); reset {
+		if to != "" {
+			return "console level reset to the file configuration (" + to + ")"
+		}
+		return "console level reset to the file configuration"
+	}
+	switch {
+	case from != "" && to != "":
+		return "console level " + from + " -> " + to
+	case to != "":
+		return "console level set to " + to
+	default:
+		return "console level changed"
+	}
 }
 
 // featureStateSuffix renders a features_changed payload's per-feature state as

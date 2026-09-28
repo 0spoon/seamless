@@ -381,6 +381,183 @@ func ClearFeaturesConfig(ctx context.Context, db *sql.DB) error {
 	return DeleteSetting(ctx, db, SettingFeaturesConfig)
 }
 
+// SettingConsoleLevel is the settings key holding the console experience level
+// the owner chose, plus whether they have seen the Home welcome card: a JSON
+// object {"level":"basic|standard|advanced","source":"chosen|seeded",
+// "welcomed":true}. When it carries a level, that level layers over the
+// file/env base (config.Console.Level) exactly like the features and briefing
+// overrides -- the row wins until reset.
+//
+// The level is PRESENTATION ONLY: it changes which console screens and knobs
+// are shown, never what agents receive. Nothing outside the console reads it.
+//
+// Two writers reach this row: the console (Settings -> Experience, the Home
+// welcome card), which stamps source "chosen", and the one-time grandfather
+// migration, which seeds "advanced" with source "seeded" on an installation that
+// already recorded sessions -- so the console can say "set by the upgrade"
+// rather than crediting the owner with a choice they never made.
+//
+// The welcomed flag lives in the same row, server-side, because the level is a
+// property of the installation's owner rather than of a browser: a phone must
+// not re-ask what the laptop already answered. A row may therefore carry the
+// flag with NO level (the owner dismissed the card without choosing), which is
+// "welcomed, still following file/env".
+const SettingConsoleLevel = "console_level"
+
+// Console level sources: who set the stored level.
+const (
+	// ConsoleLevelChosen marks a level the owner picked in the console.
+	ConsoleLevelChosen = "chosen"
+	// ConsoleLevelSeeded marks a level the upgrade migration seeded.
+	ConsoleLevelSeeded = "seeded"
+)
+
+// ConsoleLevelSources is the canonical source set, for validation and for the
+// message that names the accepted values.
+var ConsoleLevelSources = []string{ConsoleLevelChosen, ConsoleLevelSeeded}
+
+// consoleLevelRow is the stored JSON shape. Every field is optional on read: a
+// row that only records the welcome carries no level and overrides nothing.
+type consoleLevelRow struct {
+	Level    string `json:"level,omitempty"`
+	Source   string `json:"source,omitempty"`
+	Welcomed bool   `json:"welcomed"`
+}
+
+// ConsoleLevel returns the effective console level: the stored level when the
+// row carries one (overridden true, source naming who set it), else base (the
+// file/env value). welcomed reports whether the owner has seen the Home welcome
+// card; an absent row is a fresh installation, which has not.
+//
+// A corrupt row -- undecodable JSON, or a level or source outside the canonical
+// sets -- is an error that reports the base: the caller degrades to file/env and
+// logs, so presentation state can never take the console down.
+func ConsoleLevel(ctx context.Context, db *sql.DB, base string) (level string, overridden bool, source string, welcomed bool, err error) {
+	row, found, err := consoleLevelRowTx(ctx, db)
+	if err != nil {
+		return base, false, "", false, err
+	}
+	if !found || row.Level == "" {
+		return base, false, "", row.Welcomed, nil
+	}
+	return row.Level, true, row.Source, row.Welcomed, nil
+}
+
+// consoleLevelRowTx reads and validates the stored row via any executor. found
+// is false when there is no row (or a blank one).
+func consoleLevelRowTx(ctx context.Context, q settingsExecutor) (consoleLevelRow, bool, error) {
+	raw, found, err := getSettingTx(ctx, q, SettingConsoleLevel)
+	if err != nil {
+		return consoleLevelRow{}, false, err
+	}
+	if !found || strings.TrimSpace(raw) == "" {
+		return consoleLevelRow{}, false, nil
+	}
+	var row consoleLevelRow
+	if err := json.Unmarshal([]byte(raw), &row); err != nil {
+		return consoleLevelRow{}, false, fmt.Errorf("store.ConsoleLevel: decode: %w", err)
+	}
+	if row.Level != "" && !slices.Contains(config.ConsoleLevels, row.Level) {
+		return consoleLevelRow{}, false, fmt.Errorf("store.ConsoleLevel: stored level %q: valid values are %s",
+			row.Level, strings.Join(config.ConsoleLevels, ", "))
+	}
+	if row.Source != "" && !slices.Contains(ConsoleLevelSources, row.Source) {
+		return consoleLevelRow{}, false, fmt.Errorf("store.ConsoleLevel: stored source %q: valid values are %s",
+			row.Source, strings.Join(ConsoleLevelSources, ", "))
+	}
+	return row, true, nil
+}
+
+// SetConsoleLevel stores level as the console override, stamped with source,
+// and marks the row welcomed: choosing a level anywhere answers the welcome
+// card. A level or source outside the canonical sets is rejected, never stored.
+func SetConsoleLevel(ctx context.Context, db *sql.DB, level, source string) error {
+	if !slices.Contains(config.ConsoleLevels, level) {
+		return fmt.Errorf("store.SetConsoleLevel: invalid level %q: valid values are %s",
+			level, strings.Join(config.ConsoleLevels, ", "))
+	}
+	if !slices.Contains(ConsoleLevelSources, source) {
+		return fmt.Errorf("store.SetConsoleLevel: invalid source %q: valid values are %s",
+			source, strings.Join(ConsoleLevelSources, ", "))
+	}
+	return writeConsoleLevelRow(ctx, db, consoleLevelRow{Level: level, Source: source, Welcomed: true})
+}
+
+// MarkConsoleWelcomed records that the owner has seen the Home welcome card,
+// leaving any stored level untouched. With no row it writes a welcome-only row,
+// which overrides nothing: the level keeps following file/env. The read and the
+// write-back share one transaction (the family mutators' recipe), so a
+// concurrent level change cannot be clobbered by a stale copy of the row.
+func MarkConsoleWelcomed(ctx context.Context, db *sql.DB) error {
+	return mutateConsoleLevelRow(ctx, db, "store.MarkConsoleWelcomed", func(row *consoleLevelRow) {
+		row.Welcomed = true
+	})
+}
+
+// ClearConsoleLevel removes the stored level, reverting the effective level to
+// the file/env base. The welcome flag survives a reset -- resetting the level is
+// not a request to be asked again -- so a welcomed row shrinks to a welcome-only
+// row and an unwelcomed one is deleted outright. Clearing twice is a no-op.
+//
+// A corrupt row is deleted rather than reported: reset is the owner's way out of
+// whatever state the row is in, so it must not depend on reading it.
+func ClearConsoleLevel(ctx context.Context, db *sql.DB) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store.ClearConsoleLevel: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after Commit
+
+	row, found, rerr := consoleLevelRowTx(ctx, tx)
+	if rerr != nil || !found || !row.Welcomed {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, SettingConsoleLevel); err != nil {
+			return fmt.Errorf("store.ClearConsoleLevel: %w", err)
+		}
+	} else if err := writeConsoleLevelRowTx(ctx, tx, consoleLevelRow{Welcomed: true}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store.ClearConsoleLevel: commit: %w", err)
+	}
+	return nil
+}
+
+// mutateConsoleLevelRow runs a read-modify-write of the row inside one
+// transaction. A corrupt row is an error here (unlike Clear): a mutation that
+// keeps the rest of the row must be able to read it.
+func mutateConsoleLevelRow(ctx context.Context, db *sql.DB, op string, fn func(*consoleLevelRow)) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("%s: begin: %w", op, err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after Commit
+
+	row, _, err := consoleLevelRowTx(ctx, tx)
+	if err != nil {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	fn(&row)
+	if err := writeConsoleLevelRowTx(ctx, tx, row); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("%s: commit: %w", op, err)
+	}
+	return nil
+}
+
+func writeConsoleLevelRow(ctx context.Context, db *sql.DB, row consoleLevelRow) error {
+	return writeConsoleLevelRowTx(ctx, db, row)
+}
+
+func writeConsoleLevelRowTx(ctx context.Context, q settingsExecutor, row consoleLevelRow) error {
+	raw, err := json.Marshal(row)
+	if err != nil {
+		return fmt.Errorf("store.SetConsoleLevel: %w", err)
+	}
+	return setSettingTx(ctx, q, SettingConsoleLevel, string(raw))
+}
+
 // SettingEmbedderMode is the settings key holding the owner's embedder
 // override. The only stored value is EmbedderModeOff; EmbedderModeAuto clears
 // the row, so "auto" and "no override" are the same state. The daemon reads it

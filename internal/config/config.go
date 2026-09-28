@@ -64,6 +64,7 @@ type Config struct {
 	Budgets     Budgets     `yaml:"budgets"`
 	Briefing    Briefing    `yaml:"briefing"`
 	Features    Features    `yaml:"features"`
+	Console     Console     `yaml:"console"`
 	Search      Search      `yaml:"search"`
 	LLM         LLM         `yaml:"llm"`
 	Gardener    Gardener    `yaml:"gardener"`
@@ -255,6 +256,41 @@ type Features struct {
 	Gamification bool `yaml:"gamification" json:"gamification"`
 }
 
+// Console tunes the human-facing observability console. Nothing here changes
+// what agents receive: the console level is presentation only (briefings, MCP
+// tools, hooks, the gardener, and recall are identical at every level).
+//
+// The JSON tags back the console's runtime override row (see
+// store.ConsoleLevel), which layers over this file/env base exactly like the
+// features and briefing overrides: the row wins until the owner resets it.
+type Console struct {
+	// Level is how much of the console the owner sees: "basic" (the fewest
+	// screens and knobs -- the default for a fresh installation), "standard"
+	// (adds the coordination screens: tasks, plans, projects, the fleet view),
+	// or "advanced" (every screen and knob, including the analytics and the
+	// raw transport). Hidden screens stay reachable by URL; nothing is locked.
+	// Empty means the default. An installation upgraded with sessions already
+	// recorded is seeded "advanced" by a one-time store migration, so an
+	// upgrade never hides a screen someone was using.
+	Level string `yaml:"level" json:"level"`
+}
+
+// ConsoleLevels are the accepted console.level values, ordered from the fewest
+// surfaces to the most. Every enum, help string, and registry derives from this
+// slice; the order is the nesting order (each level shows everything the
+// previous one does).
+var ConsoleLevels = []string{"basic", "standard", "advanced"}
+
+// Validate rejects a present-but-unrecognized console level. Absent (empty)
+// means the default, never a silent fallback for a typo.
+func (c Console) Validate() error {
+	if c.Level != "" && !slices.Contains(ConsoleLevels, c.Level) {
+		return fmt.Errorf("config: console.level invalid %q: valid values are %s",
+			c.Level, strings.Join(ConsoleLevels, ", "))
+	}
+	return nil
+}
+
 // Search tunes the human-facing console search (retrieve.Search). Agent-facing
 // recall is deliberately not covered: an agent can judge a weak hit for itself,
 // but an observer reads "20 results" as 20 matches.
@@ -408,7 +444,11 @@ func Defaults() Config {
 		// owner enables it. Existing installations holding research data are
 		// grandfathered on by a one-time store migration, not by this default.
 		Features: Features{Research: false, Momentum: false, Gamification: false},
-		Search:   Search{SemanticFloor: 0.3},
+		// A fresh installation starts at the fewest knobs. Existing
+		// installations are grandfathered to advanced by a one-time store
+		// migration, not by this default.
+		Console: Console{Level: "basic"},
+		Search:  Search{SemanticFloor: 0.3},
 		LLM: LLM{
 			Provider: ProviderOpenAI,
 			OpenAI: OpenAI{
@@ -495,6 +535,11 @@ func LoadFrom(path string) (Config, error) {
 	// override means the default, never "every port": see Capture.AllowedPorts.
 	if len(cfg.Capture.AllowedPorts) == 0 {
 		cfg.Capture.AllowedPorts = defaultAllowedPorts()
+	}
+	// An empty console level (an empty env override, `level: ""`) is absent,
+	// so it resolves to the default here and every consumer sees a real level.
+	if cfg.Console.Level == "" {
+		cfg.Console.Level = Defaults().Console.Level
 	}
 
 	expanded, err := expandHome(cfg.DataDir)
@@ -654,6 +699,9 @@ func (c Config) Validate() error {
 	if err := c.Briefing.Validate(); err != nil {
 		return err
 	}
+	if err := c.Console.Validate(); err != nil {
+		return err
+	}
 	if c.Briefing.HardCapMultiplier > 0 && c.Budgets.MaxBriefingTokens > math.MaxInt/c.Briefing.HardCapMultiplier {
 		return fmt.Errorf("config: briefing.hard_cap_multiplier times budgets.max_briefing_tokens overflows int")
 	}
@@ -732,6 +780,7 @@ func (c *Config) applyEnv() error {
 	if err := envBool("SEAMLESS_FEATURES_GAMIFICATION", &c.Features.Gamification); err != nil {
 		return err
 	}
+	envStr("SEAMLESS_CONSOLE_LEVEL", &c.Console.Level)
 	if err := envFloat("SEAMLESS_SEARCH_SEMANTIC_FLOOR", &c.Search.SemanticFloor); err != nil {
 		return err
 	}

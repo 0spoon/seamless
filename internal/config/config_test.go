@@ -393,6 +393,57 @@ features:
 	require.Error(t, err)
 }
 
+func TestLoadFrom_ConsoleLevelFileAndEnv(t *testing.T) {
+	// A fresh installation starts at the fewest knobs.
+	cfg, err := LoadFrom("")
+	require.NoError(t, err)
+	require.Equal(t, "basic", cfg.Console.Level, "the console defaults to basic")
+	require.Equal(t, ConsoleLevels[0], cfg.Console.Level, "the default is the first (fewest-surfaces) level")
+
+	path := writeConfig(t, `
+console:
+  level: standard
+`)
+	cfg, err = LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, "standard", cfg.Console.Level)
+
+	t.Setenv("SEAMLESS_CONSOLE_LEVEL", "advanced")
+	cfg, err = LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, "advanced", cfg.Console.Level, "env wins over file")
+
+	// An empty override is absent: it resolves to the default rather than
+	// leaving consumers an empty level to guess about.
+	t.Setenv("SEAMLESS_CONSOLE_LEVEL", "")
+	cfg, err = LoadFrom("")
+	require.NoError(t, err)
+	require.Equal(t, "basic", cfg.Console.Level)
+
+	// Present but uninterpretable is an error naming the valid values, never a
+	// silent default -- from the environment and from the file alike.
+	t.Setenv("SEAMLESS_CONSOLE_LEVEL", "expert")
+	_, err = LoadFrom("")
+	require.ErrorContains(t, err, `console.level invalid "expert"`)
+	require.ErrorContains(t, err, strings.Join(ConsoleLevels, ", "))
+	require.NoError(t, os.Unsetenv("SEAMLESS_CONSOLE_LEVEL"))
+
+	bad := writeConfig(t, `
+console:
+  level: Advanced
+`)
+	_, err = LoadFrom(bad)
+	require.ErrorContains(t, err, "valid values are basic, standard, advanced")
+
+	// A typo'd key fails at load like every other block.
+	typo := writeConfig(t, `
+console:
+  levle: advanced
+`)
+	_, err = LoadFrom(typo)
+	require.Error(t, err)
+}
+
 func TestLoadFrom_FeaturesStrictYAML(t *testing.T) {
 	path := writeConfig(t, `
 features:
@@ -508,6 +559,10 @@ func TestValidate(t *testing.T) {
 		{"infinite-utility-weight", func(c *Config) { c.Briefing.UtilityWeight = math.Inf(1) }, true},
 		{"empty-utility-mode-ok", func(c *Config) { c.Briefing.UtilityMode = "" }, false},
 		{"unknown-utility-mode", func(c *Config) { c.Briefing.UtilityMode = "sideways" }, true},
+		{"empty-console-level-ok", func(c *Config) { c.Console.Level = "" }, false},
+		{"advanced-console-level-ok", func(c *Config) { c.Console.Level = "advanced" }, false},
+		{"unknown-console-level", func(c *Config) { c.Console.Level = "expert" }, true},
+		{"console-level-case-is-not-normalized", func(c *Config) { c.Console.Level = "Basic" }, true},
 		{"zero-semantic-floor-ok", func(c *Config) { c.Search.SemanticFloor = 0 }, false},
 		{"one-semantic-floor-ok", func(c *Config) { c.Search.SemanticFloor = 1 }, false},
 		{"negative-semantic-floor", func(c *Config) { c.Search.SemanticFloor = -0.1 }, true},

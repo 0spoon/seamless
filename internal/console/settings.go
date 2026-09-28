@@ -463,6 +463,13 @@ func (s *Service) settingsBriefingSave(w http.ResponseWriter, r *http.Request) {
 // attribution as every other owner action.
 const eventFeaturesChanged core.EventKind = "settings.features_changed"
 
+// eventLevelChanged records a console experience-level change in the event log
+// (payload {from, to, by: "console"}, plus reset: true when the owner went back
+// to the file/env level), so the change shows in Activity like a features
+// toggle. The level is presentation only: nothing an agent receives changes,
+// which is why this is a settings event and not a features one.
+const eventLevelChanged core.EventKind = "settings.level_changed"
+
 // settingsFeaturesSave persists the optional-features form as the stored
 // override row. Like the briefing form it rebuilds the WHOLE struct from
 // checkbox presence -- an unchecked box submits nothing, so reading only the

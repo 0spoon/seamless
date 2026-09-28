@@ -93,6 +93,7 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 | `features.research` | bool | - |
 | `features.momentum` | bool | - |
 | `features.gamification` | bool | - |
+| `console.level` | string | `basic` |
 | `search.semantic_floor` | float64 | `0.3` |
 | `llm.provider` | string | `openai` |
 | `llm.openai.api_key` | string | - |
@@ -302,6 +303,24 @@ features:
   # real recorded activity; off, the Now screen carries no trace of it.
   # env: SEAMLESS_FEATURES_GAMIFICATION
   gamification: false
+
+# The observability console. Presentation only: nothing here changes what your
+# agents receive -- briefings, MCP tools, hooks, recall, and the gardener are
+# identical at every level.
+console:
+  # How much of the console you see. One of: basic | standard | advanced.
+  #   basic    -- the essentials: what your agents remember (Memories, Notes),
+  #               what they did (Sessions), cleanup suggestions (Gardener).
+  #   standard -- adds following the work: Now, Projects, Plans, Tasks.
+  #   advanced -- every screen and knob, including Interactions and Retrieval.
+  # Hidden screens stay reachable by URL (they show a banner), so no link ever
+  # breaks. The console's own picker (Settings -> Experience, or the welcome
+  # card on Home) stores a choice in the database that WINS over this file and
+  # env until reset. A fresh installation starts at basic; an installation that
+  # already recorded sessions before levels existed starts at advanced (a
+  # one-time seeded choice), so an upgrade never hides a screen you were using.
+  # env: SEAMLESS_CONSOLE_LEVEL
+  level: basic
 
 # Console search (the full page's fused semantic+lexical retrieval). Agent
 # recall is not affected by these knobs.

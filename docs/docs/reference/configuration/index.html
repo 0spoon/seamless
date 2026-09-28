@@ -459,6 +459,11 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 <td>-</td>
 </tr>
 <tr>
+<td><code>console.level</code></td>
+<td>string</td>
+<td><code>basic</code></td>
+</tr>
+<tr>
 <td><code>search.semantic_floor</code></td>
 <td>float64</td>
 <td><code>0.3</code></td>
@@ -774,6 +779,24 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># real recorded activity; off, the Now screen carries no trace of it.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_FEATURES_GAMIFICATION</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">gamification</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># The observability console. Presentation only: nothing here changes what your</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># agents receive -- briefings, MCP tools, hooks, recall, and the gardener are</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># identical at every level.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">console</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># How much of the console you see. One of: basic | standard | advanced.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c">#   basic    -- the essentials: what your agents remember (Memories, Notes),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c">#               what they did (Sessions), cleanup suggestions (Gardener).</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c">#   standard -- adds following the work: Now, Projects, Plans, Tasks.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c">#   advanced -- every screen and knob, including Interactions and Retrieval.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Hidden screens stay reachable by URL (they show a banner), so no link ever</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># breaks. The console&#39;s own picker (Settings -&gt; Experience, or the welcome</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># card on Home) stores a choice in the database that WINS over this file and</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env until reset. A fresh installation starts at basic; an installation that</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># already recorded sessions before levels existed starts at advanced (a</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># one-time seeded choice), so an upgrade never hides a screen you were using.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_CONSOLE_LEVEL</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">level</span><span class="p">:</span><span class="w"> </span><span class="l">basic</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># Console search (the full page&#39;s fused semantic+lexical retrieval). Agent</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># recall is not affected by these knobs.</span><span class="w">

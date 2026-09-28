@@ -237,6 +237,7 @@ var eventLabels = map[string]string{
 	"gamification.record_broken": "New record",
 	"milestone.reached":          "Milestone",
 	"settings.features_changed":  "Features changed",
+	"settings.level_changed":     "Console level changed",
 }
 
 // evtLabel names an event kind for a reader. An unlisted kind is spelled out
