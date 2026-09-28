@@ -67,6 +67,19 @@ set -euo pipefail
 # (memory scene-demo-repo-must-be-seamless-free).
 export SEAMLESS_FEATURES_RESEARCH=1
 
+# The console level follows the same logic, for the same two reasons. A fixture
+# instance is a NEW installation, so the console comes up at its default level
+# (basic) -- and the upgrade grandfather only seeds advanced when the database
+# already held sessions before migrating, which a freshly seeded instance never
+# does. The branding scenes and console shots walk screens basic hides (Now,
+# Interactions, Retrieval, Context), so every fixture instance runs the console
+# at advanced, again BOTH ways: `console: level: advanced` in write_config's
+# seamless.yaml (what reaches the seambench arm runner's scrubbed daemon and the
+# operator's hand-started one) and the export below (the harness's own
+# children). The level is presentation only -- agents get the same briefing,
+# tools, and hooks at every level -- so this changes no benchmark arm.
+export SEAMLESS_CONSOLE_LEVEL=advanced
+
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 mode=""
 base=""
@@ -139,7 +152,9 @@ fi
 # The features block is not optional here: see the SEAMLESS_FEATURES_RESEARCH
 # note at the top of this file. Any daemon started against this config -- by the
 # seambench runner, by the operator, or by the self-check -- gets the research
-# tools and screens the fixture's graders and scenes assume.
+# tools and screens the fixture's graders and scenes assume. The console block is
+# the SEAMLESS_CONSOLE_LEVEL note's file half: the same daemons show every
+# console screen the scenes and shots walk.
 write_config() {
   local cfg="$1" data="$2" p="$3" keyfile="$4" key
   if [[ -f "$keyfile" ]]; then key=$(cat "$keyfile"); else key=$(openssl rand -hex 32); echo "$key" >"$keyfile"; fi
@@ -153,6 +168,11 @@ features:
   # A fixture instance is a new installation, so the optional research feature
   # would default off; seambench's graders and the branding scenes both need it.
   research: true
+console:
+  # A new installation's console starts at basic, which hides screens the
+  # branding scenes and console shots walk. Presentation only: agents are
+  # unaffected.
+  level: advanced
 EOF
   printf '%s' "$key"
 }

@@ -283,11 +283,15 @@ go run ./cmd/demoseed -data /tmp/seamless-demo
 #    research takes the Overview's Labs/Trials tiles and Trials coverage row,
 #    momentum takes the Overview memory-of-the-month spotlight and the Plans
 #    shipped-this-month count, and gamification takes the Now screen's records
-#    rail and hot-streak pulse. (This flow does not go through
-#    scripts/fixture/harness.sh, which sets research for its own instances.)
+#    rail and hot-streak pulse. SEAMLESS_CONSOLE_LEVEL=advanced is load-bearing
+#    for the same reason: a new installation's console starts at basic, which
+#    drops Now, Interactions, Retrieval, and the Overview vitals from what the
+#    shots capture. (This flow does not go through scripts/fixture/harness.sh,
+#    which sets research and the level for its own instances.)
 SEAMLESS_DATA_DIR=/tmp/seamless-demo SEAMLESS_ADDR=127.0.0.1:8090 \
   SEAMLESS_FEATURES_RESEARCH=1 SEAMLESS_FEATURES_MOMENTUM=1 \
-  SEAMLESS_FEATURES_GAMIFICATION=1 SEAMLESS_MCP_API_KEY=<any key> ./bin/seamlessd serve
+  SEAMLESS_FEATURES_GAMIFICATION=1 SEAMLESS_CONSOLE_LEVEL=advanced \
+  SEAMLESS_MCP_API_KEY=<any key> ./bin/seamlessd serve
 
 # 3. capture both themes at 1440x900 @2x (Playwright driving installed Chrome)
 pnpm add playwright-core     # once, anywhere; NODE_PATH must point at its

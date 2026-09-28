@@ -1,6 +1,9 @@
 package features
 
-// Guard for the shared fixture's dependence on an optional feature.
+// Guards for the shared fixture's dependence on an optional feature and on the
+// console level. The level is config rather than a feature, but it is the same
+// fixture concern with the same two mechanisms, so both guards live together
+// where the marker scan already does.
 //
 // Reading a repo file from a package test follows the precedent in
 // internal/hooks/codex_contract_test.go, which pins the Codex hook profile
@@ -14,6 +17,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/0spoon/seamless/internal/config"
 )
 
 // harnessPath is the shared fixture entry point, relative to this package.
@@ -118,5 +123,60 @@ func TestFixtureHarness_EnablesResearchBothWays(t *testing.T) {
 	require.GreaterOrEqual(t, strings.Count(script, envVar), 2,
 		"%s must keep the comment that explains why the export and the config block BOTH exist -- "+
 			"a future editor who deletes one as duplication is exactly who this guard is for",
+		harnessPath)
+}
+
+// The fixture harness runs the console at the level that shows every screen, in
+// BOTH modes, through BOTH mechanisms -- the research guard's twin.
+//
+// A fixture instance is a NEW installation, so its console starts at the default
+// level (basic), and the upgrade grandfather cannot help: it seeds advanced only
+// when the database already held sessions when the migration ran, and a fixture
+// seeds its sessions after. The branding scenes and console shots walk screens
+// basic hides (Now, Interactions, Retrieval, Context), so the harness sets the
+// level both ways, for exactly the reasons research needs both: the config
+// block reaches the daemon the seambench arm runner starts with a scrubbed
+// SEAMLESS_* environment (and the operator's hand-started one), and the export
+// reaches the harness's own children.
+func TestFixtureHarness_RunsTheConsoleAtTheFullLevelBothWays(t *testing.T) {
+	raw, err := os.ReadFile(harnessPath)
+	require.NoError(t, err)
+	script := string(raw)
+
+	// Derived, not transcribed: the level with every screen is the last one.
+	full := config.ConsoleLevels[len(config.ConsoleLevels)-1]
+	const envVar = "SEAMLESS_CONSOLE_LEVEL"
+
+	// Mechanism 2: an unindented export in the prologue, ahead of both modes.
+	exportLine := "\nexport " + envVar + "=" + full + "\n"
+	require.True(t, strings.Contains(script, exportLine),
+		"%s must `export %s=%s` at the top level: the harness's own children (install-hooks, the "+
+			"demoseed seeder, the self-check daemon) pick the level up from the environment. See the "+
+			"%s comment block at the top of the script for why this is not redundant with the config "+
+			"file.", harnessPath, envVar, full, envVar)
+	exportAt := strings.Index(script, exportLine)
+	for _, entry := range []string{"run_record() {", "run_bench() {"} {
+		at := strings.Index(script, entry)
+		require.NotEqual(t, -1, at,
+			"%s: %s is gone -- this guard checks the export precedes both mode entry points, so the "+
+				"scan needs to follow the rename", harnessPath, entry)
+		require.Less(t, exportAt, at,
+			"%s: `export %s=%s` must stay in the unconditional prologue, ahead of %s -- both modes "+
+				"screenshot or grade against the full console", harnessPath, envVar, full, entry)
+	}
+
+	// Mechanism 1: the throwaway config every seeded instance is started against.
+	cfg := harnessSection(t, script, "write_config() {", "\nEOF")
+	consoleBlock := harnessSection(t, cfg, "\nconsole:\n", "")
+	require.Contains(t, consoleBlock, "level: "+full,
+		"%s: write_config's seamless.yaml must set `level: %s` under `console:` -- the seambench "+
+			"arm runner scrubs the SEAMLESS_* environment, so the exported variable alone never "+
+			"reaches the daemon, and a new installation's console would come up at %s",
+		harnessPath, full, config.Defaults().Console.Level)
+
+	// Both modes go through write_config, so mechanism 1 covers both (the
+	// research guard already pins that each mode calls it).
+	require.GreaterOrEqual(t, strings.Count(script, envVar), 2,
+		"%s must keep the comment that explains why the export and the config block BOTH exist",
 		harnessPath)
 }
