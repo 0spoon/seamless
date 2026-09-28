@@ -11,7 +11,7 @@
     <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
     <span class="mv2-spacer"></span>
     <div class="mv2-controls" id="mv2-controls">
-    {{if .TotalPending}}
+    {{if and .TotalPending ($.Level.AtLeast "standard")}}
     <div class="mv2-sort">
       <span class="mv2-sort-label">Type</span>
       <div class="seg" data-seam-query>
@@ -55,7 +55,7 @@
         <button type="button" data-request-example="Find duplicate memories about authentication and propose which one should stay active.">Merge duplicates</button>
         <button type="button" data-request-example="Find guidance about the old port 8080 and propose archiving anything that is no longer true.">Archive old guidance</button>
         <button type="button" data-request-example="Find memories filed under the wrong project and propose where they belong.">Correct scope</button>
-        <button type="button" data-request-example="Split the current app project into platform-specific child projects with shared knowledge in a parent.">Split a project</button>
+        {{if $.Level.AtLeast "standard"}}<button type="button" data-request-example="Split the current app project into platform-specific child projects with shared knowledge in a parent.">Split a project</button>{{end}}
       </div>
 
       <footer class="gardener-request-footer">
@@ -183,7 +183,7 @@
              scrolls off Recently decided within a handful of decisions while
              staying in force, so this is the only surface that says what is
              still being suppressed -- and the only place to lift it. */}}
-        {{if .Hidden}}
+        {{if and .Hidden ($.Level.AtLeast "standard")}}
         <details class="rail-group rail-collapse gardener-recent gardener-hidden" id="rg-hidden">
           <summary class="rail-group-hd"><span class="hd-label">{{icon "eye-off"}}Hidden forever</span> <span class="n">{{len .Hidden}}</span></summary>
           <div class="gardener-recent-rows">
@@ -274,7 +274,7 @@
 
   <div class="gardener-evidence">{{template "cardKindBody" .}}</div>
 
-  {{if and (eq .Kind "reproject") .CanAct .Targets}}
+  {{if and (eq .Kind "reproject") .CanAct .Targets ($.Level.AtLeast "standard")}}
   {{$to := .Reproject.To}}
   <form class="gardener-retarget" method="post" action="/console/gardener/{{.ID}}/retarget">
     <label for="retarget-{{.ID}}">Correction</label>
@@ -310,10 +310,12 @@
         <input type="hidden" name="next" value="{{.NextID}}">
         <button class="btn" type="submit" title="Drop this suggestion. If the pattern behind it happens again, the gardener will raise it again.">Dismiss suggestion</button>
       </form>
+      {{if $.Level.AtLeast "standard"}}
       <form method="post" action="/console/gardener/{{.ID}}/hide">
         <input type="hidden" name="next" value="{{.NextID}}">
         <button class="btn" type="submit" title="Never suggest this again, however often it recurs. Listed under Hidden forever, where you can lift it.">Hide forever</button>
       </form>
+      {{end}}
       <form method="post" action="/console/gardener/{{.ID}}/apply"
         {{if not .CanUndoApply}}onsubmit="return confirm('Apply this {{.Kind}} proposal? This cannot be undone from the console.');"{{end}}>
         <input type="hidden" name="next" value="{{.NextID}}">

@@ -6141,3 +6141,8 @@ html:not(.js) [data-form-discard] { display: none; }
 @media (max-width: 900px) {
   .brief-preset-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---- Level gates: layouts that close up around a hidden surface -------------
+   Below Standard a session has no review-signal scorecard; its findings take
+   the whole row instead of leaving the scorecard's column empty. */
+.session-review-grid:not(:has(.session-scorecard)) { grid-template-columns: minmax(0, 1fr); }

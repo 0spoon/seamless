@@ -151,6 +151,9 @@ type featureCard struct {
 	// registry rather than transcribed, so it cannot drift from what the gates
 	// actually do.
 	WhenOff string `json:"whenOff"`
+	// WhenOffPlain is WhenOff without the agent tool names, for the Basic
+	// Settings page: the same promise in words a non-technical owner can use.
+	WhenOffPlain string `json:"-"`
 	// DataKept is the live reassurance line ("Data kept: 12 trials across 3
 	// labs"), empty when the console has no count to offer for this feature.
 	DataKept string `json:"dataKept,omitempty"`
@@ -169,6 +172,18 @@ func featureField(key features.Key) string { return featureFieldPrefix + string(
 // Everything it names is something a gate in this package or in internal/mcp
 // actually enforces.
 func featureWhenOff(f features.Feature) string {
+	return featureHides(f, true)
+}
+
+// featureWhenOffPlain is featureWhenOff without the agent tools' names: it says
+// agents lose the matching tools without spelling out their identifiers.
+func featureWhenOffPlain(f features.Feature) string {
+	return featureHides(f, false)
+}
+
+// featureHides builds the "what disappears" sentence, naming the agent tools
+// when toolNames is set and counting them otherwise.
+func featureHides(f features.Feature, toolNames bool) string {
 	parts := slices.Clone(f.Surfaces)
 	if len(f.NavIDs) > 0 {
 		screens := make([]string, 0, len(f.NavIDs))
@@ -195,8 +210,11 @@ func featureWhenOff(f features.Feature) string {
 		parts = append(parts, "the "+strings.Join(scopes, " and ")+" "+noun)
 	}
 	if len(f.Tools) > 0 {
-		parts = append(parts, fmt.Sprintf("%s (%s)",
-			plural(len(f.Tools), "agent tool", "agent tools"), strings.Join(f.Tools, ", ")))
+		tools := plural(len(f.Tools), "agent tool", "agent tools")
+		if toolNames {
+			tools += " (" + strings.Join(f.Tools, ", ") + ")"
+		}
+		parts = append(parts, tools)
 	}
 	if len(parts) == 0 {
 		return "Hides nothing on its own."
@@ -230,14 +248,15 @@ func featureCards(cfg config.Features, counts navCounts) []featureCard {
 	cards := make([]featureCard, 0, len(reg))
 	for _, f := range reg {
 		cards = append(cards, featureCard{
-			Key:     string(f.Key),
-			Label:   f.Label,
-			Blurb:   f.Blurb,
-			Enabled: f.Enabled(cfg),
-			Default: f.Default,
-			Tools:   f.Tools,
-			Field:   featureField(f.Key),
-			WhenOff: featureWhenOff(f),
+			Key:          string(f.Key),
+			Label:        f.Label,
+			Blurb:        f.Blurb,
+			Enabled:      f.Enabled(cfg),
+			Default:      f.Default,
+			Tools:        f.Tools,
+			Field:        featureField(f.Key),
+			WhenOff:      featureWhenOff(f),
+			WhenOffPlain: featureWhenOffPlain(f),
 			// The counts are the feature's own data, so they are reported
 			// whether it is on or off -- that is the whole point of the line.
 			DataKept: featureDataKept(f.Key, counts),

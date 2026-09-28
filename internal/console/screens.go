@@ -224,18 +224,48 @@ func (n navCounts) count(badge string) (int, bool) {
 	}
 }
 
-// surface is an in-page gate: an element woven into a screen the level shows,
-// hidden below Min. Its Label is the owner-facing phrase the Experience cards
-// and the docs matrix list -- register it in the same change that adds the
-// gate, exactly like features.Surfaces.
+// surface is an in-page gate: an element woven into a screen a lower level
+// shows, hidden below Min. Every {{if $.Level.AtLeast "..."}} in a template is
+// one surface here -- register the phrase in the same change that adds the
+// gate, exactly like features.Surfaces -- so the Experience cards and the docs
+// matrix can say what each level adds without anyone transcribing it. A guard
+// test holds each template's gates to its registered surfaces.
 type surface struct {
-	Screen string
-	Label  string
-	Min    level
+	// Where names the page the surface lives on, as the owner reads it.
+	Where string
+	// Template is the file whose gate hides it (the guard's key).
+	Template string
+	// Label is the owner-facing phrase, read after Where: "Overview: the vitals".
+	Label string
+	// Min is the lowest level that shows it.
+	Min level
 }
 
-// surfaces is the in-page gate registry, in screen order.
-var surfaces = []surface{}
+// surfaces is the in-page gate registry, grouped by page in sidebar order.
+var surfaces = []surface{
+	{Where: "Overview", Template: "overview.html", Label: "the observation window", Min: levelStandard},
+	{Where: "Overview", Template: "overview.html", Label: "the vitals", Min: levelStandard},
+	{Where: "Overview", Template: "overview.html", Label: "the workspaces table and the knowledge rail", Min: levelStandard},
+	{Where: "Memories", Template: "memories.html", Label: "the Reach and Utility sorts", Min: levelStandard},
+	{Where: "Memories", Template: "memories.html", Label: "how often each memory surfaced", Min: levelStandard},
+	{Where: "Memories", Template: "memories.html", Label: "the utility score in the reader", Min: levelStandard},
+	{Where: "Gardener", Template: "gardener.html", Label: "the Type and Source filters", Min: levelStandard},
+	{Where: "Gardener", Template: "gardener.html", Label: "the project-split example", Min: levelStandard},
+	{Where: "Gardener", Template: "gardener.html", Label: "the Hidden forever list", Min: levelStandard},
+	{Where: "Gardener", Template: "gardener.html", Label: "Retarget on a proposal", Min: levelStandard},
+	{Where: "Gardener", Template: "gardener.html", Label: "Hide forever on a proposal", Min: levelStandard},
+	{Where: "Sessions", Template: "sessions.html", Label: "the Retained filter", Min: levelStandard},
+	{Where: "Sessions", Template: "sessions.html", Label: "the Sort menu", Min: levelStandard},
+	{Where: "Sessions", Template: "session.html", Label: "a session's review signals", Min: levelStandard},
+	{Where: "Search", Template: "search.html", Label: "the Updated window", Min: levelStandard},
+	{Where: "Search", Template: "search.html", Label: "the Sort control", Min: levelStandard},
+	{Where: "Settings", Template: "settings.html", Label: "the precedence line on Features", Min: levelStandard},
+	{Where: "Settings", Template: "settings.html", Label: "the agent tool names on Features", Min: levelStandard},
+	{Where: "Settings", Template: "settings.html", Label: "each repo route's host on Workspaces", Min: levelAdvanced},
+	{Where: "Settings", Template: "settings.html", Label: "the unbound repo routes on Workspaces", Min: levelAdvanced},
+	{Where: "Event pages", Template: "peek_event.html", Label: "the decoded payload fields", Min: levelAdvanced},
+	{Where: "Event pages", Template: "peek_event.html", Label: "the raw payload", Min: levelAdvanced},
+}
 
 // surfacesAt lists the surfaces whose minimum level is exactly lvl.
 func surfacesAt(lvl level) []surface {

@@ -239,8 +239,17 @@ func levelAdds(feats config.Features, lvl level) []string {
 	if len(sections) > 0 {
 		items = append(items, "Settings: "+joinWithAnd(sections))
 	}
+	// Surfaces read best grouped by page: "Overview: the vitals and ...".
+	var where []string
+	byWhere := map[string][]string{}
 	for _, sf := range surfacesAt(lvl) {
-		items = append(items, sf.Label)
+		if _, seen := byWhere[sf.Where]; !seen {
+			where = append(where, sf.Where)
+		}
+		byWhere[sf.Where] = append(byWhere[sf.Where], sf.Label)
+	}
+	for _, w := range where {
+		items = append(items, w+": "+joinWithAnd(byWhere[w]))
 	}
 	return items
 }

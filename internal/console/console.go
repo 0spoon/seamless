@@ -643,6 +643,10 @@ type overviewData struct {
 	// page; above Basic it closes the vitals as one quiet line.
 	Health []healthFact `json:"-"`
 
+	// HealthLead places the health strip at the top (Basic) rather than as the
+	// quiet line under the vitals: placement, not a gate -- both levels show it.
+	HealthLead bool `json:"-"`
+
 	// Welcome is the one-time level picker (HTML only), shown until the owner
 	// chooses a level or dismisses it; nil once they have.
 	Welcome *welcomeCard `json:"-"`
@@ -896,6 +900,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 	data.Sky = s.knowledgeSky(ctx, now, r)
 	if !wantsJSON(r) {
 		data.Health = s.healthFacts(ctx)
+		data.HealthLead = lvl < levelStandard
 		if !lvlState.Welcomed {
 			data.Welcome = &welcomeCard{
 				Seeded: lvlState.Source == store.ConsoleLevelSeeded,

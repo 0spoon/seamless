@@ -31,6 +31,7 @@
       {{end}}
     </div>
   </div>
+  {{if $.Level.AtLeast "standard"}}
   <div class="search-control">
     <span class="search-control-label">Updated</span>
     <div class="search-pills search-time-pills" role="list" aria-label="Time window" data-seam-query>
@@ -39,12 +40,14 @@
       {{end}}
     </div>
   </div>
+  {{end}}
   <div class="search-control">
     <span class="search-control-label">Starred</span>
     <div class="search-pills" role="list" aria-label="Starred only" data-seam-query>
       <a class="{{if .Fav}}active{{end}}" href="/console/search?scope={{$scope}}&amp;w={{$window}}&amp;sort={{$sort}}{{if not $fav}}&amp;fav=1{{end}}&amp;q={{$query}}"{{if .Fav}} aria-current="page"{{end}}>{{icon "star"}} Starred only</a>
     </div>
   </div>
+  {{if $.Level.AtLeast "standard"}}
   <form class="search-sort" method="get" action="/console/search" data-seam-query data-seam-auto-submit>
     <input type="hidden" name="q" value="{{.Query}}">
     <input type="hidden" name="scope" value="{{.Scope}}">
@@ -56,6 +59,7 @@
     </select>
     <button class="btn small search-sort-apply" type="submit">Apply</button>
   </form>
+  {{end}}
 </section>
 
 <div class="list-detail-split search-split">

@@ -49,7 +49,7 @@
 
   {{/* Basic's first question is "is it working?": the health strip leads the
        page. Above Basic the same facts close the vitals as one quiet line. */}}
-  {{if and .Health (not ($.Level.AtLeast "standard"))}}
+  {{if and .Health .HealthLead}}
   <section class="ov-health lead" aria-label="Is it working">{{template "overview-health" .Health}}</section>
   {{end}}
 

@@ -44,6 +44,10 @@ type eventDetailData struct {
 	ResponseLabel string `json:"-"`
 	ReturnHref    string `json:"-"`
 	ReturnLabel   string `json:"-"`
+	// Level is the console level, for detail-body's gates (the decoded fields
+	// and the raw payload are Advanced): the body also renders as the ?peek=1
+	// fragment, with no page around it to ask.
+	Level level `json:"-"`
 }
 
 // eventDetail renders one event-log entry as a review workspace: promoted
@@ -80,6 +84,7 @@ func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 		ResponseLabel: responseLabel,
 		ReturnHref:    returnHref,
 		ReturnLabel:   returnLabel,
+		Level:         s.consoleLevel(ctx).Level,
 	}
 	if items, err := s.resolveEventItems(ctx, ev); err != nil {
 		s.serverError(w, r, err)

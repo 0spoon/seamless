@@ -73,7 +73,7 @@
       </dl>
     </section>
 
-    {{if .Fields}}
+    {{if and .Fields ($.Level.AtLeast "advanced")}}
     <section class="card event-payload-card">
       <header class="event-card-head">
         <div><span class="event-card-eyebrow">Decoded</span><h2>Payload fields</h2></div>
@@ -85,7 +85,7 @@
     </section>
     {{end}}
 
-    {{if .RawJSON}}
+    {{if and .RawJSON ($.Level.AtLeast "advanced")}}
     <details class="card event-raw-card">
       <summary><span><small>Source data</small><strong>Raw payload</strong></span><span class="event-raw-format">JSON</span></summary>
       <div class="event-raw-body"><pre class="ix-raw" data-ix-title="">{{.RawJSON}}</pre></div>

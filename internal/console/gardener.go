@@ -164,6 +164,9 @@ type proposalCard struct {
 	// also renders standalone as a ?reader=1 fragment with no page around it.
 	CanUndoApply bool `json:"-"`
 	CanAct       bool `json:"-"`
+	// Level is the console level, for the reader's gates (Retarget, Hide
+	// forever), for the same reason as CanAct: the reader renders standalone.
+	Level level `json:"-"`
 	// Fenced is the projects this proposal touches that are isolated NOW,
 	// whether or not they were when it was proposed. The console is exempt from
 	// the isolation fence by design -- the owner sees everything -- so this
@@ -424,6 +427,7 @@ func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
 	if !wantsJSON(r) {
 		if first := firstRow(data); first != nil {
 			first.Selected = true
+			first.Level = s.consoleLevel(r.Context()).Level
 			data.Selected = first
 			data.SelectedAuto = true
 		}
@@ -465,6 +469,7 @@ func (s *Service) gardenerDetail(w http.ResponseWriter, r *http.Request) {
 		card.NextID = ""
 	}
 	card.Selected = true
+	card.Level = s.consoleLevel(ctx).Level
 	if wantsJSON(r) {
 		writeJSON(w, http.StatusOK, card)
 		return

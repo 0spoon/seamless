@@ -60,7 +60,7 @@ func newConsoleWithGardener(t *testing.T) (context.Context, *sql.DB, *files.Mana
 	rec := events.NewRecorder(db)
 	garden := gardener.New(db, mgr, nil, nil, rec, gardener.FromConfig(config.Gardener{}), slog.Default())
 
-	svc, err := New(Config{DB: db, Files: mgr, Gardener: garden, Events: rec, DataDir: dataDir, APIKey: testKey})
+	svc, err := New(Config{DB: db, Files: mgr, Gardener: garden, Events: rec, DataDir: dataDir, APIKey: testKey, Level: "advanced"})
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	svc.Register(mux)
@@ -305,7 +305,7 @@ func newConsoleWithChat(t *testing.T, chatOut string) (context.Context, *sql.DB,
 
 	rec := events.NewRecorder(db)
 	garden := gardener.New(db, mgr, nil, stubChat{out: chatOut}, rec, gardener.FromConfig(config.Gardener{}), slog.Default())
-	svc, err := New(Config{DB: db, Files: mgr, Gardener: garden, Events: rec, DataDir: dataDir, APIKey: testKey})
+	svc, err := New(Config{DB: db, Files: mgr, Gardener: garden, Events: rec, DataDir: dataDir, APIKey: testKey, Level: "advanced"})
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	svc.Register(mux)
@@ -374,7 +374,7 @@ func newConsoleForSplit(t *testing.T, chat llm.Chat) (context.Context, *sql.DB, 
 
 	rec := events.NewRecorder(db)
 	garden := gardener.New(db, mgr, nil, chat, rec, gardener.FromConfig(config.Gardener{}), slog.Default())
-	svc, err := New(Config{DB: db, Files: mgr, Gardener: garden, Events: rec, DataDir: dataDir, APIKey: testKey})
+	svc, err := New(Config{DB: db, Files: mgr, Gardener: garden, Events: rec, DataDir: dataDir, APIKey: testKey, Level: "advanced"})
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	svc.Register(mux)

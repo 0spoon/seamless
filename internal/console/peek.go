@@ -64,19 +64,23 @@ type memoryDetail struct {
 	// BodyIsEcho reports that the stored body adds nothing to the description:
 	// absent, or the same sentence again. The reader says so instead of
 	// printing one sentence twice and calling the second one the body.
-	BodyIsEcho   bool         `json:"-"`
-	Source       string       `json:"sourceSession,omitempty"`   // session name
-	SourceID     string       `json:"sourceSessionId,omitempty"` // resolved ULID, for a link
-	Model        string       `json:"model,omitempty"`           // producing model, as the provider names it
-	Harness      string       `json:"harness,omitempty"`         // producing client, resolved from the source session
-	Favorite     bool         `json:"favorite,omitempty"`
-	ReplacedBy   string       `json:"replacedBy,omitempty"` // name of the superseder
-	ReplacedByID string       `json:"replacedById,omitempty"`
-	Supersedes   []memoryRef  `json:"supersedes,omitempty"` // reverse: memories this replaced
-	FilePath     string       `json:"filePath"`
-	AbsPath      string       `json:"absPath"`
-	EditURL      template.URL `json:"-"`
-	CanArchive   bool         `json:"-"`
+	BodyIsEcho   bool        `json:"-"`
+	Source       string      `json:"sourceSession,omitempty"`   // session name
+	SourceID     string      `json:"sourceSessionId,omitempty"` // resolved ULID, for a link
+	Model        string      `json:"model,omitempty"`           // producing model, as the provider names it
+	Harness      string      `json:"harness,omitempty"`         // producing client, resolved from the source session
+	Favorite     bool        `json:"favorite,omitempty"`
+	ReplacedBy   string      `json:"replacedBy,omitempty"` // name of the superseder
+	ReplacedByID string      `json:"replacedById,omitempty"`
+	Supersedes   []memoryRef `json:"supersedes,omitempty"` // reverse: memories this replaced
+	FilePath     string      `json:"filePath"`
+	AbsPath      string      `json:"absPath"`
+	// Level is the console level, for the reader's one gate (the utility
+	// score): the reader also renders standalone as a ?reader=1 fragment, with
+	// no page around it to ask. Presentation only -- never in the JSON.
+	Level      level        `json:"-"`
+	EditURL    template.URL `json:"-"`
+	CanArchive bool         `json:"-"`
 }
 
 // memoryDetailData projects an index row into the full detail payload: body
@@ -92,7 +96,8 @@ func (s *Service) memoryDetailData(ctx context.Context, m core.Memory) (memoryDe
 	}
 	abs, edit := absAndEditURL(s.cfg.DataDir, m.FilePath)
 	d := memoryDetail{
-		ID: m.ID, Kind: string(m.Kind), Name: m.Name, Description: m.Description,
+		Level: s.consoleLevel(ctx).Level,
+		ID:    m.ID, Kind: string(m.Kind), Name: m.Name, Description: m.Description,
 		Project: m.Project, Status: status, Tags: m.Tags,
 		Created: m.Created, Updated: m.Updated, Source: m.SourceSession, Model: m.Model,
 		Favorite: m.Favorite,

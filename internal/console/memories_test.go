@@ -35,8 +35,11 @@ func newConsoleWithFiles(t *testing.T) (*sql.DB, *files.Manager, *http.ServeMux)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = mgr.Close() })
 
+	// Advanced, like newConsoleFeatures: these tests exercise the screens'
+	// full controls, not the level gates.
 	svc, err := New(Config{
 		DB: db, Files: mgr, Events: events.NewRecorder(db), DataDir: dataDir, APIKey: testKey,
+		Level: "advanced",
 	})
 	require.NoError(t, err)
 	mux := http.NewServeMux()

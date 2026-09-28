@@ -50,6 +50,7 @@
       {{end}}
     </article>
 
+    {{if $.Level.AtLeast "standard"}}
     <aside class="card session-scorecard">
       <header class="session-card-head"><div><span class="session-card-eyebrow">At a glance</span><h2>Review signals</h2></div></header>
       <div class="session-review-metrics">
@@ -59,6 +60,7 @@
         <div class="session-review-metric"><span>Model tokens</span><strong>{{if .Session.Tokens.Total}}{{compactNum .Session.Tokens.Total}}{{else}}&mdash;{{end}}</strong><small>{{if .Session.Tokens.Total}}{{compactNum .Session.Tokens.Output}} output{{else}}not harvested{{end}}</small></div>
       </div>
     </aside>
+    {{end}}
   </section>
 
   <div class="session-workspace">

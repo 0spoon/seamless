@@ -28,6 +28,7 @@
       <a class="{{if eq .Filter "expired"}}on{{end}}" href="/console/sessions?status=expired&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained={{.Retained}}">Expired</a>
     </div>
   </div>
+  {{if $.Level.AtLeast "standard"}}
   <div class="mv2-sort">
     <span class="mv2-sort-label">Retained</span>
     <div class="seg" data-seam-query>
@@ -36,6 +37,8 @@
       <a class="{{if eq .Retained "no"}}on{{end}}" title="Sessions that retained nothing durable" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained=no">Nothing</a>
     </div>
   </div>
+  {{end}}
+  {{if $.Level.AtLeast "standard"}}
   <details class="menu sort-menu">
     <summary class="menu-btn" aria-label="Sort: {{sortLabel .Sort}}">{{icon "arrow-up-down"}}<span class="menu-k">Sort</span><strong>{{sortLabel .Sort}}</strong>{{icon "chevron-down"}}</summary>
     <div class="menu-list" data-seam-query>
@@ -43,6 +46,7 @@
       <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=name&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained={{.Retained}}">Name</a>
     </div>
   </details>
+  {{end}}
   <div class="mv2-sort">
     <span class="mv2-sort-label">Updated</span>
     <div class="seg" data-seam-query>

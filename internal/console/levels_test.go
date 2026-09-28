@@ -260,6 +260,10 @@ func TestLevels_JSONAnswersAreIdenticalAcrossLevels(t *testing.T) {
 		"/console/retrieval?format=json",
 		"/console/sessions?format=json",
 		"/console/tasks?format=json",
+		"/console/memories?format=json",
+		"/console/notes?format=json",
+		"/console/gardener?format=json",
+		"/console/search?q=xylophone&w=7d&sort=newest&format=json",
 	} {
 		var answers []map[string]any
 		for _, lvl := range config.ConsoleLevels {

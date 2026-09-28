@@ -81,12 +81,14 @@
         <span class="settings-access editable">{{icon "settings"}} Editable here</span>
       </header>
 
+      {{if $.Level.AtLeast "standard"}}
       <div class="settings-precedence{{if .FeaturesOverridden}} is-override{{end}}">
         <span class="state-dot"></span>
         {{if .FeaturesOverridden}}<span><strong>Stored override active</strong> &mdash; these switches ignore the file and environment until reset.</span>
         <button class="btn small" type="submit" form="features-reset" onclick="return confirm('Clear the stored override and go back to the file/env configuration? No data is deleted.');">Reset to file + env</button>
         {{else}}<span><strong>Following file + env</strong> &mdash; saving stores an override that wins until reset.</span>{{end}}
       </div>
+      {{end}}
 
       <article class="features-workbench">
         <header class="features-workbench-head">
@@ -108,7 +110,7 @@
               <label class="brief-toggle feature-toggle">
                 <input type="checkbox" name="{{.Field}}" value="1"{{if .Enabled}} checked{{end}}>
                 <span class="brief-switch" aria-hidden="true"></span>
-                <span><strong>Available in the console and to agents</strong><small>{{.WhenOff}}</small></span>
+                <span><strong>Available in the console and to agents</strong><small>{{if $.Level.AtLeast "standard"}}{{.WhenOff}}{{else}}{{.WhenOffPlain}}{{end}}</small></span>
               </label>
               {{if .DataKept}}<p class="feature-data">{{icon "database"}}<span>{{.DataKept}}</span></p>{{end}}
             </section>
@@ -425,7 +427,7 @@
               <span class="workspace-cell-label">Repo route</span>
               {{if .Repos}}
               <div class="workspace-route-list">
-                {{range .Repos}}<div class="workspace-route" title="{{.Path}}{{if .Host}} on {{.Host}}{{end}}"><span class="repo-path-icon">{{icon "folder-open"}}</span><span class="mono">{{.Path}}</span><span class="kind faint" title="Machine this checkout lives on">{{if .Host}}{{.Host}}{{else}}unknown host{{end}}</span>{{copyBtn .Path}}</div>{{end}}
+                {{range .Repos}}<div class="workspace-route" title="{{.Path}}{{if .Host}} on {{.Host}}{{end}}"><span class="repo-path-icon">{{icon "folder-open"}}</span><span class="mono">{{.Path}}</span>{{if $.Level.AtLeast "advanced"}}<span class="kind faint" title="Machine this checkout lives on">{{if .Host}}{{.Host}}{{else}}unknown host{{end}}</span>{{end}}{{copyBtn .Path}}</div>{{end}}
               </div>
               {{else}}<span class="workspace-empty-mark" title="No repo route">&mdash;</span>{{end}}
             </div>
@@ -442,7 +444,7 @@
         </div>
         {{else}}<div class="registry-empty">No workspace scopes registered or referenced yet.</div>{{end}}
 
-        {{if .UnboundRepos}}
+        {{if and .UnboundRepos ($.Level.AtLeast "advanced")}}
         <aside class="workspace-unbound">
           <span class="workspace-unbound-icon">{{icon "triangle-alert"}}</span>
           <div><strong>Unbound arrival routes</strong><p>These repo paths do not resolve to a project scope.</p><div>{{range .UnboundRepos}}<span class="mono" title="{{if .Host}}on {{.Host}}{{else}}host unknown{{end}}">{{.Path}}{{if .Host}} <span class="faint">({{.Host}})</span>{{end}}</span>{{end}}</div></div>
