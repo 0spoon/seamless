@@ -239,7 +239,7 @@ reference](/reference/cli-seam/) for what each command accepts.
 
 **What is happening.** The `briefing:` block has a fourth precedence layer above
 file and environment: a **runtime override stored in the database**, written by the
-console's Settings → Briefing injection form. It wins over both, applies from the
+console's Settings → Briefing section. It wins over both, applies from the
 next session start without a restart, and stays until reset.
 
 **Fix.** Check the console before you check the YAML. This is the one place the
@@ -279,6 +279,20 @@ are looking at the propagation seam, not a failure:
 One thing that is *not* a symptom of this: a gated tool call leaves no row in
 the Interactions feed. The filter rejects it before the middleware that records
 tool calls, so silence there is expected.
+
+## A console screen is not in the sidebar
+
+**What is happening.** If a link still opens it - with a note that it is not in
+your sidebar - it is the console's
+[experience level](/reference/console/#choose-how-much-you-see), not a switched-off
+feature. A fresh installation starts at Basic, which keeps the sidebar to the
+essentials. Levels only change what the console shows: your agents get the same
+tools and briefings at every level.
+
+**Fix.** Choose a level in the console under Settings → Experience (the note's
+**Switch** button does it in one click), or set `console.level` in YAML /
+`SEAMLESS_CONSOLE_LEVEL`. A choice made in the console wins over both until you
+reset it there.
 
 ## Two daemons, the wrong port, or code changes that never land
 

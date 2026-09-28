@@ -142,8 +142,8 @@ gardener latches it per project only once the project's first demand is at
 least 14 days old and it has shown 20+ demand events and 10+ memories touched
 in 30 days - a young project keeps the recency order, because a utility signal
 with no history behind it is noise. `on`/`off` force it everywhere, and the
-console Settings page shows each scope's progress toward the latch, with a
-per-scope force.
+console's Settings → Knowledge engine shows each scope's progress toward the
+latch, with a per-scope force.
 
 Every knob is tunable in [Configuration](/reference/configuration/), and the
 `briefing:` block is also editable live in the console. Those runtime edits are

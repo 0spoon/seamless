@@ -57,7 +57,7 @@
 - [The service & where things live](https://thereisnospoon.org/docs/reference/service/): Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, and every path Seamless touches.
 - [Claude app compatibility matrix](https://thereisnospoon.org/docs/reference/claude-app-compatibility/): Versioned evidence for the Claude app's two surfaces - embedded code sessions (hooks, MCP, runtime skew) and the chat surface's stdio MCP bridge.
 - [Codex compatibility matrix](https://thereisnospoon.org/docs/reference/codex-compatibility/): Versioned, platform-specific evidence for the Codex hooks, MCP transports, trust gate, output limit, and the contract-recapture procedure.
-- [Console](https://thereisnospoon.org/docs/reference/console/): The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, and what each page shows.
+- [Console](https://thereisnospoon.org/docs/reference/console/): The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, the three experience levels, and what each page shows.
 - [Storage and file formats](https://thereisnospoon.org/docs/reference/storage/): The ~/.seamless tree, memory and note frontmatter field by field, what lives only in SQLite, and the rules for hand-editing.
 - [Glossary](https://thereisnospoon.org/docs/reference/glossary/): The vocabulary, with the distinctions that actually matter - memory vs note vs finding, briefing vs recall, archive vs supersede vs delete.
 

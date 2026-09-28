@@ -227,6 +227,9 @@ Open the console to watch it happen:
 seamlessd console-open                               # opens pre-authenticated
 ```
 
+It starts with the essentials; the card on its Home lets you pick how much of it
+you want to see.
+
 ## Next steps
 
 - Run `/seam-onboard` in Claude Code or `$seam-onboard` in Codex once - it
@@ -2244,8 +2247,8 @@ gardener latches it per project only once the project's first demand is at
 least 14 days old and it has shown 20+ demand events and 10+ memories touched
 in 30 days - a young project keeps the recency order, because a utility signal
 with no history behind it is noise. `on`/`off` force it everywhere, and the
-console Settings page shows each scope's progress toward the latch, with a
-per-scope force.
+console's Settings → Knowledge engine shows each scope's progress toward the
+latch, with a per-scope force.
 
 Every knob is tunable in [Configuration](/reference/configuration/), and the
 `briefing:` block is also editable live in the console. Those runtime edits are
@@ -5227,7 +5230,7 @@ reference](/reference/cli-seam/) for what each command accepts.
 
 **What is happening.** The `briefing:` block has a fourth precedence layer above
 file and environment: a **runtime override stored in the database**, written by the
-console's Settings → Briefing injection form. It wins over both, applies from the
+console's Settings → Briefing section. It wins over both, applies from the
 next session start without a restart, and stays until reset.
 
 **Fix.** Check the console before you check the YAML. This is the one place the
@@ -5267,6 +5270,20 @@ are looking at the propagation seam, not a failure:
 One thing that is *not* a symptom of this: a gated tool call leaves no row in
 the Interactions feed. The filter rejects it before the middleware that records
 tool calls, so silence there is expected.
+
+## A console screen is not in the sidebar
+
+**What is happening.** If a link still opens it - with a note that it is not in
+your sidebar - it is the console's
+[experience level](/reference/console/#choose-how-much-you-see), not a switched-off
+feature. A fresh installation starts at Basic, which keeps the sidebar to the
+essentials. Levels only change what the console shows: your agents get the same
+tools and briefings at every level.
+
+**Fix.** Choose a level in the console under Settings → Experience (the note's
+**Switch** button does it in one click), or set `console.level` in YAML /
+`SEAMLESS_CONSOLE_LEVEL`. A choice made in the console wins over both until you
+reset it there.
 
 ## Two daemons, the wrong port, or code changes that never land
 
@@ -7210,24 +7227,42 @@ Four layers resolve each key. Later layers win:
    the database. They win over file *and* env, take effect without a daemon
    restart, and stay until reset.
 
-That fourth layer covers two blocks, and only those two:
+That fourth layer covers three blocks, and only those three:
 
 | Block | Written by | When it takes effect |
 |---|---|---|
-| `briefing:` | Settings → Briefing injection | From the next session start. |
+| `briefing:` | Settings → [Briefing](/reference/console/#briefing) | From the next session start. |
 | `features:` | Settings → [Features](/reference/console/#optional-features) | Immediately in the console; an agent sees it from its next session (tool lists and briefings alike). |
+| `console.level` | Settings → [Experience](/reference/console/#experience), or the Home welcome card | Immediately, in the console only. |
 
 It exists so you can change what agents get injected - and what they can reach -
 while they are running, and it is the one place where the config file is not the
-last word: check the console before concluding a `briefing:` or `features:`
-setting is being ignored. Neither form ever writes your config file, and
-**Reset** on either clears the stored row and hands that block back to file/env.
+last word: check the console before concluding a `briefing:`, `features:`, or
+`console.level` setting is being ignored. No form ever writes your config file,
+and **Reset** on each clears the stored row and hands that block back to
+file/env.
 
-One override can be in force without you having set it. Upgrading an
+Overrides can be in force without you having set them. Upgrading an
 installation that already holds trial data seeds a stored `features:` override
 with research on, so a feature that now ships off does not disappear from under
 data you were already using. The console labels it a stored override, not your
 choice; **Reset** clears it like any other.
+
+### The console level
+
+`console.level` (`SEAMLESS_CONSOLE_LEVEL`) is how much of the
+[console](/reference/console/#choose-how-much-you-see) you see: `basic`,
+`standard`, or `advanced`. It is presentation only - briefings, MCP tools,
+hooks, recall, and the gardener are identical at every level - and a screen a
+level leaves out of the sidebar still opens from a link. A value outside those
+three stops the daemon at startup with an error naming them; an empty value
+means the default, `basic`.
+
+A fresh installation starts at `basic`. Upgrading an installation that had
+already recorded sessions stores `advanced` once, as the same kind of runtime
+override (labeled "set by the upgrade" in Settings → Experience), so an upgrade
+never hides a screen you were using. Like any override, it wins over this key
+until **Reset** hands the level back to file/env.
 
 ## Generating a key
 
@@ -8356,8 +8391,17 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Unhide a pattern | `POST /console/gardener/{id}/unhide` | Lifts a forever block. The proposal stays resolved; the gardener may propose the pattern again the next time it recurs. |
 | Retarget a reproject proposal | `POST /console/gardener/{id}/retarget` | Rewrites a **pending** reproject's destination project before it is applied. Reproject proposals only. |
 | Apply a whole plan batch | `POST /console/gardener/plan/{slug}/apply` | Applies every pending proposal in a plan, split setup first so the child projects exist before the memories move. Best-effort: it applies what it can, reports how many landed, and leaves the rest pending. |
+| Dismiss a whole rail group | `POST /console/gardener/group/dismiss` | Dismisses every pending proposal in one rail section or split plan, one at a time, so each keeps its own event and stays individually undoable. Only Dismiss is offered in bulk. |
+| Undo a decision | `POST /console/gardener/{id}/undo` | Returns a resolved proposal to the queue from **Recently decided**, inverting whatever its apply did, for the kinds whose apply can be inverted. |
+| Set a project's isolation | `POST /console/projects/{slug}/isolation` | Changes how far a project's knowledge travels. A tightening that would cut existing context first renders a confirmation step; nothing is written until it is confirmed. |
 | Save briefing settings | `POST /console/settings/briefing` | Writes the briefing knobs as a runtime **override row** in the DB. It never writes the config file. |
 | Reset briefing settings | `POST /console/settings/briefing/reset` | Clears the override row, reverting to the file/env configuration. |
+| Force utility ranking for a scope | `POST /console/settings/utility` | Sets or clears the owner's per-scope force: `on` and `off` win over the gardener's readiness latch, `auto` defers to it again. |
+| Switch embeddings off or back on | `POST /console/settings/embeddings/mode` | Stores or clears the embedder off switch. It is read at serve start, so the change applies from the next restart - the page says so. |
+| Re-embed everything | `POST /console/settings/embeddings/reembed` | Starts a background pass that re-embeds every memory and note with the active model. It changes vectors, never content. |
+| Choose the console level | `POST /console/settings/level` | Stores the [experience level](#choose-how-much-you-see) as a row that wins over file and env. Presentation only: nothing an agent receives changes. |
+| Reset the console level | `POST /console/settings/level/reset` | Clears that row, back to the file/env level. |
+| Dismiss the welcome card | `POST /console/settings/level/welcome` | Records that the Home welcome card was seen, without choosing a level. |
 | Save optional features | `POST /console/settings/features` | Writes the feature switches as a stored **override row** in the DB. It changes what is exposed - console screens and the matching agent tools - and deletes nothing. |
 | Reset optional features | `POST /console/settings/features/reset` | Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing. |
 | Save a project family | `POST /console/settings/families/save` | Creates a family or replaces one family's name and member set - the same `project_families` setting `seamlessd family` manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member. |
@@ -8371,7 +8415,8 @@ flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
 configuration knob (briefing overrides, feature switches, project families) that
 shapes future briefings, or what is exposed, without touching any memory's
-content.
+content. The console level is presentation state of the same kind: it changes
+what this console shows you and nothing else.
 
 This is deliberate, and it is the same principle as
 [the gardener's](/concepts/gardener/) propose-only contract. The store is written
@@ -8434,6 +8479,8 @@ The sidebar groups the screens by the job they serve rather than by table:
 | **Work** | Projects, Plans, Tasks, Sessions |
 | **Research** | Labs, Trials (only while that [optional feature](#optional-features) is on) |
 
+That is the full list, at the Advanced [level](#choose-how-much-you-see); a
+lower level shows a subset, in the same order and under the same names.
 Settings closes the list. Above the groups, a **Search or jump to** field opens
 the command palette. The sidebar collapses to an icon rail (the header button, or
 `[`) and remembers that per browser; under 720px it becomes a drawer behind the
@@ -8446,11 +8493,13 @@ is for.
 
 `Cmd/Ctrl+K`, the sidebar's search field, or `/` on a screen with no filter of
 its own opens the palette. With nothing typed it offers **Recent** (the entities
-you last opened in this browser), **Jump to** (every section, with its shortcut),
-and **Actions** (switch theme, collapse the sidebar, the shortcut sheet). Typing
-matches sections and actions instantly; from two characters on it also searches
-memories, notes, tasks, plans, trials, projects, and sessions through the same
-route as [Search](#search).
+you last opened in this browser), **Jump to** (every section the sidebar offers,
+with its shortcut, plus Search, Context, and each Settings section the level
+shows), and **Actions** (switch theme, collapse the sidebar, the shortcut sheet,
+change the experience level). Typing matches sections and actions instantly;
+from two characters on it also searches memories, notes, tasks, plans, trials,
+projects, and sessions through the same route as [Search](#search), showing the
+groups the level offers.
 
 ### Keyboard
 
@@ -8465,7 +8514,8 @@ route as [Search](#search).
 | `Esc` | Close the palette, a menu, the sheet, or the drawer |
 
 The `g` map is read from the sidebar itself, so a section switched off in
-Settings takes its shortcut with it.
+Settings - or one the [level](#choose-how-much-you-see) leaves out of the
+sidebar - takes its shortcut with it, and brings it back when it returns.
 
 Moving between screens keeps the sidebar in place and settles the new content
 in (cross-document view transitions, where the browser supports them), and
@@ -8486,6 +8536,117 @@ opens; agents working right now carry a slow orbit of light on the Now screen.
 All of it is decoration over data the page already states: nothing here changes
 a number, and `prefers-reduced-motion` stills every part of it (the Seam sends no
 sparks, numbers render at their value).
+
+## Choose how much you see
+
+The console has three **experience levels**. They change what the console shows
+you and nothing else: your agents get the same briefing, the same MCP tools, the
+same hooks, the same recall, and the same gardener at every level. The level is
+presentation, stored for this installation's owner rather than per browser, so
+your phone and your laptop agree.
+
+**Basic** is the essentials, for someone who installed Seamless because they use
+Claude Code or Codex and wants to know it works: what the agents remember
+(Memories, Notes), what they did (Sessions), cleanup suggestions to accept or
+decline (Gardener), and a Home that opens on a health strip - which agent clients
+are working here, whether semantic recall is on, when the last briefing went
+out, and the version.
+
+**Standard** adds following the work: Now, Projects, Plans, and Tasks (and Labs
+and Trials when that feature is on), the Overview's window, vitals, and
+workspaces, the Briefing and Workspaces settings, and the finer controls on the
+screens Basic already had.
+
+**Advanced** is every screen and every knob: Interactions (the tool-call
+transport), Retrieval (the analytics), Context, the Knowledge engine settings,
+and raw event payloads.
+
+A fresh installation starts at **Basic**, and Home carries a one-time welcome
+card offering all three - pick one, or dismiss it; either way it does not come
+back, on any device. The sidebar's account row names the level you are on and
+links to **Settings > Experience**, where the three levels sit side by side with
+the list of what each one shows. The palette's **Change experience level** action
+goes there too.
+
+**Hidden, not locked.** A level removes screens from the sidebar, the palette,
+and the shortcut map; it never locks them. A link to a screen above your level -
+from these docs, an agent's finding, a briefing, a bookmark - still opens it,
+under a note saying it is not in your sidebar, with a button to switch. JSON
+callers (`?format=json`, and so the `seam` CLI, `seam doctor` included) get the
+same answer at every level.
+
+**Upgrading keeps every screen.** An installation that already recorded sessions
+before levels existed is set to Advanced by a one-time upgrade step, so nothing
+you were using disappears; Settings > Experience says the level was set by the
+upgrade, and the welcome card appears once to announce the choice.
+
+Levels and [optional features](#optional-features) compose: a screen shows when
+its feature is on **and** the level includes it. Features change what exists -
+for the console and for agents alike; the level only changes how much of it you
+see. The level can also come from the config file or environment (`console.level`,
+`SEAMLESS_CONSOLE_LEVEL`) - a choice made in the console wins until you reset it
+there. See [Configuration](/reference/configuration/).
+
+What each level shows, generated from the console's own registries:
+
+### Screens
+
+| | Basic | Standard | Advanced |
+|---|---|---|---|
+| **Overview** | shown | shown | shown |
+| **Now** | - | shown | shown |
+| **Interactions** | - | - | shown |
+| **Memories** | shown | shown | shown |
+| **Notes** | shown | shown | shown |
+| **Retrieval** | - | - | shown |
+| **Gardener** | shown | shown | shown |
+| **Projects** | - | shown | shown |
+| **Plans** | - | shown | shown |
+| **Tasks** | - | shown | shown |
+| **Sessions** | shown | shown | shown |
+| **Labs** - while the research feature is on | - | shown | shown |
+| **Trials** - while the research feature is on | - | shown | shown |
+| **Settings** | shown | shown | shown |
+| **Search** - no sidebar entry: the palette and links reach it | shown | shown | shown |
+| **Context** - no sidebar entry: the palette and links reach it | - | - | shown |
+
+### Settings sections
+
+| | Basic | Standard | Advanced |
+|---|---|---|---|
+| **Experience** - How much of the console you see, and how it looks | shown | shown | shown |
+| **Features** - Optional features, for the console and agents alike | shown | shown | shown |
+| **Your setup** - Version, files, and what is connected | shown | shown | shown |
+| **Briefing** - What every new agent session starts with | - | shown | shown |
+| **Workspaces** - Projects, repo routes, and families | - | shown | shown |
+| **Knowledge engine** - Semantic index, ranking, storage, and policy | - | - | shown |
+
+### Within screens
+
+| | Basic | Standard | Advanced |
+|---|---|---|---|
+| **Overview: the observation window** | - | shown | shown |
+| **Overview: the vitals** | - | shown | shown |
+| **Overview: the workspaces table and the knowledge rail** | - | shown | shown |
+| **Memories: the Reach and Utility sorts** | - | shown | shown |
+| **Memories: how often each memory surfaced** | - | shown | shown |
+| **Memories: the utility score in the reader** | - | shown | shown |
+| **Gardener: the Type and Source filters** | - | shown | shown |
+| **Gardener: the project-split example** | - | shown | shown |
+| **Gardener: the Hidden forever list** | - | shown | shown |
+| **Gardener: Retarget on a proposal** | - | shown | shown |
+| **Gardener: Hide forever on a proposal** | - | shown | shown |
+| **Sessions: the Retained filter** | - | shown | shown |
+| **Sessions: the Sort menu** | - | shown | shown |
+| **Sessions: a session's review signals** | - | shown | shown |
+| **Search: the Updated window** | - | shown | shown |
+| **Search: the Sort control** | - | shown | shown |
+| **Settings: the precedence line on Features** | - | shown | shown |
+| **Settings: the agent tool names on Features** | - | shown | shown |
+| **Settings: each repo route's host on Workspaces** | - | - | shown |
+| **Settings: the unbound repo routes on Workspaces** | - | - | shown |
+| **Event pages: the decoded payload fields** | - | - | shown |
+| **Event pages: the raw payload** | - | - | shown |
 
 ## Three ways to render a page
 
@@ -8937,20 +9098,47 @@ See [The gardener](/concepts/gardener/) for what each proposal type means.
 
 ## Settings
 
-`/console/settings`
+`/console/settings?s=<section>`
 
-A view of the running configuration - data dir, budgets, gardener settings, the
-registered projects, and the repo→project map - with editable blocks for
-optional features, the semantic index, briefing injection (including utility
-ranking), and project families.
+Settings is one section at a time, each shaped by what you came to do rather
+than by subsystem. A sub-nav on the left (a row of chips on a phone) switches
+sections in place, without reloading the page. `/console/settings` alone opens
+**Experience**; an unknown `?s=` is a 400 that names the valid sections. Which
+sections a level offers is in the [matrix above](#choose-how-much-you-see); a
+section above your level still opens from a link, under the same note a hidden
+screen gets. Old `/console/settings#...` bookmarks land on the matching section.
+
+The editable sections share two habits. A one-line note at the top says where
+the values come from - **Following file + env**, or an override in force, with
+**Reset to file + env** beside it. And a save bar appears at the bottom once a
+form has unsaved changes, with **Save** and **Discard** (which puts the form back
+exactly as the page loaded it); without JavaScript the bar is simply always
+there. `GET /console/settings?format=json` returns the whole payload whatever
+`?s=` says, plus `consoleLevel`, `consoleLevelOverridden`, and
+`consoleLevelSource`.
+
+### Experience
+
+`/console/settings?s=experience`
+
+The three [levels](#choose-how-much-you-see) side by side - Basic, Standard,
+Advanced - the current one marked, each with a one-line pitch and a list of what
+it shows, generated from the same registries the sidebar and the page gates
+read, so the list cannot promise something the level does not do. Choosing one
+applies at once: the sidebar and the page update in place, and if the new level
+hides the screen you were on you land on Home with a note. The note at the top
+says whether the level was **chosen in the console** or **set by the upgrade**,
+and **Reset to file + env** hands the choice back to `console.level`. The same
+section holds the theme (Dark or Light - per browser, and the same switch as the
+sidebar's sun and moon) and a button for the shortcut sheet.
 
 ### Optional features
 
-`/console/settings#features`
+`/console/settings?s=features`
 
 Optional features are the parts of Seamless you can switch on and off, and they
 ship **off**: a fresh install exposes none of them until you turn one on. The
-zone renders one card per feature - a toggle, an Enabled/Disabled pill, what the
+section renders one card per feature - a toggle, an Enabled/Disabled pill, what the
 feature is, a generated line naming exactly what switching it off hides, and a
 live count of the data it holds either way ("Data kept: 12 trials across 3
 labs").
@@ -9074,54 +9262,95 @@ file/env configuration, which unless you set `features:` there is off.
 One override can be in force without you having set it. Upgrading an
 installation that already holds trial data seeds the override with research on,
 so a feature that now ships off does not disappear from under data you were
-already using. That is why the zone states that a stored override is in force
+already using. That is why the section states that a stored override is in force
 rather than crediting you with the choice - and reset clears it like any other.
+At Basic the section keeps the cards, what each hides, and the data-kept line,
+and leaves out the agent tool names and the precedence line.
 
-### Semantic index & storage
+### Your setup
 
-The embedding pipeline and the SQLite database, side by side. The embedder card
-shows the active provider and model - and when embeddings are off, the exact
-cause, with distinct copy for the owner off switch, the no-key lexical fallback,
-and a config error. The off/auto switch is
-a settings row read once at serve start, so the page flags a pending restart
-whenever the stored switch disagrees with the running process. Below it, the
-stored-vector counts: totals, the not-yet-embedded backlog, and a per-model
-table that badges models the running embedder no longer writes as stale -
-**re-embed everything** rewrites the corpus with the active model in the
-background. The database card shows the file path, size on disk including the
-WAL, and schema version.
+`/console/settings?s=setup`
 
-### Briefing injection
+Read-only facts in plain words: the version, the machine the daemon runs on, the
+config file (with a link that opens it in your editor, or a note that the daemon
+runs on defaults and environment variables), the data folder, the database file
+and its size, which agent clients have recorded sessions and when each was last
+active, whether semantic recall is on - and when it is off, what to do about it -
+whether the gardener is running and how often, and links to these docs. No
+budgets or policy numbers: those live in Knowledge engine.
+
+### Briefing
+
+`/console/settings?s=briefing`
+
+What every new agent session starts with. Three **presets** lead the section -
+**Lean** (a short briefing: the binding rules, the freshest memories, little
+else), **Balanced** (exactly the defaults), and **Rich** (more rules in full,
+more recent work, and family memories) - each card showing the numbers that set
+it apart. Picking one fills the form; nothing is saved until you save. Below
+them, **Customize** holds every knob, grouped by what it shapes - the memory
+index, recent work, the planning horizon, the project family, utility ranking,
+and the safety ceiling - with each knob's "0 means" note under it. Customize is
+open by default at Advanced. The section marks the preset your saved values
+equal, or **Custom** when they match none, and re-marks it as you edit.
 
 Saving writes a runtime override row in the DB. It layers over the file/env
 values and wins until reset, and it applies from the next session start - no
-daemon restart. It never touches your config file, so
-`seamless.yaml` stays the thing you wrote. **Reset** clears the override and
-reverts to file/env. The form validates: a non-numeric knob or a value that
-fails `Briefing.Validate()` comes back as an error flash, not a
+daemon restart. It never touches your config file, so `seamless.yaml` stays the
+thing you wrote. The token budget (`budgets.max_briefing_tokens`) is not a
+briefing knob and no preset moves it. The form validates: a non-numeric knob or a
+value that fails `Briefing.Validate()` comes back as an error flash, not a
 silently-dropped save.
 
-The form's **utility ranking** group holds the closed-loop knobs -
-`utility_weight` (utility's share of the briefing sort key; 0 restores pure
-recency) and `utility_mode` (`auto` arms each project as its demand history
-matures, `on` everywhere now, `off` never). The same group's **utility
-activation by scope** table lists every scope with each readiness gate against
-its threshold (demand events, memories touched, history age - met gates turn
-green) and, for scopes still building, spells out exactly what remains before
-auto arms ("needs 7 more events, 3d more history"). A per-scope **force**
-overrides the latch in either direction; when the global mode is `on` or
-`off`, the table says the per-scope state is dormant until auto returns. See
+The **utility ranking** group holds `utility_weight` (utility's share of the
+briefing sort key; 0 restores pure recency) and `utility_mode` (`auto` arms each
+project as its demand history matures, `on` everywhere now, `off` never). Where
+each scope stands against the readiness gates is in Knowledge engine. See
 [Sessions & briefings](/concepts/sessions/#the-budget-and-what-survives-it) for
 how the blended order behaves once active.
 
-### Project families
+### Workspaces
 
-Create, rename, edit, or delete the named groupings that
-[`seamlessd family`](/reference/cli-seamlessd/#seamlessd_family) manages from
-the CLI - the same `project_families` setting, so a change on either surface
-shows up on the other. Members are chosen from a closed picker of registered
-projects; the CLI is the route for pre-registering a slug that does not exist
-yet.
+`/console/settings?s=workspaces`
+
+How repositories resolve to project scopes, and which projects share context.
+**Project families** are editable here: create, rename, edit, or delete the named
+groupings that [`seamlessd family`](/reference/cli-seamlessd/#seamlessd_family)
+manages from the CLI - the same `project_families` setting, so a change on either
+surface shows up on the other. Members are chosen from a closed picker of
+registered projects; the CLI is the route for pre-registering a slug that does
+not exist yet. Below it, one bounded directory lists every scope with its repo
+routes and family tags. At Advanced each route also names the machine it lives
+on, and repo paths that resolve to no project are listed as unbound.
+
+### Knowledge engine
+
+`/console/settings?s=engine`
+
+The machinery, in three groups.
+
+**Recall** - the embedder card shows the active provider and model, and when
+embeddings are off, the exact cause, with distinct copy for the owner off switch,
+the no-key lexical fallback, and a config error. The off/auto switch is a
+settings row read once at serve start, so the page flags a pending restart
+whenever the stored switch disagrees with the running process. Beside it, the
+stored-vector counts: totals, the not-yet-embedded backlog, and a per-model
+table that badges models the running embedder no longer writes as stale -
+**re-embed everything** rewrites the corpus with the active model in the
+background.
+
+**Ranking** - the **utility activation by scope** table lists every scope with
+each readiness gate against its threshold (demand events, memories touched,
+history age - met gates turn green) and, for scopes still building, spells out
+exactly what remains before auto arms ("needs 7 more events, 3d more history").
+A per-scope **force** overrides the latch in either direction; when the global
+mode is `on` or `off`, the table says the per-scope state is dormant until auto
+returns.
+
+**Storage & policy** - read-only: the data folder, the context budgets, the
+database (path, size on disk including the WAL, schema version), and the
+gardener's cadence and policy. Change these through the config file or
+environment, then restart.
 
 See [Configuration](/reference/configuration/) for what each knob does, and
 [Sessions & briefings](/concepts/sessions/) for what they tune.
@@ -9133,7 +9362,8 @@ See [Configuration](/reference/configuration/) for what each knob does, and
 What a Recent-activity or timeline row links to: a compact event review workspace
 with the event's agent/session attribution, verbatim injected or transport
 content, surfaced memories resolved to their live index entries (or flagged
-missing), remaining payload fields, and raw JSON. The Interactions inspector
+missing), remaining payload fields, and raw JSON (the last two at the Advanced
+level; `?format=json` always carries them). The Interactions inspector
 uses the same content model in a side pane; opening the full page adds context
 without changing the underlying event.
 

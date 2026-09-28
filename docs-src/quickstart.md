@@ -140,6 +140,9 @@ Open the console to watch it happen:
 seamlessd console-open                               # opens pre-authenticated
 ```
 
+It starts with the essentials; the card on its Home lets you pick how much of it
+you want to see.
+
 ## Next steps
 
 - Run `/seam-onboard` in Claude Code or `$seam-onboard` in Codex once - it

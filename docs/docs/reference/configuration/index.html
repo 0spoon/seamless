@@ -230,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#where-the-config-comes-from">Where the config comes from</a></li><li class="lvl-2"><a href="#precedence">Precedence</a></li><li class="lvl-2"><a href="#generating-a-key">Generating a key</a></li><li class="lvl-2"><a href="#every-key">Every key</a></li><li class="lvl-2"><a href="#annotated-example">Annotated example</a></li>
+      <li class="lvl-2"><a href="#where-the-config-comes-from">Where the config comes from</a></li><li class="lvl-2"><a href="#precedence">Precedence</a></li><li class="lvl-3"><a href="#the-console-level">The console level</a></li><li class="lvl-2"><a href="#generating-a-key">Generating a key</a></li><li class="lvl-2"><a href="#every-key">Every key</a></li><li class="lvl-2"><a href="#annotated-example">Annotated example</a></li>
     </ul>
   </details>
   <p>Seamless reads a single YAML file. Every key also has a <code>SEAMLESS_*</code> environment
@@ -252,7 +252,7 @@ override.</p>
 the database. They win over file <em>and</em> env, take effect without a daemon
 restart, and stay until reset.</li>
 </ol>
-<p>That fourth layer covers two blocks, and only those two:</p>
+<p>That fourth layer covers three blocks, and only those three:</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -265,7 +265,7 @@ restart, and stay until reset.</li>
 <tbody>
 <tr>
 <td><code>briefing:</code></td>
-<td>Settings → Briefing injection</td>
+<td>Settings → <a href="../../reference/console/#briefing">Briefing</a></td>
 <td>From the next session start.</td>
 </tr>
 <tr>
@@ -273,19 +273,38 @@ restart, and stay until reset.</li>
 <td>Settings → <a href="../../reference/console/#optional-features">Features</a></td>
 <td>Immediately in the console; an agent sees it from its next session (tool lists and briefings alike).</td>
 </tr>
+<tr>
+<td><code>console.level</code></td>
+<td>Settings → <a href="../../reference/console/#experience">Experience</a>, or the Home welcome card</td>
+<td>Immediately, in the console only.</td>
+</tr>
 </tbody>
 </table>
 </div>
 <p>It exists so you can change what agents get injected - and what they can reach -
 while they are running, and it is the one place where the config file is not the
-last word: check the console before concluding a <code>briefing:</code> or <code>features:</code>
-setting is being ignored. Neither form ever writes your config file, and
-<strong>Reset</strong> on either clears the stored row and hands that block back to file/env.</p>
-<p>One override can be in force without you having set it. Upgrading an
+last word: check the console before concluding a <code>briefing:</code>, <code>features:</code>, or
+<code>console.level</code> setting is being ignored. No form ever writes your config file,
+and <strong>Reset</strong> on each clears the stored row and hands that block back to
+file/env.</p>
+<p>Overrides can be in force without you having set them. Upgrading an
 installation that already holds trial data seeds a stored <code>features:</code> override
 with research on, so a feature that now ships off does not disappear from under
 data you were already using. The console labels it a stored override, not your
 choice; <strong>Reset</strong> clears it like any other.</p>
+<h3 id="the-console-level">The console level</h3>
+<p><code>console.level</code> (<code>SEAMLESS_CONSOLE_LEVEL</code>) is how much of the
+<a href="../../reference/console/#choose-how-much-you-see">console</a> you see: <code>basic</code>,
+<code>standard</code>, or <code>advanced</code>. It is presentation only - briefings, MCP tools,
+hooks, recall, and the gardener are identical at every level - and a screen a
+level leaves out of the sidebar still opens from a link. A value outside those
+three stops the daemon at startup with an error naming them; an empty value
+means the default, <code>basic</code>.</p>
+<p>A fresh installation starts at <code>basic</code>. Upgrading an installation that had
+already recorded sessions stores <code>advanced</code> once, as the same kind of runtime
+override (labeled &quot;set by the upgrade&quot; in Settings → Experience), so an upgrade
+never hides a screen you were using. Like any override, it wins over this key
+until <strong>Reset</strong> hands the level back to file/env.</p>
 <h2 id="generating-a-key">Generating a key</h2>
 <p><code>mcp.api_key</code> guards <code>/api/mcp</code> and the console. On a true first run - no
 config file anywhere in the search order and no <code>SEAMLESS_MCP_API_KEY</code> in the
@@ -924,7 +943,7 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#where-the-config-comes-from">Where the config comes from</a></li><li class="lvl-2"><a href="#precedence">Precedence</a></li><li class="lvl-2"><a href="#generating-a-key">Generating a key</a></li><li class="lvl-2"><a href="#every-key">Every key</a></li><li class="lvl-2"><a href="#annotated-example">Annotated example</a></li>
+      <li class="lvl-2"><a href="#where-the-config-comes-from">Where the config comes from</a></li><li class="lvl-2"><a href="#precedence">Precedence</a></li><li class="lvl-3"><a href="#the-console-level">The console level</a></li><li class="lvl-2"><a href="#generating-a-key">Generating a key</a></li><li class="lvl-2"><a href="#every-key">Every key</a></li><li class="lvl-2"><a href="#annotated-example">Annotated example</a></li>
     </ul>
   </aside>
   

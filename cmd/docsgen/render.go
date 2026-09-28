@@ -53,7 +53,9 @@ func renderPages(site *Site) error {
 			if err != nil {
 				return fmt.Errorf("%s: generate %q: %w", p.Src, p.Generate, err)
 			}
-			md = strings.TrimRight(md, "\n") + "\n\n" + extra
+			if md, err = placeGenerated(md, extra); err != nil {
+				return fmt.Errorf("%s: generate %q: %w", p.Src, p.Generate, err)
+			}
 		}
 		expanded, hasVariants, err := expandVariants(md)
 		if err != nil {
@@ -71,6 +73,25 @@ func renderPages(site *Site) error {
 		p.Body, p.Headings, p.Links, p.Text = out.HTML, out.Headings, out.Links, plainText(textifyVariants(md))
 	}
 	return checkLinks(site)
+}
+
+// generateHere marks where a page's generated markdown goes when it belongs
+// mid-page (the console's level matrix sits inside its own section). A page
+// without the marker gets the output appended, the historical behavior.
+const generateHere = "<!-- generate here -->"
+
+// placeGenerated puts a generator's markdown at the page's marker, or at the
+// end when there is none. Two markers are an authoring mistake: which one the
+// output belongs at would be a guess.
+func placeGenerated(md, extra string) (string, error) {
+	switch strings.Count(md, generateHere) {
+	case 0:
+		return strings.TrimRight(md, "\n") + "\n\n" + extra, nil
+	case 1:
+		return strings.Replace(md, generateHere, strings.TrimRight(extra, "\n"), 1), nil
+	default:
+		return "", fmt.Errorf("more than one %s marker", generateHere)
+	}
 }
 
 // checkLinks resolves every internal link against the site. A cross-reference to

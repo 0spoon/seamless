@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Console - Seamless docs</title>
-<meta name="description" content="The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, and what each page shows.">
+<meta name="description" content="The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, the three experience levels, and what each page shows.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/reference/console/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/reference/console/">
 <meta property="og:title" content="Console - Seamless docs">
-<meta property="og:description" content="The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, and what each page shows.">
+<meta property="og:description" content="The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, the three experience levels, and what each page shows.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"Console","item":"https://thereisnospoon.org/docs/reference/console/"}]},{"@type":"TechArticle","headline":"Console - Seamless docs","description":"The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, and what each page shows.","url":"https://thereisnospoon.org/docs/reference/console/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"Console","item":"https://thereisnospoon.org/docs/reference/console/"}]},{"@type":"TechArticle","headline":"Console - Seamless docs","description":"The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, the three experience levels, and what each page shows.","url":"https://thereisnospoon.org/docs/reference/console/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -226,11 +226,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 </nav>
 
   <h1>Console</h1>
-  <p class="lede">The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, and what each page shows.</p>
+  <p class="lede">The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, the three experience levels, and what each page shows.</p>
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-3"><a href="#ambient-signals">Ambient signals</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#semantic-index--storage">Semantic index &amp; storage</a></li><li class="lvl-3"><a href="#briefing-injection">Briefing injection</a></li><li class="lvl-3"><a href="#project-families">Project families</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
+      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-3"><a href="#ambient-signals">Ambient signals</a></li><li class="lvl-2"><a href="#choose-how-much-you-see">Choose how much you see</a></li><li class="lvl-3"><a href="#screens">Screens</a></li><li class="lvl-3"><a href="#settings-sections">Settings sections</a></li><li class="lvl-3"><a href="#within-screens">Within screens</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#experience">Experience</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#your-setup">Your setup</a></li><li class="lvl-3"><a href="#briefing">Briefing</a></li><li class="lvl-3"><a href="#workspaces">Workspaces</a></li><li class="lvl-3"><a href="#knowledge-engine">Knowledge engine</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
     </ul>
   </details>
   <p>The console is the owner's window onto a system whose actual clients are agents.
@@ -314,6 +314,21 @@ is not how Seamless is driven; it is how you watch it.</p>
 <td>Applies every pending proposal in a plan, split setup first so the child projects exist before the memories move. Best-effort: it applies what it can, reports how many landed, and leaves the rest pending.</td>
 </tr>
 <tr>
+<td>Dismiss a whole rail group</td>
+<td><code>POST /console/gardener/group/dismiss</code></td>
+<td>Dismisses every pending proposal in one rail section or split plan, one at a time, so each keeps its own event and stays individually undoable. Only Dismiss is offered in bulk.</td>
+</tr>
+<tr>
+<td>Undo a decision</td>
+<td><code>POST /console/gardener/{id}/undo</code></td>
+<td>Returns a resolved proposal to the queue from <strong>Recently decided</strong>, inverting whatever its apply did, for the kinds whose apply can be inverted.</td>
+</tr>
+<tr>
+<td>Set a project's isolation</td>
+<td><code>POST /console/projects/{slug}/isolation</code></td>
+<td>Changes how far a project's knowledge travels. A tightening that would cut existing context first renders a confirmation step; nothing is written until it is confirmed.</td>
+</tr>
+<tr>
 <td>Save briefing settings</td>
 <td><code>POST /console/settings/briefing</code></td>
 <td>Writes the briefing knobs as a runtime <strong>override row</strong> in the DB. It never writes the config file.</td>
@@ -322,6 +337,36 @@ is not how Seamless is driven; it is how you watch it.</p>
 <td>Reset briefing settings</td>
 <td><code>POST /console/settings/briefing/reset</code></td>
 <td>Clears the override row, reverting to the file/env configuration.</td>
+</tr>
+<tr>
+<td>Force utility ranking for a scope</td>
+<td><code>POST /console/settings/utility</code></td>
+<td>Sets or clears the owner's per-scope force: <code>on</code> and <code>off</code> win over the gardener's readiness latch, <code>auto</code> defers to it again.</td>
+</tr>
+<tr>
+<td>Switch embeddings off or back on</td>
+<td><code>POST /console/settings/embeddings/mode</code></td>
+<td>Stores or clears the embedder off switch. It is read at serve start, so the change applies from the next restart - the page says so.</td>
+</tr>
+<tr>
+<td>Re-embed everything</td>
+<td><code>POST /console/settings/embeddings/reembed</code></td>
+<td>Starts a background pass that re-embeds every memory and note with the active model. It changes vectors, never content.</td>
+</tr>
+<tr>
+<td>Choose the console level</td>
+<td><code>POST /console/settings/level</code></td>
+<td>Stores the <a href="#choose-how-much-you-see">experience level</a> as a row that wins over file and env. Presentation only: nothing an agent receives changes.</td>
+</tr>
+<tr>
+<td>Reset the console level</td>
+<td><code>POST /console/settings/level/reset</code></td>
+<td>Clears that row, back to the file/env level.</td>
+</tr>
+<tr>
+<td>Dismiss the welcome card</td>
+<td><code>POST /console/settings/level/welcome</code></td>
+<td>Records that the Home welcome card was seen, without choosing a level.</td>
 </tr>
 <tr>
 <td>Save optional features</td>
@@ -358,7 +403,8 @@ flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
 configuration knob (briefing overrides, feature switches, project families) that
 shapes future briefings, or what is exposed, without touching any memory's
-content.</p>
+content. The console level is presentation state of the same kind: it changes
+what this console shows you and nothing else.</p>
 <p>This is deliberate, and it is the same principle as
 <a href="../../concepts/gardener/">the gardener's</a> propose-only contract. The store is written
 by agents doing work, with provenance attached. A console that could quietly edit
@@ -428,7 +474,9 @@ cookie to the browser they can actually see. (<code>--browser</code> is macOS-on
 </tbody>
 </table>
 </div>
-<p>Settings closes the list. Above the groups, a <strong>Search or jump to</strong> field opens
+<p>That is the full list, at the Advanced <a href="#choose-how-much-you-see">level</a>; a
+lower level shows a subset, in the same order and under the same names.
+Settings closes the list. Above the groups, a <strong>Search or jump to</strong> field opens
 the command palette. The sidebar collapses to an icon rail (the header button, or
 <code>[</code>) and remembers that per browser; under 720px it becomes a drawer behind the
 menu button, with every section's label and count.</p>
@@ -437,11 +485,13 @@ is for.</p>
 <h3 id="the-command-palette">The command palette</h3>
 <p><code>Cmd/Ctrl+K</code>, the sidebar's search field, or <code>/</code> on a screen with no filter of
 its own opens the palette. With nothing typed it offers <strong>Recent</strong> (the entities
-you last opened in this browser), <strong>Jump to</strong> (every section, with its shortcut),
-and <strong>Actions</strong> (switch theme, collapse the sidebar, the shortcut sheet). Typing
-matches sections and actions instantly; from two characters on it also searches
-memories, notes, tasks, plans, trials, projects, and sessions through the same
-route as <a href="#search">Search</a>.</p>
+you last opened in this browser), <strong>Jump to</strong> (every section the sidebar offers,
+with its shortcut, plus Search, Context, and each Settings section the level
+shows), and <strong>Actions</strong> (switch theme, collapse the sidebar, the shortcut sheet,
+change the experience level). Typing matches sections and actions instantly;
+from two characters on it also searches memories, notes, tasks, plans, trials,
+projects, and sessions through the same route as <a href="#search">Search</a>, showing the
+groups the level offers.</p>
 <h3 id="keyboard">Keyboard</h3>
 <div class="table-wrap">
 <table>
@@ -484,7 +534,8 @@ route as <a href="#search">Search</a>.</p>
 </table>
 </div>
 <p>The <code>g</code> map is read from the sidebar itself, so a section switched off in
-Settings takes its shortcut with it.</p>
+Settings - or one the <a href="#choose-how-much-you-see">level</a> leaves out of the
+sidebar - takes its shortcut with it, and brings it back when it returns.</p>
 <p>Moving between screens keeps the sidebar in place and settles the new content
 in (cross-document view transitions, where the browser supports them), and
 hovering a console link prefetches its page. Neither runs any code of the
@@ -501,6 +552,357 @@ opens; agents working right now carry a slow orbit of light on the Now screen.</
 <p>All of it is decoration over data the page already states: nothing here changes
 a number, and <code>prefers-reduced-motion</code> stills every part of it (the Seam sends no
 sparks, numbers render at their value).</p>
+<h2 id="choose-how-much-you-see">Choose how much you see</h2>
+<p>The console has three <strong>experience levels</strong>. They change what the console shows
+you and nothing else: your agents get the same briefing, the same MCP tools, the
+same hooks, the same recall, and the same gardener at every level. The level is
+presentation, stored for this installation's owner rather than per browser, so
+your phone and your laptop agree.</p>
+<p><strong>Basic</strong> is the essentials, for someone who installed Seamless because they use
+Claude Code or Codex and wants to know it works: what the agents remember
+(Memories, Notes), what they did (Sessions), cleanup suggestions to accept or
+decline (Gardener), and a Home that opens on a health strip - which agent clients
+are working here, whether semantic recall is on, when the last briefing went
+out, and the version.</p>
+<p><strong>Standard</strong> adds following the work: Now, Projects, Plans, and Tasks (and Labs
+and Trials when that feature is on), the Overview's window, vitals, and
+workspaces, the Briefing and Workspaces settings, and the finer controls on the
+screens Basic already had.</p>
+<p><strong>Advanced</strong> is every screen and every knob: Interactions (the tool-call
+transport), Retrieval (the analytics), Context, the Knowledge engine settings,
+and raw event payloads.</p>
+<p>A fresh installation starts at <strong>Basic</strong>, and Home carries a one-time welcome
+card offering all three - pick one, or dismiss it; either way it does not come
+back, on any device. The sidebar's account row names the level you are on and
+links to <strong>Settings &gt; Experience</strong>, where the three levels sit side by side with
+the list of what each one shows. The palette's <strong>Change experience level</strong> action
+goes there too.</p>
+<p><strong>Hidden, not locked.</strong> A level removes screens from the sidebar, the palette,
+and the shortcut map; it never locks them. A link to a screen above your level -
+from these docs, an agent's finding, a briefing, a bookmark - still opens it,
+under a note saying it is not in your sidebar, with a button to switch. JSON
+callers (<code>?format=json</code>, and so the <code>seam</code> CLI, <code>seam doctor</code> included) get the
+same answer at every level.</p>
+<p><strong>Upgrading keeps every screen.</strong> An installation that already recorded sessions
+before levels existed is set to Advanced by a one-time upgrade step, so nothing
+you were using disappears; Settings &gt; Experience says the level was set by the
+upgrade, and the welcome card appears once to announce the choice.</p>
+<p>Levels and <a href="#optional-features">optional features</a> compose: a screen shows when
+its feature is on <strong>and</strong> the level includes it. Features change what exists -
+for the console and for agents alike; the level only changes how much of it you
+see. The level can also come from the config file or environment (<code>console.level</code>,
+<code>SEAMLESS_CONSOLE_LEVEL</code>) - a choice made in the console wins until you reset it
+there. See <a href="../../reference/configuration/">Configuration</a>.</p>
+<p>What each level shows, generated from the console's own registries:</p>
+<h3 id="screens">Screens</h3>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Basic</th>
+<th>Standard</th>
+<th>Advanced</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Overview</strong></td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Now</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Interactions</strong></td>
+<td>-</td>
+<td>-</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Memories</strong></td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Notes</strong></td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Retrieval</strong></td>
+<td>-</td>
+<td>-</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Gardener</strong></td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Projects</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Plans</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Tasks</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Sessions</strong></td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Labs</strong> - while the research feature is on</td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Trials</strong> - while the research feature is on</td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Settings</strong></td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Search</strong> - no sidebar entry: the palette and links reach it</td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Context</strong> - no sidebar entry: the palette and links reach it</td>
+<td>-</td>
+<td>-</td>
+<td>shown</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="settings-sections">Settings sections</h3>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Basic</th>
+<th>Standard</th>
+<th>Advanced</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Experience</strong> - How much of the console you see, and how it looks</td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Features</strong> - Optional features, for the console and agents alike</td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Your setup</strong> - Version, files, and what is connected</td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Briefing</strong> - What every new agent session starts with</td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Workspaces</strong> - Projects, repo routes, and families</td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Knowledge engine</strong> - Semantic index, ranking, storage, and policy</td>
+<td>-</td>
+<td>-</td>
+<td>shown</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3 id="within-screens">Within screens</h3>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Basic</th>
+<th>Standard</th>
+<th>Advanced</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Overview: the observation window</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Overview: the vitals</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Overview: the workspaces table and the knowledge rail</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Memories: the Reach and Utility sorts</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Memories: how often each memory surfaced</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Memories: the utility score in the reader</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Gardener: the Type and Source filters</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Gardener: the project-split example</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Gardener: the Hidden forever list</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Gardener: Retarget on a proposal</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Gardener: Hide forever on a proposal</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Sessions: the Retained filter</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Sessions: the Sort menu</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Sessions: a session's review signals</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Search: the Updated window</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Search: the Sort control</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Settings: the precedence line on Features</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Settings: the agent tool names on Features</strong></td>
+<td>-</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Settings: each repo route's host on Workspaces</strong></td>
+<td>-</td>
+<td>-</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Settings: the unbound repo routes on Workspaces</strong></td>
+<td>-</td>
+<td>-</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Event pages: the decoded payload fields</strong></td>
+<td>-</td>
+<td>-</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Event pages: the raw payload</strong></td>
+<td>-</td>
+<td>-</td>
+<td>shown</td>
+</tr>
+</tbody>
+</table>
+</div>
 <h2 id="three-ways-to-render-a-page">Three ways to render a page</h2>
 <p>Every route answers in the shape the caller asked for:</p>
 <ul>
@@ -903,16 +1305,39 @@ other. When the split's source project cannot be matched, an inline follow-up
 asks you to pick the project and plans the split from there; nothing is retyped.</p>
 <p>See <a href="../../concepts/gardener/">The gardener</a> for what each proposal type means.</p>
 <h2 id="settings">Settings</h2>
-<p><code>/console/settings</code></p>
-<p>A view of the running configuration - data dir, budgets, gardener settings, the
-registered projects, and the repo→project map - with editable blocks for
-optional features, the semantic index, briefing injection (including utility
-ranking), and project families.</p>
+<p><code>/console/settings?s=&lt;section&gt;</code></p>
+<p>Settings is one section at a time, each shaped by what you came to do rather
+than by subsystem. A sub-nav on the left (a row of chips on a phone) switches
+sections in place, without reloading the page. <code>/console/settings</code> alone opens
+<strong>Experience</strong>; an unknown <code>?s=</code> is a 400 that names the valid sections. Which
+sections a level offers is in the <a href="#choose-how-much-you-see">matrix above</a>; a
+section above your level still opens from a link, under the same note a hidden
+screen gets. Old <code>/console/settings#...</code> bookmarks land on the matching section.</p>
+<p>The editable sections share two habits. A one-line note at the top says where
+the values come from - <strong>Following file + env</strong>, or an override in force, with
+<strong>Reset to file + env</strong> beside it. And a save bar appears at the bottom once a
+form has unsaved changes, with <strong>Save</strong> and <strong>Discard</strong> (which puts the form back
+exactly as the page loaded it); without JavaScript the bar is simply always
+there. <code>GET /console/settings?format=json</code> returns the whole payload whatever
+<code>?s=</code> says, plus <code>consoleLevel</code>, <code>consoleLevelOverridden</code>, and
+<code>consoleLevelSource</code>.</p>
+<h3 id="experience">Experience</h3>
+<p><code>/console/settings?s=experience</code></p>
+<p>The three <a href="#choose-how-much-you-see">levels</a> side by side - Basic, Standard,
+Advanced - the current one marked, each with a one-line pitch and a list of what
+it shows, generated from the same registries the sidebar and the page gates
+read, so the list cannot promise something the level does not do. Choosing one
+applies at once: the sidebar and the page update in place, and if the new level
+hides the screen you were on you land on Home with a note. The note at the top
+says whether the level was <strong>chosen in the console</strong> or <strong>set by the upgrade</strong>,
+and <strong>Reset to file + env</strong> hands the choice back to <code>console.level</code>. The same
+section holds the theme (Dark or Light - per browser, and the same switch as the
+sidebar's sun and moon) and a button for the shortcut sheet.</p>
 <h3 id="optional-features">Optional features</h3>
-<p><code>/console/settings#features</code></p>
+<p><code>/console/settings?s=features</code></p>
 <p>Optional features are the parts of Seamless you can switch on and off, and they
 ship <strong>off</strong>: a fresh install exposes none of them until you turn one on. The
-zone renders one card per feature - a toggle, an Enabled/Disabled pill, what the
+section renders one card per feature - a toggle, an Enabled/Disabled pill, what the
 feature is, a generated line naming exactly what switching it off hides, and a
 live count of the data it holds either way (&quot;Data kept: 12 trials across 3
 labs&quot;).</p>
@@ -1051,47 +1476,78 @@ file/env configuration, which unless you set <code>features:</code> there is off
 <p>One override can be in force without you having set it. Upgrading an
 installation that already holds trial data seeds the override with research on,
 so a feature that now ships off does not disappear from under data you were
-already using. That is why the zone states that a stored override is in force
-rather than crediting you with the choice - and reset clears it like any other.</p>
-<h3 id="semantic-index--storage">Semantic index &amp; storage</h3>
-<p>The embedding pipeline and the SQLite database, side by side. The embedder card
-shows the active provider and model - and when embeddings are off, the exact
-cause, with distinct copy for the owner off switch, the no-key lexical fallback,
-and a config error. The off/auto switch is
-a settings row read once at serve start, so the page flags a pending restart
-whenever the stored switch disagrees with the running process. Below it, the
+already using. That is why the section states that a stored override is in force
+rather than crediting you with the choice - and reset clears it like any other.
+At Basic the section keeps the cards, what each hides, and the data-kept line,
+and leaves out the agent tool names and the precedence line.</p>
+<h3 id="your-setup">Your setup</h3>
+<p><code>/console/settings?s=setup</code></p>
+<p>Read-only facts in plain words: the version, the machine the daemon runs on, the
+config file (with a link that opens it in your editor, or a note that the daemon
+runs on defaults and environment variables), the data folder, the database file
+and its size, which agent clients have recorded sessions and when each was last
+active, whether semantic recall is on - and when it is off, what to do about it -
+whether the gardener is running and how often, and links to these docs. No
+budgets or policy numbers: those live in Knowledge engine.</p>
+<h3 id="briefing">Briefing</h3>
+<p><code>/console/settings?s=briefing</code></p>
+<p>What every new agent session starts with. Three <strong>presets</strong> lead the section -
+<strong>Lean</strong> (a short briefing: the binding rules, the freshest memories, little
+else), <strong>Balanced</strong> (exactly the defaults), and <strong>Rich</strong> (more rules in full,
+more recent work, and family memories) - each card showing the numbers that set
+it apart. Picking one fills the form; nothing is saved until you save. Below
+them, <strong>Customize</strong> holds every knob, grouped by what it shapes - the memory
+index, recent work, the planning horizon, the project family, utility ranking,
+and the safety ceiling - with each knob's &quot;0 means&quot; note under it. Customize is
+open by default at Advanced. The section marks the preset your saved values
+equal, or <strong>Custom</strong> when they match none, and re-marks it as you edit.</p>
+<p>Saving writes a runtime override row in the DB. It layers over the file/env
+values and wins until reset, and it applies from the next session start - no
+daemon restart. It never touches your config file, so <code>seamless.yaml</code> stays the
+thing you wrote. The token budget (<code>budgets.max_briefing_tokens</code>) is not a
+briefing knob and no preset moves it. The form validates: a non-numeric knob or a
+value that fails <code>Briefing.Validate()</code> comes back as an error flash, not a
+silently-dropped save.</p>
+<p>The <strong>utility ranking</strong> group holds <code>utility_weight</code> (utility's share of the
+briefing sort key; 0 restores pure recency) and <code>utility_mode</code> (<code>auto</code> arms each
+project as its demand history matures, <code>on</code> everywhere now, <code>off</code> never). Where
+each scope stands against the readiness gates is in Knowledge engine. See
+<a href="../../concepts/sessions/#the-budget-and-what-survives-it">Sessions &amp; briefings</a> for
+how the blended order behaves once active.</p>
+<h3 id="workspaces">Workspaces</h3>
+<p><code>/console/settings?s=workspaces</code></p>
+<p>How repositories resolve to project scopes, and which projects share context.
+<strong>Project families</strong> are editable here: create, rename, edit, or delete the named
+groupings that <a href="../../reference/cli-seamlessd/#seamlessd_family"><code>seamlessd family</code></a>
+manages from the CLI - the same <code>project_families</code> setting, so a change on either
+surface shows up on the other. Members are chosen from a closed picker of
+registered projects; the CLI is the route for pre-registering a slug that does
+not exist yet. Below it, one bounded directory lists every scope with its repo
+routes and family tags. At Advanced each route also names the machine it lives
+on, and repo paths that resolve to no project are listed as unbound.</p>
+<h3 id="knowledge-engine">Knowledge engine</h3>
+<p><code>/console/settings?s=engine</code></p>
+<p>The machinery, in three groups.</p>
+<p><strong>Recall</strong> - the embedder card shows the active provider and model, and when
+embeddings are off, the exact cause, with distinct copy for the owner off switch,
+the no-key lexical fallback, and a config error. The off/auto switch is a
+settings row read once at serve start, so the page flags a pending restart
+whenever the stored switch disagrees with the running process. Beside it, the
 stored-vector counts: totals, the not-yet-embedded backlog, and a per-model
 table that badges models the running embedder no longer writes as stale -
 <strong>re-embed everything</strong> rewrites the corpus with the active model in the
-background. The database card shows the file path, size on disk including the
-WAL, and schema version.</p>
-<h3 id="briefing-injection">Briefing injection</h3>
-<p>Saving writes a runtime override row in the DB. It layers over the file/env
-values and wins until reset, and it applies from the next session start - no
-daemon restart. It never touches your config file, so
-<code>seamless.yaml</code> stays the thing you wrote. <strong>Reset</strong> clears the override and
-reverts to file/env. The form validates: a non-numeric knob or a value that
-fails <code>Briefing.Validate()</code> comes back as an error flash, not a
-silently-dropped save.</p>
-<p>The form's <strong>utility ranking</strong> group holds the closed-loop knobs -
-<code>utility_weight</code> (utility's share of the briefing sort key; 0 restores pure
-recency) and <code>utility_mode</code> (<code>auto</code> arms each project as its demand history
-matures, <code>on</code> everywhere now, <code>off</code> never). The same group's <strong>utility
-activation by scope</strong> table lists every scope with each readiness gate against
-its threshold (demand events, memories touched, history age - met gates turn
-green) and, for scopes still building, spells out exactly what remains before
-auto arms (&quot;needs 7 more events, 3d more history&quot;). A per-scope <strong>force</strong>
-overrides the latch in either direction; when the global mode is <code>on</code> or
-<code>off</code>, the table says the per-scope state is dormant until auto returns. See
-<a href="../../concepts/sessions/#the-budget-and-what-survives-it">Sessions &amp; briefings</a> for
-how the blended order behaves once active.</p>
-<h3 id="project-families">Project families</h3>
-<p>Create, rename, edit, or delete the named groupings that
-<a href="../../reference/cli-seamlessd/#seamlessd_family"><code>seamlessd family</code></a> manages from
-the CLI - the same <code>project_families</code> setting, so a change on either surface
-shows up on the other. Members are chosen from a closed picker of registered
-projects; the CLI is the route for pre-registering a slug that does not exist
-yet.</p>
+background.</p>
+<p><strong>Ranking</strong> - the <strong>utility activation by scope</strong> table lists every scope with
+each readiness gate against its threshold (demand events, memories touched,
+history age - met gates turn green) and, for scopes still building, spells out
+exactly what remains before auto arms (&quot;needs 7 more events, 3d more history&quot;).
+A per-scope <strong>force</strong> overrides the latch in either direction; when the global
+mode is <code>on</code> or <code>off</code>, the table says the per-scope state is dormant until auto
+returns.</p>
+<p><strong>Storage &amp; policy</strong> - read-only: the data folder, the context budgets, the
+database (path, size on disk including the WAL, schema version), and the
+gardener's cadence and policy. Change these through the config file or
+environment, then restart.</p>
 <p>See <a href="../../reference/configuration/">Configuration</a> for what each knob does, and
 <a href="../../concepts/sessions/">Sessions &amp; briefings</a> for what they tune.</p>
 <h2 id="event-detail">Event detail</h2>
@@ -1099,7 +1555,8 @@ yet.</p>
 <p>What a Recent-activity or timeline row links to: a compact event review workspace
 with the event's agent/session attribution, verbatim injected or transport
 content, surfaced memories resolved to their live index entries (or flagged
-missing), remaining payload fields, and raw JSON. The Interactions inspector
+missing), remaining payload fields, and raw JSON (the last two at the Advanced
+level; <code>?format=json</code> always carries them). The Interactions inspector
 uses the same content model in a side pane; opening the full page adds context
 without changing the underlying event.</p>
 <h2 id="errors">Errors</h2>
@@ -1128,7 +1585,7 @@ the detail pane would nest the whole console inside itself.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-3"><a href="#ambient-signals">Ambient signals</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#semantic-index--storage">Semantic index &amp; storage</a></li><li class="lvl-3"><a href="#briefing-injection">Briefing injection</a></li><li class="lvl-3"><a href="#project-families">Project families</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
+      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-3"><a href="#ambient-signals">Ambient signals</a></li><li class="lvl-2"><a href="#choose-how-much-you-see">Choose how much you see</a></li><li class="lvl-3"><a href="#screens">Screens</a></li><li class="lvl-3"><a href="#settings-sections">Settings sections</a></li><li class="lvl-3"><a href="#within-screens">Within screens</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#experience">Experience</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#your-setup">Your setup</a></li><li class="lvl-3"><a href="#briefing">Briefing</a></li><li class="lvl-3"><a href="#workspaces">Workspaces</a></li><li class="lvl-3"><a href="#knowledge-engine">Knowledge engine</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
     </ul>
   </aside>
   

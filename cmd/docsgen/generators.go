@@ -5,12 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/console"
 	"github.com/0spoon/seamless/internal/features"
 	seamlessmcp "github.com/0spoon/seamless/internal/mcp"
 )
@@ -26,8 +28,9 @@ import (
 type generator func(p *Page, srcDir string) (string, error)
 
 var generators = map[string]generator{
-	"mcp-tools": generateMCPTools,
-	"config":    generateConfig,
+	"mcp-tools":      generateMCPTools,
+	"config":         generateConfig,
+	"console-levels": generateConsoleLevels,
 }
 
 func generate(name string, p *Page, srcDir string) (string, error) {
@@ -256,6 +259,68 @@ func readPartial(path string) (string, error) {
 		return "", fmt.Errorf("read partial %s: %w", path, err)
 	}
 	return strings.TrimSpace(string(raw)), nil
+}
+
+// ---------------------------------------------------------------------------
+// console-levels
+
+// generateConsoleLevels renders the console's "what each level shows" matrix
+// from its own registries (console.LevelMatrix): the screens, the Settings
+// sections, and the in-page surfaces, each against the three levels. The
+// levels themselves come from config.ConsoleLevels.
+func generateConsoleLevels(_ *Page, _ string) (string, error) {
+	levels := config.ConsoleLevels
+	rows := console.LevelMatrix()
+	var b strings.Builder
+	for _, group := range []string{console.MatrixScreens, console.MatrixSections, console.MatrixSurfaces} {
+		fmt.Fprintf(&b, "### %s\n\n", group)
+		b.WriteString("| |")
+		for _, lvl := range levels {
+			fmt.Fprintf(&b, " %s |", titleCase(lvl))
+		}
+		b.WriteString("\n|---|")
+		for range levels {
+			b.WriteString("---|")
+		}
+		b.WriteString("\n")
+		n := 0
+		for _, r := range rows {
+			if r.Group != group {
+				continue
+			}
+			first := slices.Index(levels, r.Min)
+			if first < 0 {
+				return "", fmt.Errorf("%s %q: unknown level %q", group, r.Name, r.Min)
+			}
+			name := "**" + escapeCell(r.Name) + "**"
+			if r.Note != "" {
+				name += " - " + escapeCell(r.Note)
+			}
+			fmt.Fprintf(&b, "| %s |", name)
+			for i := range levels {
+				cell := "-"
+				if i >= first {
+					cell = "shown"
+				}
+				fmt.Fprintf(&b, " %s |", cell)
+			}
+			b.WriteString("\n")
+			n++
+		}
+		if n == 0 {
+			return "", fmt.Errorf("console.LevelMatrix has no %q rows", group)
+		}
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n") + "\n", nil
+}
+
+// titleCase upper-cases a level key's first letter ("basic" -> "Basic").
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // ---------------------------------------------------------------------------
