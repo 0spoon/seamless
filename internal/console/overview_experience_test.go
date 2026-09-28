@@ -2,7 +2,9 @@ package console
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -197,4 +199,98 @@ func TestOverview_StylesStayScopedAndStackResponsively(t *testing.T) {
 	require.NotContains(t, css, "OVERVIEW FRONT DOOR")
 	require.NotContains(t, css, ".overview-hero.topbar")
 	require.NotContains(t, css, ".overview-atlas-node")
+}
+
+// newHealthConsole builds a console that knows its version and embedder, at
+// the given level, over a fresh DB.
+func newHealthConsole(t *testing.T, lvl string, emb EmbeddingRuntime) (*sql.DB, *http.ServeMux) {
+	t.Helper()
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	svc, err := New(Config{
+		DB: db, Events: events.NewRecorder(db), APIKey: testKey,
+		Level: lvl, Version: "0.5.2+abc1234", Embedding: emb,
+	})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+	return db, mux
+}
+
+// The Basic Home answers "is it working?" first and carries nothing analytic:
+// health strip, check-in, attention, live, sky, activity -- and nothing else.
+func TestOverview_BasicHomeIsHealthFirst(t *testing.T) {
+	db, mux := newHealthConsole(t, "basic", EmbeddingRuntime{Enabled: true, Provider: "openai", Model: "text-embedding-3-large"})
+	ctx := context.Background()
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: mustID(t), Name: "cc/live1", ExternalClient: "claude-code", Status: core.SessionActive,
+		CreatedAt: now.Add(-4 * time.Minute), UpdatedAt: now.Add(-4 * time.Minute),
+	}))
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: mustID(t), Name: "cx/old1", ExternalClient: "codex", Status: core.SessionCompleted,
+		CreatedAt: now.Add(-72 * time.Hour), UpdatedAt: now.Add(-72 * time.Hour),
+	}))
+	rec := events.NewRecorder(db)
+	evID, err := rec.Record(ctx, core.Event{Kind: core.EventInjected, Payload: map[string]any{"hook": "session-start"}})
+	require.NoError(t, err)
+
+	body := getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, body, `<section class="ov-health lead" aria-label="Is it working">`)
+	require.Contains(t, body, "Working with Claude Code (last active 4m ago) and Codex (3d ago)")
+	require.Contains(t, body, `href="/console/sessions"`)
+	require.Contains(t, body, "semantic recall on")
+	require.Contains(t, body, `href="/console/events/`+evID+`"`)
+	require.Contains(t, body, "last briefing delivered")
+	require.Contains(t, body, "version 0.5.2&#43;abc1234", "html/template escapes the build suffix plus")
+	require.Contains(t, body, `id="checkin"`)
+	require.Contains(t, body, `aria-label="Recent activity"`)
+	require.Contains(t, body, `aria-label="Sessions live now"`)
+
+	for _, gone := range []string{
+		`class="ov2-vitals"`, `class="ov2-window-tabs"`, "sessions observed",
+		`aria-label="Recently active workspaces"`, `class="ov2-rail"`, "Most reused knowledge",
+		`class="ov-health quiet"`,
+	} {
+		require.NotContains(t, body, gone, "basic Home hides %s", gone)
+	}
+	// The strip leads: it comes before the check-in.
+	require.Less(t, strings.Index(body, "ov-health lead"), strings.Index(body, `id="checkin"`))
+}
+
+// Above Basic the page is today's Overview, with the health facts as a quiet
+// line closing the vitals.
+func TestOverview_AdvancedKeepsTheAnalyticsAndAQuietHealthLine(t *testing.T) {
+	_, mux := newHealthConsole(t, "advanced", EmbeddingRuntime{Provider: "openai", Reason: "api_key is empty"})
+	body := getPeek(t, mux, "/console/?w=7d").Body.String()
+	for _, want := range []string{
+		`class="ov2-vitals"`, `class="ov2-window-tabs"`, "sessions observed",
+		`aria-label="Recently active workspaces"`, `class="ov2-rail"`, "Most reused knowledge",
+		`<footer class="ov-health quiet" aria-label="Is it working">`,
+	} {
+		require.Contains(t, body, want)
+	}
+	require.NotContains(t, body, "ov-health lead")
+	require.Contains(t, body, "semantic recall off")
+	require.Contains(t, body, `title="Recall is keyword-only: api_key is empty"`)
+	require.Less(t, strings.Index(body, `class="ov2-vitals"`), strings.Index(body, "ov-health quiet"))
+}
+
+// An unknown fact is omitted, never printed as a zero: a fresh install with no
+// clients, no briefing, no version, and no embedder report shows no strip.
+func TestOverview_HealthStripOmitsUnknownFacts(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	svc, err := New(Config{DB: db, APIKey: testKey})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+
+	body := getPeek(t, mux, "/console/").Body.String()
+	require.NotContains(t, body, "ov-health")
+	require.NotContains(t, body, "Working with")
+	require.NotContains(t, body, "last briefing")
+	require.NotContains(t, body, "version ")
 }

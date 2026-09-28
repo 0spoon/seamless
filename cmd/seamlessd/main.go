@@ -348,6 +348,7 @@ func runServe(args []string) error {
 		// The file/env console level base, layered the same way. Presentation
 		// only: nothing an agent receives reads it.
 		Level:          cfg.Console.Level,
+		Version:        buildVersion(),
 		Embedding:      embedRT,
 		SessionIdleTTL: time.Duration(cfg.Gardener.SessionIdleMinutes) * time.Minute,
 		// Secure only under TLS: a browser drops a Secure cookie arriving over

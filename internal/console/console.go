@@ -77,6 +77,9 @@ type Config struct {
 	// this plus the store's override row, resolved live per request (see
 	// effectiveFeatures) so a Settings save applies without a restart.
 	Features config.Features
+	// Version is the daemon's build version (seamlessd's buildVersion), shown
+	// on the Home health strip and in Settings -> Your setup. Empty omits it.
+	Version string
 	// Level is the file/env console level base (config.Console.Level): how much
 	// of the console the owner sees. The effective level is this plus the
 	// store's level row, resolved live per request (see consoleLevel). Empty
@@ -632,6 +635,10 @@ type overviewData struct {
 	// Sky is the knowledge constellation panel (HTML only; nil for JSON callers
 	// and for a fleet with no active memories).
 	Sky *skyData `json:"-"`
+
+	// Health is the "is it working?" strip (HTML only): at Basic it leads the
+	// page; above Basic it closes the vitals as one quiet line.
+	Health []healthFact `json:"-"`
 }
 
 // spotlightData is the memory-of-the-month panel payload: the winner (when
@@ -756,28 +763,38 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), now)
-	report, err := store.BuildRetrievalReport(ctx, s.cfg.DB, win, 5)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	cov, err := store.GetSessionCoverage(ctx, s.cfg.DB, win.Since)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	covTrend, err := store.SessionCoverageBuckets(ctx, s.cfg.DB, win, now)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	// "Projects at a glance": the top projects by recent activity, from the same
-	// batched board query -- strict per-slug counts, so these rows equal the
-	// board's rows exactly. The global ("") scope is not a project row.
-	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win, now, s.cfg.SessionIdleTTL)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
+	// The Basic Home carries nothing analytic: the vitals, the window, the
+	// workspaces table, and the rail are Standard screens' furniture. Their
+	// queries run only when something will show them -- but a JSON caller always
+	// gets the complete answer, whatever the level (hidden, not different).
+	lvl := s.consoleLevel(ctx).Level
+	analytics := wantsJSON(r) || lvl >= levelStandard
+	var (
+		report   store.RetrievalReport
+		cov      store.SessionCoverage
+		covTrend []store.CoverageBucket
+		board    []store.ProjectBoardRow
+	)
+	if analytics {
+		if report, err = store.BuildRetrievalReport(ctx, s.cfg.DB, win, 5); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		if cov, err = store.GetSessionCoverage(ctx, s.cfg.DB, win.Since); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		if covTrend, err = store.SessionCoverageBuckets(ctx, s.cfg.DB, win, now); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		// "Projects at a glance": the top projects by recent activity, from the
+		// same batched board query -- strict per-slug counts, so these rows equal
+		// the board's rows exactly. The global ("") scope is not a project row.
+		if board, err = store.ProjectsWithCounts(ctx, s.cfg.DB, win, now, s.cfg.SessionIdleTTL); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
 	}
 	// Live sessions across every scope (global "" included), TTL-aware via the
 	// board query, so the headline matches the Sessions screen instead of the raw
@@ -805,7 +822,13 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		glance = glance[:8]
 	}
 
-	prior, hasPrior := s.priorVitals(ctx, win, now)
+	var (
+		prior    store.WindowVitals
+		hasPrior bool
+	)
+	if analytics {
+		prior, hasPrior = s.priorVitals(ctx, win, now)
+	}
 	staleUnseen, err := store.CountMemoriesUnsurfacedSince(ctx, s.cfg.DB, now.UTC().AddDate(0, 0, -staleSurfacedDays))
 	if err != nil {
 		s.serverError(w, r, err)
@@ -848,9 +871,14 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		StaleUnseen:      staleUnseen,
 	}
 	data.Attention = s.attentionCards(ctx, data)
-	data.Vitals = overviewVitals(data, report, covTrend, prior, hasPrior, win)
-	data.Spotlight = s.memorySpotlight(ctx, now)
+	if analytics {
+		data.Vitals = overviewVitals(data, report, covTrend, prior, hasPrior, win)
+		data.Spotlight = s.memorySpotlight(ctx, now)
+	}
 	data.Sky = s.knowledgeSky(ctx, now, r)
+	if !wantsJSON(r) {
+		data.Health = s.healthFacts(ctx)
+	}
 	s.render(w, r, "overview", pageData{Title: "Overview", Active: "overview", Data: data})
 }
 

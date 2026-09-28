@@ -5996,3 +5996,20 @@ html:not(.js) [data-form-discard] { display: none; }
   .engine-group-head .settings-access { grid-column: 1; grid-row: auto; justify-self: start; }
   .setup-facts > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 }
+
+/* ---- Home health strip (console levels) -------------------------------------
+   "Is it working?" in one line of linked facts. At Basic it leads the page as a
+   soft panel; above Basic it is a quiet footer closing the vitals. */
+.ov-health { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: var(--text-xs); color: var(--muted); }
+.ov-health.lead {
+  margin: 0 0 16px; padding: 11px 14px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--ok) 5%, var(--surface)); box-shadow: inset 0 1px 0 var(--sheen);
+  font-size: var(--text-sm); color: var(--ink-2);
+}
+.ov-health.quiet { margin: -6px 0 18px; padding: 0 2px; }
+.ov-health-fact { display: inline-flex; align-items: center; gap: 6px; color: inherit; }
+.ov-health-fact:hover { color: var(--ink); text-decoration: none; }
+.ov-health-fact .ico { width: 14px; height: 14px; color: var(--faint); }
+.ov-health-fact[data-tone="ok"] .ico { color: var(--ok); }
+.ov-health-fact[data-tone="warn"] .ico { color: var(--warn); }
+.ov-health-sep { color: var(--faint); }

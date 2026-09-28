@@ -8,11 +8,19 @@
     <h1>{{icon "layout-dashboard"}}Overview</h1>{{about "The check-in page: what needs you, whether stored knowledge is reaching your agents, who is working right now, and what just happened."}}
     <span class="live ov2-title-live"><span class="live-dot"></span>system live</span>
     <span class="ov2-title-spacer"></span>
+    {{if $.Level.AtLeast "standard"}}
     <nav class="ov2-window-tabs" aria-label="Observation window" data-seam-query>
       {{range .Windows}}<a class="{{if .Active}}active{{end}}"{{if .Active}} aria-current="page"{{end}} href="?w={{.Key}}">{{.Label}}</a>{{end}}
     </nav>
     <span class="ov2-observed"><strong>{{.CovTotal}}</strong>session{{if ne .CovTotal 1}}s{{end}} observed</span>
+    {{end}}
   </header>
+
+  {{/* Basic's first question is "is it working?": the health strip leads the
+       page. Above Basic the same facts close the vitals as one quiet line. */}}
+  {{if and .Health (not ($.Level.AtLeast "standard"))}}
+  <section class="ov-health lead" aria-label="Is it working">{{template "overview-health" .Health}}</section>
+  {{end}}
 
   {{/* "Since you were last here": shell.js fills this from the browser's own
        last-looked stamp and GET /console/since, so the check-in question --
@@ -54,6 +62,7 @@
   {{/* Each vital is a drill-down link into the screen that explains its
        number, keeping the active window; empty-state cards stay linked because
        the destination states why there is nothing. */}}
+  {{if $.Level.AtLeast "standard"}}
   <section class="ov2-vitals" aria-label="Vitals">
     {{range .Vitals}}
     <a class="ov2-vital" href="{{.Href}}" title="{{.HrefTitle}}">
@@ -64,6 +73,8 @@
     </a>
     {{end}}
   </section>
+  {{with .Health}}<footer class="ov-health quiet" aria-label="Is it working">{{template "overview-health" .}}</footer>{{end}}
+  {{end}}
 
   {{if .Live}}
   <section class="ov2-live" aria-label="Sessions live now">
@@ -90,6 +101,7 @@
   </section>
   {{end}}
 
+  {{if $.Level.AtLeast "standard"}}
   <div class="ov2-grid">
     <section class="ov2-panel" aria-label="Recently active workspaces">
       <header class="ov2-panel-head"><h2>Recently active workspaces</h2><a href="/console/projects">All projects {{icon "arrow-right"}}</a></header>
@@ -151,6 +163,7 @@
       {{end}}
     </aside>
   </div>
+  {{end}}
 
   <section class="ov2-panel" aria-label="Recent activity">
     <header class="ov2-panel-head"><h2>Recent activity</h2><a href="/console/interactions">Full interaction stream {{icon "arrow-right"}}</a></header>
@@ -171,6 +184,10 @@
 </div><!-- .overview-page -->
 {{end}}
 {{end}}
+
+{{/* The health strip's facts, each a link to where it is explained. Its dot is
+     "fine" or "look here" -- never a number the owner has to judge. */}}
+{{define "overview-health"}}{{range $i, $f := .}}{{if $i}}<span class="ov-health-sep" aria-hidden="true">&middot;</span>{{end}}<a class="ov-health-fact"{{with .Tone}} data-tone="{{.}}"{{end}} href="{{.Href}}"{{with .Title}} title="{{.}}"{{end}}>{{icon .Icon}}<span>{{.Text}}</span></a>{{end}}{{end}}
 
 {{define "scripts"}}
 <script>
