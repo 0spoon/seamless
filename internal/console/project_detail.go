@@ -293,9 +293,30 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 		{Key: "interactions", Label: "Interactions", Icon: "activity"},
 		{Key: "context", Label: "Context", Icon: "share-2"},
 	}
+	// The Interactions and Context tabs are those screens scoped to one
+	// project, so they follow the screens' levels: below it the tab leaves the
+	// bar, and a direct ?tab= request still renders the panel (hidden, not
+	// locked) under the banner naming that screen. The workspace is HTML-only
+	// (JSON callers get projectSummary), so no JSON answer changes.
+	pd := pageData{Title: "Project " + slug, Active: "projects", Data: data}
+	lvl := s.consoleLevel(ctx).Level
+	data.Tabs = slices.DeleteFunc(data.Tabs, func(t projectTabVM) bool {
+		sc, ok := screenByID(t.Key)
+		return ok && projectTabFollowsScreen(t.Key) && lvl < sc.Min && t.Key != tab
+	})
+	if projectTabFollowsScreen(tab) {
+		pd.LevelBanner = levelBannerFor(tab, lvl)
+	}
 	for i := range data.Tabs {
 		data.Tabs[i].Active = data.Tabs[i].Key == tab
 	}
 
-	s.render(w, r, "projectdetail", pageData{Title: "Project " + slug, Active: "projects", Data: data})
+	pd.Data = data
+	s.render(w, r, "projectdetail", pd)
 }
+
+// projectTabFollowsScreen reports whether a workspace tab is a whole console
+// screen scoped to one project, and so takes that screen's level. The other
+// tabs share a key with a screen (memories, sessions, notes) but are the
+// project's own lists, visible wherever the workspace is.
+func projectTabFollowsScreen(tab string) bool { return tab == "interactions" || tab == "context" }

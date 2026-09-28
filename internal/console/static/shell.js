@@ -306,6 +306,39 @@
   surfaceFlash();
   document.addEventListener('seam:content-updated', surfaceFlash);
 
+  /* ---- Level banner: "Got it" ---------------------------------------------- */
+
+  // A screen above the console level renders under a note offering the switch
+  // (layout.html). "Got it" hides it for this tab only -- a banner is not
+  // durable state, so sessionStorage, keyed by screen. Re-applied after every
+  // morph, which restores what the server rendered.
+  var BANNERS = 'seamless-level-banners';
+  function dismissed() {
+    try {
+      var list = JSON.parse(sessionStorage.getItem(BANNERS) || '[]');
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+  function applyBanners() {
+    var gone = dismissed();
+    document.querySelectorAll('[data-level-banner]').forEach(function (b) {
+      if (gone.indexOf(b.getAttribute('data-level-banner')) !== -1) b.hidden = true;
+    });
+  }
+  document.addEventListener('click', function (e) {
+    var x = e.target.closest ? e.target.closest('[data-level-banner-dismiss]') : null;
+    if (!x) return;
+    var banner = x.closest('[data-level-banner]');
+    if (!banner) return;
+    var id = banner.getAttribute('data-level-banner');
+    var gone = dismissed();
+    if (gone.indexOf(id) === -1) gone.push(id);
+    try { sessionStorage.setItem(BANNERS, JSON.stringify(gone)); } catch (e2) {}
+    banner.hidden = true;
+  });
+  applyBanners();
+  document.addEventListener('seam:content-updated', applyBanners);
+
   /* ---- Arrival: reveal, count-up, and the panel flashlight ------------------ */
 
   // html.reveal is set before first paint (layout.html) so the page settles in

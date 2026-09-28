@@ -53,6 +53,9 @@ type screen struct {
 	NavRow bool
 	// Hint is the palette's one-line description for a screen with no nav row.
 	Hint string
+	// Scope is the search scope this screen owns ("" = none): the scope is
+	// offered wherever the screen is visible (see searchScopesFor).
+	Scope string
 }
 
 // Sidebar groups, in the owner's job order: what is happening, what the fleet
@@ -73,25 +76,25 @@ var screens = []screen{
 	{ID: "interactions", Label: "Interactions", Icon: "activity", Href: "/console/interactions", Group: groupLive, Key: "i",
 		Min: levelAdvanced, NavRow: true},
 	{ID: "memories", Label: "Memories", Icon: "database", Href: "/console/memories", Group: groupKnowledge, Key: "m",
-		Min: levelBasic, NavRow: true, Badge: "memories"},
+		Min: levelBasic, NavRow: true, Badge: "memories", Scope: "memories"},
 	{ID: "notes", Label: "Notes", Icon: "file-text", Href: "/console/notes", Group: groupKnowledge, Key: "e",
-		Min: levelBasic, NavRow: true, Badge: "notes"},
+		Min: levelBasic, NavRow: true, Badge: "notes", Scope: "notes"},
 	{ID: "retrieval", Label: "Retrieval", Icon: "brain", Href: "/console/retrieval", Group: groupKnowledge, Key: "r",
 		Min: levelAdvanced, NavRow: true},
 	{ID: "gardener", Label: "Gardener", Icon: "sprout", Href: "/console/gardener", Group: groupKnowledge, Key: "g",
 		Min: levelBasic, NavRow: true, Badge: "proposals", BadgeTitle: "Proposals waiting for review", BadgeZero: true},
 	{ID: "projects", Label: "Projects", Icon: "table-2", Href: "/console/projects", Group: groupWork, Key: "w",
-		Min: levelStandard, NavRow: true, Badge: "projects"},
+		Min: levelStandard, NavRow: true, Badge: "projects", Scope: "projects"},
 	{ID: "plans", Label: "Plans", Icon: "map", Href: "/console/plans", Group: groupWork, Key: "p",
-		Min: levelStandard, NavRow: true, Badge: "plans"},
+		Min: levelStandard, NavRow: true, Badge: "plans", Scope: "plans"},
 	{ID: "tasks", Label: "Tasks", Icon: "list-checks", Href: "/console/tasks", Group: groupWork, Key: "t",
-		Min: levelStandard, NavRow: true, Badge: "tasks", BadgeTitle: "Open tasks"},
+		Min: levelStandard, NavRow: true, Badge: "tasks", BadgeTitle: "Open tasks", Scope: "tasks"},
 	{ID: "sessions", Label: "Sessions", Icon: "terminal", Href: "/console/sessions", Group: groupWork, Key: "s",
-		Min: levelBasic, NavRow: true, Badge: "sessions"},
+		Min: levelBasic, NavRow: true, Badge: "sessions", Scope: "sessions"},
 	{ID: "labs", Label: "Labs", Icon: "flask-conical", Href: "/console/labs", Group: groupResearch, Key: "l",
 		Min: levelStandard, Feature: features.Research, NavRow: true, Badge: "labs"},
 	{ID: "trials", Label: "Trials", Icon: "test-tube", Href: "/console/trials", Group: groupResearch, Key: "x",
-		Min: levelStandard, Feature: features.Research, NavRow: true, Badge: "trials"},
+		Min: levelStandard, Feature: features.Research, NavRow: true, Badge: "trials", Scope: "trials"},
 	{ID: "settings", Label: "Settings", Icon: "settings", Href: "/console/settings", Key: ",",
 		Min: levelBasic, NavRow: true, Class: "nav-settings"},
 	// Real pages with no sidebar row.
@@ -134,6 +137,17 @@ func visibleScreens(feats config.Features, lvl level) []screen {
 		}
 	}
 	return out
+}
+
+// scopeScreen returns the screen that owns a search scope; found is false for
+// "all" (every screen's) and for an unknown scope.
+func scopeScreen(scope string) (screen, bool) {
+	for _, sc := range screens {
+		if sc.Scope != "" && sc.Scope == scope {
+			return sc, true
+		}
+	}
+	return screen{}, false
 }
 
 // navEntry is one rendered sidebar link: the screen plus this request's facts.

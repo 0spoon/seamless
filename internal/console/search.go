@@ -26,31 +26,38 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/features"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// searchScopes are the accepted ?scope values: "all", the two knowledge kinds
-// retrieve.Search understands, and one per structured entity. It is the full
-// set; searchScopesFor narrows it to what the enabled optional features expose.
+// searchScopes are the ?scope values in selector order: "all", the two
+// knowledge kinds retrieve.Search understands, and one per structured entity.
+// It is the full set; which of them a request may use comes from the screen
+// registry, where each scope is owned by the screen that lists its entities
+// (screen.Scope).
 var searchScopes = []string{"all", "memories", "notes", "tasks", "plans", "trials", "projects", "sessions"}
 
-// searchScopesFor returns the scopes available under cfg. A scope belonging to a
-// disabled optional feature leaves the accepted enum entirely, so ?scope=trials
-// gets the same named-values 400 as any other misspelling rather than silently
-// searching everything -- and the selector cannot offer a scope that would
-// always come back empty.
-func searchScopesFor(cfg config.Features) []string {
-	if features.Enabled(cfg, features.Research) {
-		return searchScopes
-	}
+// searchScopesFor returns the scopes offered at this level and feature state:
+// "all" plus every scope whose owning screen is visible, in selector order.
+//
+// Two callers, two answers. At the top level it is the ACCEPTED enum, which is
+// level-blind on purpose (hidden, not locked): a scope belonging to a disabled
+// optional feature leaves it entirely, so ?scope=trials gets the same
+// named-values 400 as any misspelling rather than silently searching
+// everything, while a scope merely above the level still works by URL. At the
+// request's own level it is what the page OFFERS: the selector's choices and
+// what "all" covers on the HTML page. JSON callers always get the level-blind
+// set, so a level never changes a JSON answer.
+func searchScopesFor(cfg config.Features, lvl level) []string {
 	out := make([]string, 0, len(searchScopes))
 	for _, scope := range searchScopes {
-		if scope == "trials" {
+		if scope == "all" {
+			out = append(out, scope)
 			continue
 		}
-		out = append(out, scope)
+		if sc, ok := scopeScreen(scope); ok && sc.visibleAt(cfg, lvl) {
+			out = append(out, scope)
+		}
 	}
 	return out
 }
@@ -129,11 +136,17 @@ type searchData struct {
 	Rows        []searchRow   `json:"-"` // unified, globally sorted page projection
 	Since       time.Time     `json:"-"`
 	// TrialsScope reports whether the research feature exposes the trials
-	// scope; the page copy names it only when it is actually searchable.
-	TrialsScope bool                 `json:"-"`
-	Scopes      []searchScope        `json:"-"`
-	Windows     []searchWindowOption `json:"-"`
-	Sorts       []searchSortOption   `json:"-"`
+	// scope: while it is off, not even ?scope=all may reach past it.
+	TrialsScope bool `json:"-"`
+	// Offered is what "all" covers for this response: every accepted scope for
+	// a JSON caller (level-blind), the level's visible scopes on the page.
+	Offered []string `json:"-"`
+	// ScopeNoun names the offered kinds as prose ("memories, notes, and
+	// sessions") for the page copy.
+	ScopeNoun string               `json:"-"`
+	Scopes    []searchScope        `json:"-"`
+	Windows   []searchWindowOption `json:"-"`
+	Sorts     []searchSortOption   `json:"-"`
 }
 
 // highlightSnippet renders an FTS snippet as safe HTML with the matched terms
@@ -154,8 +167,14 @@ func highlightSnippet(raw string) template.HTML {
 	return template.HTML(esc)
 }
 
-// wants reports whether scope selects the given kind.
-func (d searchData) wants(kind string) bool { return d.Scope == "all" || d.Scope == kind }
+// wants reports whether scope selects the given kind: "all" selects every
+// offered kind, a named scope selects itself.
+func (d searchData) wants(kind string) bool {
+	if d.Scope == "all" {
+		return slices.Contains(d.Offered, kind)
+	}
+	return d.Scope == kind
+}
 
 var searchParamNames = []string{"q", "scope", "w", "sort", "fast", "fav", "format"}
 
@@ -205,11 +224,18 @@ func (s *Service) searchPage(w http.ResponseWriter, r *http.Request) {
 		q = strings.TrimSpace(string(n[:searchQueryMax]))
 	}
 	feats := s.effectiveFeatures(ctx)
-	scopes := searchScopesFor(feats)
-	scope, err := searchEnumParam(values, "scope", "all", scopes)
+	// The accepted enum is level-blind (see searchScopesFor); the level only
+	// decides what the page offers and what "all" covers there.
+	accepted := searchScopesFor(feats, levelAdvanced)
+	scope, err := searchEnumParam(values, "scope", "all", accepted)
 	if err != nil {
 		s.badRequest(w, r, err.Error())
 		return
+	}
+	offered, lvl := accepted, levelAdvanced
+	if !wantsJSON(r) {
+		lvl = s.consoleLevel(ctx).Level
+		offered = searchScopesFor(feats, lvl)
 	}
 	sortKey, err := searchEnumParam(values, "sort", "relevance", searchSortKeys)
 	if err != nil {
@@ -238,14 +264,21 @@ func (s *Service) searchPage(w http.ResponseWriter, r *http.Request) {
 	data := searchData{
 		Query: q, Scope: scope, Sort: sortKey,
 		Window: window.Key, WindowLabel: window.Label, Since: window.Since,
-		Fast: fast, Fav: fav, Scopes: searchScopeOptions(scope, scopes),
-		TrialsScope: slices.Contains(scopes, "trials"),
-		Windows:     searchWindowOptions(window.Key), Sorts: searchSortOptions(sortKey),
+		Fast: fast, Fav: fav, Scopes: searchScopeOptions(scope, offered),
+		TrialsScope: slices.Contains(accepted, "trials"),
+		Offered:     offered, ScopeNoun: searchScopeNoun(offered),
+		Windows: searchWindowOptions(window.Key), Sorts: searchSortOptions(sortKey),
+	}
+	// A scope above the level still searches (hidden, not locked), under the
+	// banner that names its screen.
+	pd := pageData{Title: "Search", Active: "search", Data: data}
+	if sc, ok := scopeScreen(scope); ok {
+		pd.LevelBanner = levelBannerFor(sc.ID, lvl)
 	}
 	if len([]rune(q)) < searchQueryMin {
 		// Too short to match anything: render the empty state rather than a
 		// query that would promise results it cannot find.
-		s.render(w, r, "search", pageData{Title: "Search", Active: "search", Data: data})
+		s.render(w, r, "search", pd)
 		return
 	}
 
@@ -270,7 +303,8 @@ func (s *Service) searchPage(w http.ResponseWriter, r *http.Request) {
 		data.Rows = append(data.Rows, g.Rows...)
 	}
 	sortSearchRows(data.Rows, data.Sort)
-	s.render(w, r, "search", pageData{Title: "Search", Active: "search", Data: data})
+	pd.Data = data
+	s.render(w, r, "search", pd)
 }
 
 // searchGroups runs each in-scope entity query and returns the non-empty groups
@@ -611,17 +645,44 @@ type searchScope struct {
 	Active bool
 }
 
-// searchScopeOptions builds the ordered selector entries from the scopes
-// currently available (searchScopesFor), flagging the active one. Labels are
-// title-cased scope keys, except "all".
+// searchScopeOptions builds the ordered selector entries from the scopes the
+// page offers (searchScopesFor), flagging the active one. Labels are the owning
+// screens' names, except "all".
 func searchScopeOptions(active string, scopes []string) []searchScope {
-	labels := map[string]string{
-		"all": "All", "memories": "Memories", "notes": "Notes", "tasks": "Tasks",
-		"plans": "Plans", "trials": "Trials", "projects": "Projects", "sessions": "Sessions",
+	// A scope requested by URL that the level does not offer still shows as the
+	// active choice, in its usual place, so the selector never hides what the
+	// page is searching.
+	if !slices.Contains(scopes, active) {
+		scopes = slices.DeleteFunc(slices.Clone(searchScopes), func(k string) bool {
+			return k != active && !slices.Contains(scopes, k)
+		})
 	}
 	out := make([]searchScope, 0, len(scopes))
 	for _, k := range scopes {
-		out = append(out, searchScope{Key: k, Label: labels[k], Active: k == active})
+		out = append(out, searchScope{Key: k, Label: searchScopeLabel(k), Active: k == active})
 	}
 	return out
+}
+
+// searchScopeLabel names a scope the way its screen is named.
+func searchScopeLabel(scope string) string {
+	if sc, ok := scopeScreen(scope); ok {
+		return sc.Label
+	}
+	if scope == "all" {
+		return "All"
+	}
+	return scope
+}
+
+// searchScopeNoun renders the offered kinds as lowercase prose for the page
+// copy: "memories, notes, and sessions".
+func searchScopeNoun(scopes []string) string {
+	var kinds []string
+	for _, k := range scopes {
+		if k != "all" {
+			kinds = append(kinds, strings.ToLower(searchScopeLabel(k)))
+		}
+	}
+	return joinWithAnd(kinds)
 }

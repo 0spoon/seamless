@@ -22,6 +22,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -121,4 +122,49 @@ func (s *Service) consoleLevel(ctx context.Context) levelState {
 		return levelState{Level: s.baseLevel, Welcomed: true}
 	}
 	return levelState{Level: lvl, Overridden: overridden, Source: source, Welcomed: welcomed}
+}
+
+// screenForPath finds the registry screen a console path belongs to: the one
+// whose Href is the longest path-segment prefix of it, so /console/memories/X
+// is Memories. "/console/" matches only itself -- every console path starts
+// with it, and Overview owns nothing beneath it.
+func screenForPath(reg []screen, path string) (screen, bool) {
+	var best screen
+	found := false
+	for _, sc := range reg {
+		match := path == sc.Href
+		if !match && sc.Href != "/console/" {
+			match = strings.HasPrefix(path, strings.TrimSuffix(sc.Href, "/")+"/")
+		}
+		if match && (!found || len(sc.Href) > len(best.Href)) {
+			best, found = sc, true
+		}
+	}
+	return best, found
+}
+
+// redirectAfterLevelChange decides where a level change lands, as the 303
+// target with its notice. When the new level shows the return path's screen --
+// or the path belongs to no level-gated screen at all (an event page) -- the
+// owner goes back where they were; switching UP always does. When the new level
+// hides it, standing on a bannered page would be a strange welcome to a level
+// just chosen, so the owner lands on Home with a note naming what left the
+// sidebar. returnPath passes the login open-redirect guard first.
+func redirectAfterLevelChange(reg []screen, newLevel level, returnPath string) string {
+	switched := "Switched to " + newLevel.Label() + "."
+	target, err := url.Parse(safeNext(returnPath))
+	if err != nil {
+		target = &url.URL{Path: "/console/"}
+	}
+	if sc, ok := screenForPath(reg, target.Path); ok && newLevel < sc.Min {
+		target = &url.URL{Path: "/console/"}
+		switched += " " + sc.Label + " is not in the " + newLevel.Label() +
+			" sidebar, so you are back on Home."
+	}
+	q := target.Query()
+	q.Del("error")
+	q.Set("notice", switched)
+	target.RawQuery = q.Encode()
+	target.Fragment = ""
+	return target.RequestURI()
 }

@@ -34,6 +34,23 @@
     return '/console/search?q=' + encodeURIComponent(q || '');
   }
 
+  // The search scopes the console level offers, rendered on the sidebar nav
+  // (it is re-rendered whenever the level changes the screen set). The server's
+  // JSON is level-blind by contract, so the palette -- a presentation surface --
+  // narrows the groups it shows here instead.
+  function visibleScopes() {
+    var nav = document.querySelector('nav.nav[data-scopes]');
+    if (!nav) return null;
+    return (nav.getAttribute('data-scopes') || '').split(' ').filter(Boolean);
+  }
+  function scopeHint() {
+    var scopes = visibleScopes();
+    if (!scopes || !scopes.length) return 'Keep typing to search.';
+    var words = scopes.slice();
+    if (words.length > 1) words[words.length - 1] = 'and ' + words[words.length - 1];
+    return 'Keep typing to search ' + words.join(words.length > 2 ? ', ' : ' ') + '.';
+  }
+
   /* ---- Local sources: pages, actions, recents ------------------------------ */
 
   // Pages come from the sidebar, so a feature switched off in Settings is not
@@ -172,7 +189,9 @@
     (local || []).forEach(function (g) { group(g.label, g.rows.length, g.rows, 'local'); });
 
     if (remote && remote.groups && remote.groups.length) {
+      var scopes = visibleScopes();
       remote.groups.forEach(function (g) {
+        if (scopes && scopes.indexOf(g.kind) === -1) return;
         group(g.label, g.count, (g.rows || []).slice(0, PER_GROUP).map(function (r) {
           var bits = [];
           if (r.identifier && r.identifier !== r.title) bits.push(r.identifier);
@@ -274,7 +293,8 @@
       if (ctl !== inflight) return; // superseded by a newer keystroke
       panel.classList.remove('loading');
       var local = localGroups(q);
-      var none = (!data.groups || !data.groups.length);
+      var scopes = visibleScopes();
+      var none = !(data.groups || []).some(function (g) { return !scopes || scopes.indexOf(g.kind) !== -1; });
       render(local, data, none ? { cls: 'cmdk-empty', text: local.length ? 'No knowledge or work matches "' + q + '".' : 'No results for "' + q + '".' } : null);
     }).catch(function (err) {
       if (err && err.name === 'AbortError') return;
@@ -293,7 +313,7 @@
     panel.classList.remove('loading');
     var local = localGroups(q);
     if (q.length < MIN_CHARS) {
-      render(local, null, q ? { cls: 'cmdk-empty', text: 'Keep typing to search memories, notes, tasks, plans, and sessions.' } : null);
+      render(local, null, q ? { cls: 'cmdk-empty', text: scopeHint() } : null);
       return;
     }
     render(local, null, null);

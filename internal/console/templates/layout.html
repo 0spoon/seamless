@@ -47,7 +47,7 @@
          sheet, and search.js's Jump to reads the same links, so the shortcut
          map and the palette follow the registry with no list of their own. A
          screen missing here still works by URL. */}}
-    <nav class="nav" aria-label="Sections">
+    <nav class="nav" aria-label="Sections" data-scopes="{{.VisibleScopes}}">
 {{- range .NavGroups}}{{if .Label}}
       <div class="nav-sec">{{.Label}}</div>{{end}}
 {{- range .Entries}}
@@ -74,6 +74,20 @@
        it belongs to. Decorative: aria-hidden, and still under reduced motion. */}}
   <div class="seam" id="seam" aria-hidden="true"></div>
   <main class="main" id="main" tabindex="-1">
+    {{/* Hidden, not locked: a screen above the console level still renders in
+         full, under this note offering the switch. Information, never an error;
+         "Got it" hides it for this browser tab only (shell.js, sessionStorage). */}}
+    {{with .LevelBanner}}<div class="section notice level-banner" role="note" data-level-banner="{{.ID}}">
+      <p class="level-banner-copy">{{icon "eye-off"}}<span><strong>{{.Label}}</strong> is {{.MinArticle}} {{.Min.Label}} screen. You are in {{.Current.Label}}: it works, it just is not in your sidebar.</span></p>
+      <div class="level-banner-acts">
+        <form method="post" action="/console/settings/level">
+          <input type="hidden" name="level" value="{{.Min}}">
+          <input type="hidden" name="return" value="{{$.ReturnPath}}">
+          <button class="btn small primary" type="submit">Switch to {{.Min.Label}}</button>
+        </form>
+        <button class="btn small" type="button" data-level-banner-dismiss>Got it</button>
+      </div>
+    </div>{{end}}
     {{if .Notice}}<div class="section notice" role="status" data-flash="ok">{{.Notice}}</div>{{end}}
     {{if .FlashErr}}<div class="section login-err" role="alert" data-flash="error">{{.FlashErr}}</div>{{end}}
     {{template "content" .}}

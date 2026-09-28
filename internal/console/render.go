@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -95,15 +96,34 @@ type pageData struct {
 	// LevelBanner is set when this page's screen is above the current level:
 	// it still renders in full, under a note offering the switch.
 	LevelBanner *levelBanner
-	Data        any
+	// ReturnPath is this page's own URL (flash params stripped), for forms that
+	// change presentation state and come back here -- the banner's switch.
+	ReturnPath string
+	// VisibleScopes are the search scopes this level offers, space-separated,
+	// for the palette to narrow its server results to (the JSON itself is
+	// level-blind).
+	VisibleScopes string
+	Data          any
 }
 
 // levelBanner is the soft note a below-level screen carries: which screen, the
-// level whose sidebar shows it, and the level in force.
+// level whose sidebar shows it, and the level in force. It is information, not
+// an error -- the page beneath renders in full.
 type levelBanner struct {
+	// ID is the screen's registry id: the per-browser "Got it" remembers it.
+	ID      string
 	Label   string
 	Min     level
 	Current level
+}
+
+// MinArticle is the indefinite article for the minimum level's label ("an
+// Advanced screen", "a Standard screen").
+func (b levelBanner) MinArticle() string {
+	if strings.ContainsRune("AEIOU", rune(b.Min.Label()[0])) {
+		return "an"
+	}
+	return "a"
 }
 
 // levelBannerFor returns the banner for the screen id at the current level, or
@@ -113,7 +133,7 @@ func levelBannerFor(id string, current level) *levelBanner {
 	if !ok || current >= sc.Min {
 		return nil
 	}
-	return &levelBanner{Label: sc.Label, Min: sc.Min, Current: current}
+	return &levelBanner{ID: sc.ID, Label: sc.Label, Min: sc.Min, Current: current}
 }
 
 // withChrome fills the per-request chrome every layout-wrapped page shares: the
@@ -126,6 +146,8 @@ func (s *Service) withChrome(ctx context.Context, pd pageData) pageData {
 	pd.Screens = visibleScreens(pd.Features, pd.Level)
 	pd.Nav = s.navCounts(ctx, pd.Features)
 	pd.NavGroups = navGroups(pd.Screens, pd.Active, pd.Nav)
+	pd.VisibleScopes = strings.Join(slices.DeleteFunc(searchScopesFor(pd.Features, pd.Level),
+		func(scope string) bool { return scope == "all" }), " ")
 	if pd.LevelBanner == nil {
 		id := pd.Screen
 		if id == "" {
@@ -146,6 +168,17 @@ func withFlash(r *http.Request, pd pageData) pageData {
 	pd.Notice = q.Get("notice")
 	pd.FlashErr = q.Get("error")
 	return pd
+}
+
+// returnPath is the request's own path and query minus the one-shot flash
+// params, so a form that comes back here does not replay a stale message.
+func returnPath(r *http.Request) string {
+	u := *r.URL
+	q := u.Query()
+	q.Del("notice")
+	q.Del("error")
+	u.RawQuery = q.Encode()
+	return safeNext(u.RequestURI())
 }
 
 // funcs are the template helpers shared by every page.
@@ -486,6 +519,7 @@ func (s *Service) render(w http.ResponseWriter, r *http.Request, page string, pd
 	}
 	pd = s.withChrome(r.Context(), pd)
 	pd = withFlash(r, pd)
+	pd.ReturnPath = returnPath(r)
 	tmpl, ok := s.pages[page]
 	if !ok {
 		s.serverError(w, r, fmt.Errorf("console: no such page %q", page))
