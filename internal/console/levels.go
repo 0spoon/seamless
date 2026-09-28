@@ -191,9 +191,11 @@ type levelCard struct {
 	Line string
 	// Lead introduces Items: "Shows" for the first level, "Adds" after it.
 	Lead string
-	// Items are generated from the registries (screens, Settings sections, and
-	// in-page surfaces), so a card can never promise what the gates do not do.
-	Items []string
+	// Items (screens and Settings sections) and Details (in-page surfaces,
+	// grouped by page) are generated from the registries, so a card can never
+	// promise what the gates do not do.
+	Items   []string
+	Details []string
 	// Current marks the level in force.
 	Current bool
 }
@@ -214,7 +216,7 @@ func levelCards(feats config.Features, current level) []levelCard {
 		if lvl == levelBasic {
 			card.Lead = "Shows"
 		}
-		card.Items = levelAdds(feats, lvl)
+		card.Items, card.Details = levelAddsScreens(feats, lvl), levelAddsSurfaces(lvl)
 		out = append(out, card)
 	}
 	return out
@@ -224,6 +226,11 @@ func levelCards(feats config.Features, current level) []levelCard {
 // first level: everything it shows): its screens, then its Settings sections,
 // then the in-page surfaces registered at it.
 func levelAdds(feats config.Features, lvl level) []string {
+	return append(levelAddsScreens(feats, lvl), levelAddsSurfaces(lvl)...)
+}
+
+// levelAddsScreens names the screens and Settings sections lvl adds.
+func levelAddsScreens(feats config.Features, lvl level) []string {
 	var items []string
 	for _, sc := range screens {
 		if sc.Min == lvl && sc.visibleAt(feats, lvl) {
@@ -239,7 +246,13 @@ func levelAdds(feats config.Features, lvl level) []string {
 	if len(sections) > 0 {
 		items = append(items, "Settings: "+joinWithAnd(sections))
 	}
-	// Surfaces read best grouped by page: "Overview: the vitals and ...".
+	return items
+}
+
+// levelAddsSurfaces names the in-page surfaces lvl adds, grouped by page:
+// "Overview: the vitals and ...".
+func levelAddsSurfaces(lvl level) []string {
+	var items []string
 	var where []string
 	byWhere := map[string][]string{}
 	for _, sf := range surfacesAt(lvl) {

@@ -231,7 +231,8 @@ func (n navCounts) count(badge string) (int, bool) {
 // matrix can say what each level adds without anyone transcribing it. A guard
 // test holds each template's gates to its registered surfaces.
 type surface struct {
-	// Where names the page the surface lives on, as the owner reads it.
+	// Where names the page the surface lives on, as the owner reads it -- a
+	// Settings surface names its section ("Settings › Features").
 	Where string
 	// Template is the file whose gate hides it (the guard's key).
 	Template string
@@ -259,10 +260,10 @@ var surfaces = []surface{
 	{Where: "Sessions", Template: "session.html", Label: "a session's review signals", Min: levelStandard},
 	{Where: "Search", Template: "search.html", Label: "the Updated window", Min: levelStandard},
 	{Where: "Search", Template: "search.html", Label: "the Sort control", Min: levelStandard},
-	{Where: "Settings", Template: "settings.html", Label: "the precedence line on Features", Min: levelStandard},
-	{Where: "Settings", Template: "settings.html", Label: "the agent tool names on Features", Min: levelStandard},
-	{Where: "Settings", Template: "settings.html", Label: "each repo route's host on Workspaces", Min: levelAdvanced},
-	{Where: "Settings", Template: "settings.html", Label: "the unbound repo routes on Workspaces", Min: levelAdvanced},
+	{Where: "Settings \u203a Features", Template: "settings.html", Label: "the precedence line", Min: levelStandard},
+	{Where: "Settings \u203a Features", Template: "settings.html", Label: "the agent tool names", Min: levelStandard},
+	{Where: "Settings \u203a Workspaces", Template: "settings.html", Label: "each repo route's host", Min: levelAdvanced},
+	{Where: "Settings \u203a Workspaces", Template: "settings.html", Label: "the unbound repo routes", Min: levelAdvanced},
 	{Where: "Event pages", Template: "peek_event.html", Label: "the decoded payload fields", Min: levelAdvanced},
 	{Where: "Event pages", Template: "peek_event.html", Label: "the raw payload", Min: levelAdvanced},
 }

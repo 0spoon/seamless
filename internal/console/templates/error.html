@@ -10,15 +10,14 @@
   {{if eq .Status 404}}
   <form class="err-search" method="get" action="/console/search" role="search" data-seam-query>
     {{icon "search"}}
-    <input type="search" name="q" placeholder="Search memories, notes, tasks, plans&hellip;" aria-label="Search the console" autocomplete="off">
+    <input type="search" name="q" placeholder="Search {{.SearchNoun}}&hellip;" aria-label="Search the console" autocomplete="off">
     <button class="btn small" type="submit">Search</button>
   </form>
   {{end}}
+  {{/* Drawn from the screen registry at this level, so a lost Basic owner is
+       never sent somewhere their sidebar does not go. */}}
   <nav class="err-actions" aria-label="Go somewhere else">
-    <a class="btn" href="/console/">{{icon "layout-dashboard"}}Overview</a>
-    <a class="btn" href="/console/memories">{{icon "database"}}Memories</a>
-    <a class="btn" href="/console/sessions">{{icon "terminal"}}Sessions</a>
-    <a class="btn" href="/console/projects">{{icon "table-2"}}Projects</a>
+    {{range .Links}}<a class="btn" href="{{.Href}}">{{icon .Icon}}{{.Label}}</a>{{end}}
   </nav>
 </div>
 {{end}}

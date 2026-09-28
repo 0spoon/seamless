@@ -36,16 +36,27 @@ type HealthFacts struct {
 }
 
 // GetHealthFacts reads the health strip's facts in two small queries: a
-// group-by over the sessions' client column, and the newest session-start
-// injection walked down the (kind, ts) index.
+// group-by over the sessions' client, and the newest session-start injection
+// walked down the (kind, ts) index.
+//
+// A session's client is its external_client, or -- for a row that predates
+// that column or was named by hand -- the ambient name prefix (cc/, cx/), the
+// same fallback the console's agent pill uses (and migration 010's backfill).
+// A session with neither names no client and adds no row.
 func GetHealthFacts(ctx context.Context, db *sql.DB) (HealthFacts, error) {
 	var out HealthFacts
 	rows, err := db.QueryContext(ctx, `
-		SELECT external_client, MAX(updated_at)
-		  FROM sessions
-		 WHERE external_client <> ''
-		 GROUP BY external_client
-		 ORDER BY MAX(updated_at) DESC, external_client`)
+		SELECT client, MAX(updated_at) FROM (
+			SELECT CASE
+			         WHEN external_client <> '' THEN external_client
+			         WHEN substr(name, 1, 3) = 'cc/' THEN 'claude-code'
+			         WHEN substr(name, 1, 3) = 'cx/' THEN 'codex'
+			         ELSE ''
+			       END AS client, updated_at
+			  FROM sessions)
+		 WHERE client <> ''
+		 GROUP BY client
+		 ORDER BY MAX(updated_at) DESC, client`)
 	if err != nil {
 		return out, fmt.Errorf("store.GetHealthFacts: clients: %w", err)
 	}

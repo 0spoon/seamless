@@ -606,6 +606,31 @@ type errorData struct {
 	Status  int
 	Heading string
 	Message string
+	// Links are the places a lost reader most often means, drawn from the
+	// screens this level offers; SearchNoun names what the search box covers.
+	Links      []screen
+	SearchNoun string
+}
+
+// errorDestinations are the screens the styled error page offers, in order,
+// by id: the places a lost reader most often means.
+var errorDestinations = []string{"overview", "memories", "sessions", "projects", "notes"}
+
+// errorLinks picks up to four destinations the level offers, so a Basic owner
+// is never sent to a screen their sidebar does not have.
+func errorLinks(visible []screen) []screen {
+	var out []screen
+	for _, id := range errorDestinations {
+		for _, sc := range visible {
+			if sc.ID == id && sc.NavRow {
+				out = append(out, sc)
+			}
+		}
+		if len(out) == 4 {
+			break
+		}
+	}
+	return out
 }
 
 // renderErrorPage renders a full, layout-wrapped error page (sidebar + a way
@@ -631,10 +656,12 @@ func (s *Service) renderErrorPage(w http.ResponseWriter, r *http.Request, status
 		http.Error(w, msg, status)
 		return
 	}
-	pd := s.withChrome(r.Context(), pageData{
-		Title: heading,
-		Data:  errorData{Status: status, Heading: heading, Message: msg},
-	})
+	pd := s.withChrome(r.Context(), pageData{Title: heading})
+	pd.Data = errorData{
+		Status: status, Heading: heading, Message: msg,
+		Links:      errorLinks(pd.Screens),
+		SearchNoun: searchScopeNoun(searchScopesFor(pd.Features, pd.Level)),
+	}
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "layout", pd); err != nil {
 		http.Error(w, msg, status)

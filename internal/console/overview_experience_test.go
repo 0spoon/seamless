@@ -193,7 +193,9 @@ func TestOverview_StylesStayScopedAndStackResponsively(t *testing.T) {
 	}
 	stackAt := strings.Index(block, "@media (max-width: 1100px)")
 	require.NotEqual(t, -1, stackAt)
-	require.Contains(t, block[stackAt:], ".ov2-grid { grid-template-columns: 1fr; }")
+	// One column, floored at zero rather than at min-content: a bare 1fr let the
+	// workspaces table widen the whole phone page past the screen.
+	require.Contains(t, block[stackAt:], ".ov2-grid { grid-template-columns: minmax(0, 1fr); }")
 
 	// The marketing block is gone, not merely unused.
 	require.NotContains(t, css, "OVERVIEW FRONT DOOR")

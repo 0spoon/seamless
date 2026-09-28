@@ -28,7 +28,9 @@ func TestGetHealthFacts(t *testing.T) {
 		{"01S1", "cc/one", "claude-code", 4 * time.Minute},
 		{"01S2", "cc/two", "claude-code", 3 * time.Hour},
 		{"01S3", "cx/one", "codex", 72 * time.Hour},
-		{"01S4", "sess/named", "", time.Minute}, // an explicit session names no client
+		{"01S4", "sess/named", "", time.Minute},           // an explicit session names no client
+		{"01S5", "cx/legacy", "", 30 * time.Minute},       // no column value: the ambient prefix names it
+		{"01S6", "cc/older-legacy", "", 10 * time.Minute}, // older than cc/one: does not move claude-code
 	} {
 		require.NoError(t, CreateSession(ctx, db, core.Session{
 			ID: s.id, Name: s.name, ExternalClient: s.client, Status: core.SessionActive,
@@ -49,7 +51,7 @@ func TestGetHealthFacts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []ClientSeen{
 		{Client: "claude-code", LastSeen: now.Add(-4 * time.Minute)},
-		{Client: "codex", LastSeen: now.Add(-72 * time.Hour)},
+		{Client: "codex", LastSeen: now.Add(-30 * time.Minute)},
 	}, facts.Clients, "one row per client, newest activity first; unclassified sessions add none")
 	require.NotNil(t, facts.LastBriefing)
 	require.Equal(t, "01E2", facts.LastBriefing.EventID)

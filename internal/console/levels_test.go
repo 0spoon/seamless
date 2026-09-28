@@ -701,3 +701,29 @@ func TestSetupSection_Facts(t *testing.T) {
 		require.NotContains(t, page, advanced, "budgets and policy stay in Knowledge engine")
 	}
 }
+
+// The styled 404 offers the places a lost reader most often means -- drawn from
+// the screens the level shows, so Basic is never sent to a screen its sidebar
+// lacks -- and its search box names what the level searches.
+func TestErrorPage_DestinationsFollowTheLevel(t *testing.T) {
+	db, mux := newConsoleLevel(t, config.Features{}, "basic")
+	destinations := regexp.MustCompile(`(?s)<nav class="err-actions" aria-label="Go somewhere else">(.*?)</nav>`)
+	hrefs := regexp.MustCompile(`href="([^"]+)"`)
+	links := func() []string {
+		rr := getPeek(t, mux, "/console/no-such-screen")
+		require.Equal(t, http.StatusNotFound, rr.Code)
+		nav := destinations.FindStringSubmatch(rr.Body.String())
+		require.NotNil(t, nav)
+		var out []string
+		for _, m := range hrefs.FindAllStringSubmatch(nav[1], -1) {
+			out = append(out, m[1])
+		}
+		return out
+	}
+	require.Equal(t, []string{"/console/", "/console/memories", "/console/sessions", "/console/notes"}, links())
+	require.Contains(t, getPeek(t, mux, "/console/no-such-screen").Body.String(),
+		`placeholder="Search memories, notes, and sessions&hellip;"`)
+
+	setLevel(t, db, "standard")
+	require.Equal(t, []string{"/console/", "/console/memories", "/console/sessions", "/console/projects"}, links())
+}

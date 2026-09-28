@@ -45,7 +45,8 @@
           <input type="hidden" name="return" value="/console/settings?s=experience">
           <header class="level-card-head"><h3>{{.Level.Label}}</h3>{{if .Current}}<span class="badge ok">Current</span>{{end}}</header>
           <p class="level-card-line">{{.Line}}</p>
-          <div class="level-card-items"><span class="level-card-lead">{{.Lead}}</span><ul>{{range .Items}}<li>{{.}}</li>{{end}}</ul></div>
+          <div class="level-card-items"><span class="level-card-lead">{{.Lead}}</span><ul>{{range .Items}}<li>{{.}}</li>{{end}}</ul>
+            {{with .Details}}<ul class="level-card-details">{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}</div>
           {{if .Current}}<button class="btn small" type="button" disabled>In use</button>{{else}}<button class="btn small primary" type="submit">Use {{.Level.Label}}</button>{{end}}
         </form>
         {{end}}
@@ -855,6 +856,19 @@ window.SEAM_NO_LIVE_REFRESH = true; // preserve unsaved form state on this contr
     var input = event.target.closest ? event.target.closest('[data-theme-choice] input[name="theme"]') : null;
     if (input && window.SeamTheme) window.SeamTheme.set(input.value);
   });
+  // On a phone the sub-nav is a scrolling row of chips: keep the open section's
+  // chip in view, including one reached by URL from above the level.
+  function revealActiveSection() {
+    var chip = document.querySelector('.settings-subnav a.active');
+    var nav = chip && chip.parentElement;
+    if (!nav || nav.scrollWidth <= nav.clientWidth) return;
+    // Rects, not offsetLeft: the phone row is position: static, so a chip's
+    // offsetParent is some ancestor rather than the row it scrolls in.
+    var gap = chip.getBoundingClientRect().left - nav.getBoundingClientRect().left;
+    nav.scrollLeft = Math.max(0, nav.scrollLeft + gap - (nav.clientWidth - chip.offsetWidth) / 2);
+  }
+  revealActiveSection();
+  document.addEventListener('seam:content-updated', revealActiveSection);
   document.addEventListener('seam:theme', syncThemeChoice);
   document.addEventListener('seam:content-updated', syncThemeChoice);
   syncThemeChoice();

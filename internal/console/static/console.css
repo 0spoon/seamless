@@ -2470,8 +2470,10 @@ kbd {
 .cmdk-opt { align-items: center; }
 .cmdk-opt .cmdk-ico { width: 15px; height: 15px; color: var(--muted); flex: none; }
 .cmdk-opt.selected .cmdk-ico { color: var(--brand); }
-.cmdk-opt.cmdk-local .t { max-width: none; flex: 0 1 auto; }
-.cmdk-opt.cmdk-local .meta { margin-left: 2px; }
+/* A Jump to row's hint gives way before its title does: on a phone the Settings
+   sections' blurbs would otherwise squeeze "Settings > Experience" to "Settin...". */
+.cmdk-opt.cmdk-local .t { max-width: 72%; flex: 0 0 auto; }
+.cmdk-opt.cmdk-local .meta { flex: 0 1 auto; min-width: 0; margin-left: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmdk-key { margin-left: auto; flex: none; font-size: 10px; }
 .cmdk-group.local { color: var(--faint); }
 
@@ -4669,7 +4671,10 @@ button.star.on .ico { fill: currentColor; }
 
 @media (max-width: 1100px) {
   .ov2-vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ov2-grid { grid-template-columns: 1fr; }
+  /* minmax(0, ...), not 1fr: a bare 1fr floors the column at its widest
+     item's min-content, and the workspaces table then widened the whole
+     phone page past the screen (its table-wrap scrolls instead). */
+  .ov2-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
   .ov2-titlebar { flex-wrap: wrap; }
@@ -5960,6 +5965,14 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 .js form:not(.is-dirty) > .settings-savebar { display: none; }
 html:not(.js) [data-form-discard] { display: none; }
 .settings-savebar { animation: rise-in var(--dur-med) var(--ease-out) both; }
+@media (max-width: 720px) {
+  /* The phone rule above sets save bars static, from when they always showed.
+     A Settings bar shows only while its form is dirty, so it can afford to
+     stick again: a Save below the fold is a change the owner walks away from.
+     Scripted pages only -- without script the bar always shows, in flow. */
+  .js .brief-actions.settings-savebar { position: sticky; bottom: 8px; gap: 8px; padding: 9px 10px; }
+  .js .settings-savebar .btn-row { flex-direction: row; }
+}
 .engine-group { margin: 0 0 26px; scroll-margin-top: 20px; }
 .engine-group-head {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 4px 14px; margin: 0 0 12px;
@@ -6146,3 +6159,13 @@ html:not(.js) [data-form-discard] { display: none; }
    Below Standard a session has no review-signal scorecard; its findings take
    the whole row instead of leaving the scorecard's column empty. */
 .session-review-grid:not(:has(.session-scorecard)) { grid-template-columns: minmax(0, 1fr); }
+/* The finer controls a level adds read as plain lines under the screen chips:
+   they are sentences, and a pill around a sentence reads as a button. */
+.level-card-items ul.level-card-details { display: block; margin-top: 9px; }
+.level-card-items ul.level-card-details li {
+  position: relative; margin: 0 0 4px; padding: 0 0 0 12px; border: 0; border-radius: 0; background: none;
+  color: var(--muted); line-height: 1.45;
+}
+.level-card-items ul.level-card-details li::before {
+  content: ""; position: absolute; left: 1px; top: 0.62em; width: 4px; height: 4px; border-radius: 50%; background: var(--faint);
+}

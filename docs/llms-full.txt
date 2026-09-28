@@ -8641,10 +8641,10 @@ What each level shows, generated from the console's own registries:
 | **Sessions: a session's review signals** | - | shown | shown |
 | **Search: the Updated window** | - | shown | shown |
 | **Search: the Sort control** | - | shown | shown |
-| **Settings: the precedence line on Features** | - | shown | shown |
-| **Settings: the agent tool names on Features** | - | shown | shown |
-| **Settings: each repo route's host on Workspaces** | - | - | shown |
-| **Settings: the unbound repo routes on Workspaces** | - | - | shown |
+| **Settings › Features: the precedence line** | - | shown | shown |
+| **Settings › Features: the agent tool names** | - | shown | shown |
+| **Settings › Workspaces: each repo route's host** | - | - | shown |
+| **Settings › Workspaces: the unbound repo routes** | - | - | shown |
 | **Event pages: the decoded payload fields** | - | - | shown |
 | **Event pages: the raw payload** | - | - | shown |
 
