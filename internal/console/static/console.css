@@ -564,7 +564,9 @@ body:has(.main[aria-busy="true"]) .nav-progress { opacity: 1; animation: nav-pro
 .tt-ico { display: none; align-items: center; }
 [data-theme="dark"] .tt-ico.ico-light { display: inline-flex; }
 [data-theme="light"] .tt-ico.ico-dark { display: inline-flex; }
-:root:not([data-theme="light"]) .tt-ico.ico-light { display: inline-flex; }
+/* System (no data-theme): the icon offers the theme opposite the OS's. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme]) .tt-ico.ico-light { display: inline-flex; } }
+@media (prefers-color-scheme: light) { :root:not([data-theme]) .tt-ico.ico-dark { display: inline-flex; } }
 
 /* Theme toggle + sign-out are pinned to the sidebar bottom. */
 .side-foot { margin-top: auto; padding: 12px 0 0; border-top: 1px solid var(--border); }

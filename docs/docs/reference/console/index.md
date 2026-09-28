@@ -765,8 +765,12 @@ applies at once: the sidebar and the page update in place, and if the new level
 hides the screen you were on you land on Home with a note. The note at the top
 says whether the level was **chosen in the console** or **set by the upgrade**,
 and **Reset to file + env** hands the choice back to `console.level`. The same
-section holds the theme (Dark or Light - per browser, and the same switch as the
-sidebar's sun and moon) and a button for the shortcut sheet.
+section holds the theme and a button for the shortcut sheet. The theme is
+**System**, **Light**, or **Dark**, kept per browser. System is what a browser
+starts on: it follows your computer's light or dark appearance, and follows it
+live when it changes. Light and Dark pin one theme. The sidebar's sun and moon
+switch the same setting: under System they pin the theme opposite the one on
+screen, and picking System here goes back to following the computer.
 
 ### Optional features
 

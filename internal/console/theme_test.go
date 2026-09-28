@@ -104,3 +104,75 @@ func TestBrandClass_WordmarkRulesStayOnTheWordmark(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(layout), `document.querySelectorAll('a.brand .dot')`)
 }
+
+// System (no stored choice) follows the OS: a page carries no data-theme until
+// the owner picks Light or Dark, and the stylesheet's prefers-color-scheme
+// block does the rest before first paint. That block must be the dark theme
+// exactly -- the same tokens with the same values, and nothing but tokens -- or
+// "System on a dark Mac" and "Dark" would be two different consoles.
+func TestTheme_SystemFollowsTheOS(t *testing.T) {
+	css := regexp.MustCompile(`(?s)/\*.*?\*/`).ReplaceAllString(string(consoleCSS), "")
+	block := func(opener string) string {
+		at := strings.Index(css, opener)
+		require.NotEqual(t, -1, at, "missing %q", opener)
+		open := at + len(opener)
+		depth := 1
+		for i := open; i < len(css); i++ {
+			switch css[i] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+				if depth == 0 {
+					return css[open:i]
+				}
+			}
+		}
+		t.Fatalf("unclosed %q", opener)
+		return ""
+	}
+	decl := regexp.MustCompile(`(--[\w-]+)\s*:\s*([^;]+);`)
+	tokens := func(body string) map[string]string {
+		out := map[string]string{}
+		for _, m := range decl.FindAllStringSubmatch(body, -1) {
+			out[m[1]] = strings.Join(strings.Fields(strings.ReplaceAll(m[2], ", ", ",")), " ")
+		}
+		return out
+	}
+
+	media := block(`@media (prefers-color-scheme: dark) {`)
+	rules := regexp.MustCompile(`([^{}]+)\{`).FindAllStringSubmatch(media, -1)
+	require.Len(t, rules, 1, "the OS-dark block holds one rule")
+	require.Equal(t, `:root:not([data-theme="light"])`, strings.TrimSpace(rules[0][1]))
+	inner := block(`:root:not([data-theme="light"]) {`)
+	require.Empty(t, strings.TrimSpace(decl.ReplaceAllString(inner, "")), "the OS-dark block redefines tokens only")
+	require.Equal(t, tokens(block(`[data-theme="dark"] {`)), tokens(inner), "System-dark is the Dark theme, token for token")
+
+	// Under System the toggle offers the theme opposite the OS's.
+	require.Contains(t, css, `@media (prefers-color-scheme: dark) { :root:not([data-theme]) .tt-ico.ico-light { display: inline-flex; } }`)
+	require.Contains(t, css, `@media (prefers-color-scheme: light) { :root:not([data-theme]) .tt-ico.ico-dark { display: inline-flex; } }`)
+
+	// Both pre-paint scripts set data-theme only for an explicit choice: no
+	// default path writes one, so no stored choice means the OS decides.
+	for _, name := range []string{"layout.html", "login.html"} {
+		raw, err := templateFS.ReadFile("templates/" + name)
+		require.NoError(t, err)
+		src := string(raw)
+		require.Contains(t, src, `if(t==='dark'||t==='light')`, name)
+		require.NotContains(t, src, `||'dark'`, "%s: no default theme", name)
+		require.NotContains(t, src, `setAttribute('data-theme','dark')`, "%s: no forced dark", name)
+	}
+	_, mux := newConsole(t)
+	page := getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, page, `<html lang="en">`, "the server renders no theme")
+	require.NotContains(t, page, `||'dark'`)
+
+	// Experience offers the choice, System first.
+	settings := getPeek(t, mux, "/console/settings?s=experience").Body.String()
+	radios := regexp.MustCompile(`name="theme" value="(\w+)"`).FindAllStringSubmatch(settings, -1)
+	var values []string
+	for _, m := range radios {
+		values = append(values, m[1])
+	}
+	require.Equal(t, []string{"system", "light", "dark"}, values)
+}

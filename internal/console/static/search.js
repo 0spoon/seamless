@@ -74,7 +74,11 @@
   function actions() {
     var out = [];
     var theme = document.getElementById('theme-toggle');
-    if (theme) out.push({ title: 'Switch to ' + (document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark') + ' theme', run: function () { theme.click(); } });
+    if (theme) {
+      // The theme on screen, which under System is the OS's, not the attribute's.
+      var onScreen = window.SeamTheme ? window.SeamTheme.effective() : document.documentElement.getAttribute('data-theme');
+      out.push({ title: 'Switch to ' + (onScreen === 'dark' ? 'light' : 'dark') + ' theme', run: function () { theme.click(); } });
+    }
     if (window.SeamShell) {
       out.push({ title: 'Collapse or expand the sidebar', hint: '[', run: function () { window.SeamShell.toggleSidebar(); } });
       out.push({ title: 'Keyboard shortcuts', hint: '?', run: function () { window.SeamShell.openKeys(); } });

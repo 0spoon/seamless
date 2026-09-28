@@ -647,7 +647,8 @@ func TestSidebar_NamesTheLevel(t *testing.T) {
 
 	layout, err := templateFS.ReadFile("templates/layout.html")
 	require.NoError(t, err)
-	require.Contains(t, string(layout), "window.SeamTheme = { set: set };")
+	require.Contains(t, string(layout), "window.SeamTheme = { set: set, choice: choice, effective: effective };",
+		"one theme setter, shared by the sidebar toggle and Settings > Experience")
 	require.Contains(t, string(layout), "'seam:theme'")
 }
 

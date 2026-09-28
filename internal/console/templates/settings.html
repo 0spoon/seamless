@@ -57,10 +57,11 @@
         <section class="experience-group" aria-labelledby="experience-theme-title">
           <h3 id="experience-theme-title">Theme</h3>
           <div class="seg theme-choice" role="radiogroup" aria-labelledby="experience-theme-title" data-theme-choice>
-            <label><input type="radio" name="theme" value="dark"><span>Dark</span></label>
+            <label><input type="radio" name="theme" value="system"><span>System</span></label>
             <label><input type="radio" name="theme" value="light"><span>Light</span></label>
+            <label><input type="radio" name="theme" value="dark"><span>Dark</span></label>
           </div>
-          <p>Kept in this browser only; the sidebar&rsquo;s sun and moon switch the same setting.</p>
+          <p>System follows your computer&rsquo;s light or dark appearance. Kept in this browser only; the sidebar&rsquo;s sun and moon pick Light or Dark.</p>
         </section>
         <section class="experience-group" aria-labelledby="experience-keys-title">
           <h3 id="experience-keys-title">Keyboard</h3>
@@ -876,8 +877,12 @@ window.SEAM_NO_LIVE_REFRESH = true; // preserve unsaved form state on this contr
   // The Experience theme radios and the sidebar's toggle drive one per-browser
   // setting (layout.html's SeamTheme); each follows the other, and a morph
   // (which resets the radios to the unchecked server markup) re-syncs them.
+  // The radios show the CHOICE -- System stays checked while the OS flips. It
+  // is read from the attribute the pre-paint script set, not from SeamTheme:
+  // this script runs before the layout's defines it.
   function syncThemeChoice() {
-    var current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    var theme = document.documentElement.getAttribute('data-theme');
+    var current = theme === 'dark' || theme === 'light' ? theme : 'system';
     document.querySelectorAll('[data-theme-choice] input[name="theme"]').forEach(function (input) {
       input.checked = input.value === current;
     });

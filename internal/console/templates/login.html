@@ -7,7 +7,9 @@
 <link rel="icon" type="image/svg+xml" href="/console/static/favicon.svg">
 <link rel="stylesheet" href="/console/static/console.css">
 <script>
-(function(){try{document.documentElement.setAttribute('data-theme',localStorage.getItem('seamless-theme')||'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+/* The layout's rule: only an explicit Light or Dark sets data-theme; with no
+   choice the stylesheet follows the OS. */
+(function(){try{var t=localStorage.getItem('seamless-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
 </script>
 </head>
 <body class="login-body">

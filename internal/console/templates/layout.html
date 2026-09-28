@@ -7,9 +7,12 @@
 <link rel="icon" type="image/svg+xml" href="/console/static/favicon.svg">
 <link rel="stylesheet" href="/console/static/console.css">
 <script>
-/* Apply the saved theme (default dark) and sidebar state before first paint,
-   so neither flashes. Both are per-browser conveniences, never server state. */
-(function(){var d=document.documentElement;d.classList.add('js','reveal');try{d.setAttribute('data-theme',localStorage.getItem('seamless-theme')||'dark');if(localStorage.getItem('seamless-sidebar')==='collapsed')d.setAttribute('data-sidebar','collapsed');}catch(e){d.setAttribute('data-theme','dark');}})();
+/* Apply a chosen theme and the sidebar state before first paint, so neither
+   flashes. Only an explicit Light or Dark sets data-theme: with no choice
+   (System) the stylesheet follows the OS through prefers-color-scheme, which
+   resolves before paint with no script at all. Both are per-browser
+   conveniences, never server state. */
+(function(){var d=document.documentElement;d.classList.add('js','reveal');try{var t=localStorage.getItem('seamless-theme');if(t==='dark'||t==='light')d.setAttribute('data-theme',t);if(localStorage.getItem('seamless-sidebar')==='collapsed')d.setAttribute('data-sidebar','collapsed');}catch(e){}})();
 </script>
 {{/* Hover prefetch for console pages (Chromium; ignored elsewhere). It only
      fetches the document, never runs it, and skips the SSE stream, sign-out,
@@ -403,28 +406,58 @@
 })();
 (function () {
   var btn = document.getElementById('theme-toggle');
-  if (!btn) return;
   var root = document.documentElement;
+  var osDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  // The choice is 'system' (nothing stored, no data-theme: follow the OS),
+  // 'light', or 'dark'; the theme on screen is the choice, or the OS's.
+  function choice() {
+    var t = root.getAttribute('data-theme');
+    return t === 'dark' || t === 'light' ? t : 'system';
+  }
+  function effective() {
+    var c = choice();
+    if (c !== 'system') return c;
+    return osDark && osDark.matches ? 'dark' : 'light';
+  }
   // The affordance is a fixed-size icon button, so its state lives in the label
-  // rather than in visible text -- nothing reflows when the theme flips.
+  // rather than in visible text -- nothing reflows when the theme flips. Under
+  // System a click picks the theme opposite the OS's, and the label says so.
   function label() {
-    var next = root.getAttribute('data-theme') === 'dark' ? 'Light theme' : 'Dark theme';
+    if (!btn) return;
+    var next = effective() === 'dark' ? 'Light theme' : 'Dark theme';
+    if (choice() === 'system') next += effective() === 'dark' ? ' instead of the system\u2019s dark' : ' instead of the system\u2019s light';
     btn.setAttribute('aria-label', next);
     btn.setAttribute('title', next);
   }
   label();
-  // One setter for the per-browser theme, shared with Settings -> Experience,
-  // so the toggle and the radio pair can never disagree: both write through
-  // here and both listen for seam:theme.
-  function set(theme) {
-    if (theme !== 'dark' && theme !== 'light') return;
-    root.setAttribute('data-theme', theme);
-    try { localStorage.setItem('seamless-theme', theme); } catch (e) {}
-    label();
-    document.dispatchEvent(new CustomEvent('seam:theme', { detail: { theme: theme } }));
+  function announce() {
+    document.dispatchEvent(new CustomEvent('seam:theme', { detail: { theme: choice(), effective: effective() } }));
   }
-  window.SeamTheme = { set: set };
-  btn.onclick = function () { set(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); };
+  // One setter for the per-browser theme, shared with Settings -> Experience,
+  // so the toggle and the radios can never disagree: both write through here
+  // and both listen for seam:theme. 'system' forgets the choice.
+  function set(theme) {
+    if (theme === 'system') {
+      root.removeAttribute('data-theme');
+      try { localStorage.removeItem('seamless-theme'); } catch (e) {}
+    } else if (theme === 'dark' || theme === 'light') {
+      root.setAttribute('data-theme', theme);
+      try { localStorage.setItem('seamless-theme', theme); } catch (e) {}
+    } else {
+      return;
+    }
+    label();
+    announce();
+  }
+  window.SeamTheme = { set: set, choice: choice, effective: effective };
+  if (btn) btn.onclick = function () { set(effective() === 'dark' ? 'light' : 'dark'); };
+  // Under System the OS can switch while the page is open: the stylesheet
+  // follows by itself; the label and the listeners follow here.
+  if (osDark) {
+    var onOS = function () { if (choice() === 'system') { label(); announce(); } };
+    if (osDark.addEventListener) osDark.addEventListener('change', onOS);
+    else if (osDark.addListener) osDark.addListener(onOS);
+  }
 })();
 (function () {
   /* Quick-copy: document-level delegation on .copy-btn[data-copy] so it keeps
