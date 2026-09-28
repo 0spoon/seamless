@@ -130,22 +130,6 @@ func (s *Service) featureOff(w http.ResponseWriter, r *http.Request, key feature
 	})
 }
 
-// navOff lists the sidebar nav ids hidden because their optional feature is off,
-// derived from the registry so a future feature hides its own entries without a
-// template change beyond the guard itself.
-func navOff(cfg config.Features) map[string]bool {
-	off := make(map[string]bool)
-	for _, f := range features.Registry() {
-		if f.Enabled(cfg) {
-			continue
-		}
-		for _, id := range f.NavIDs {
-			off[id] = true
-		}
-	}
-	return off
-}
-
 // ---------------------------------------------------------------------------
 // Settings cards
 // ---------------------------------------------------------------------------

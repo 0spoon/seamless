@@ -39,32 +39,20 @@
          field-shaped trigger rather than hiding behind a shortcut. On Search it
          carries the active marker the old nav row did. */}}
     <button type="button" class="side-search{{if eq .Active "search"}} active{{end}}" data-cmdk-open data-tip="Search" aria-label="Search or jump to (Cmd+K)"><span class="side-search-ico">{{icon "search"}}</span><span class="side-search-label">Search or jump to&hellip;</span><kbd class="kbd-hint">&#8984;K</kbd></button>
-    {{/* Grouped by the owner's job, not by table: what is happening (Live), what
-         the fleet knows and how it circulates (Knowledge), what is being done
-         (Work). data-key is the g-chord (g then key) shell.js binds and lists in
-         the ? sheet, so the shortcut map lives with the links it opens. */}}
+    {{/* Rendered from the screen registry (screens.go), which decides the order,
+         the groups, and what this level and feature state offer: grouped by the
+         owner's job, not by table -- what is happening (Live), what the fleet
+         knows and how it circulates (Knowledge), what is being done (Work).
+         data-key is the g-chord (g then key) shell.js binds and lists in the ?
+         sheet, and search.js's Jump to reads the same links, so the shortcut
+         map and the palette follow the registry with no list of their own. A
+         screen missing here still works by URL. */}}
     <nav class="nav" aria-label="Sections">
-      <div class="nav-sec">Live</div>
-      <a href="/console/" data-key="o" data-tip="Overview" class="{{if eq .Active "overview"}}active{{end}}">{{icon "layout-dashboard"}}<span class="nav-label">Overview</span></a>
-      <a href="/console/now" data-key="n" data-tip="Now" class="{{if eq .Active "now"}}active{{end}}">{{icon "radar"}}<span class="nav-label">Now</span><span class="count" title="Agents live now"{{if not .Nav.Now}} data-zero{{end}}>{{.Nav.Now}}</span></a>
-      <a href="/console/interactions" data-key="i" data-tip="Interactions" class="{{if eq .Active "interactions"}}active{{end}}">{{icon "activity"}}<span class="nav-label">Interactions</span></a>
-      <div class="nav-sec">Knowledge</div>
-      <a href="/console/memories" data-key="m" data-tip="Memories" class="{{if eq .Active "memories"}}active{{end}}">{{icon "database"}}<span class="nav-label">Memories</span><span class="count">{{.Nav.Memories}}</span></a>
-      <a href="/console/notes" data-key="e" data-tip="Notes" class="{{if eq .Active "notes"}}active{{end}}">{{icon "file-text"}}<span class="nav-label">Notes</span><span class="count">{{.Nav.Notes}}</span></a>
-      <a href="/console/retrieval" data-key="r" data-tip="Retrieval" class="{{if eq .Active "retrieval"}}active{{end}}">{{icon "brain"}}<span class="nav-label">Retrieval</span></a>
-      <a href="/console/gardener" data-key="g" data-tip="Gardener" class="{{if eq .Active "gardener"}}active{{end}}">{{icon "sprout"}}<span class="nav-label">Gardener</span><span class="count" title="Proposals waiting for review"{{if not .Nav.Proposals}} data-zero{{end}}>{{.Nav.Proposals}}</span></a>
-      <div class="nav-sec">Work</div>
-      <a href="/console/projects" data-key="w" data-tip="Projects" class="{{if eq .Active "projects"}}active{{end}}">{{icon "table-2"}}<span class="nav-label">Projects</span><span class="count">{{.Nav.Projects}}</span></a>
-      <a href="/console/plans" data-key="p" data-tip="Plans" class="{{if eq .Active "plans"}}active{{end}}">{{icon "map"}}<span class="nav-label">Plans</span><span class="count">{{.Nav.Plans}}</span></a>
-      <a href="/console/tasks" data-key="t" data-tip="Tasks" class="{{if eq .Active "tasks"}}active{{end}}">{{icon "list-checks"}}<span class="nav-label">Tasks</span><span class="count" title="Open tasks">{{.Nav.Tasks}}</span></a>
-      <a href="/console/sessions" data-key="s" data-tip="Sessions" class="{{if eq .Active "sessions"}}active{{end}}">{{icon "terminal"}}<span class="nav-label">Sessions</span><span class="count">{{.Nav.Sessions}}</span></a>
-      {{/* Optional-feature entries: hidden while their feature is off (NavOff is
-           registry-derived, so a future feature hides its own entries the same
-           way). The data behind them is untouched -- see /console/settings#features. */}}
-      {{if or (not (index .NavOff "labs")) (not (index .NavOff "trials"))}}<div class="nav-sec">Research</div>{{end}}
-      {{if not (index .NavOff "labs")}}<a href="/console/labs" data-key="l" data-tip="Labs" class="{{if eq .Active "labs"}}active{{end}}">{{icon "flask-conical"}}<span class="nav-label">Labs</span><span class="count">{{.Nav.Labs}}</span></a>{{end}}
-      {{if not (index .NavOff "trials")}}<a href="/console/trials" data-key="x" data-tip="Trials" class="{{if eq .Active "trials"}}active{{end}}">{{icon "test-tube"}}<span class="nav-label">Trials</span><span class="count">{{.Nav.Trials}}</span></a>{{end}}
-      <a href="/console/settings" data-key="," data-tip="Settings" class="nav-settings{{if eq .Active "settings"}} active{{end}}">{{icon "settings"}}<span class="nav-label">Settings</span></a>
+{{- range .NavGroups}}{{if .Label}}
+      <div class="nav-sec">{{.Label}}</div>{{end}}
+{{- range .Entries}}
+      <a href="{{.Href}}" data-key="{{.Key}}" data-tip="{{.Label}}" class="{{.LinkClass}}">{{icon .Icon}}<span class="nav-label">{{.Label}}</span>{{if .Badge}}<span class="count"{{with .BadgeTitle}} title="{{.}}"{{end}}{{if and .BadgeZero (not .Count)}} data-zero{{end}}>{{.Count}}</span>{{end}}</a>
+{{- end}}{{end}}
     </nav>
     <div class="side-foot">
       <div class="account">

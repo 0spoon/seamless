@@ -166,3 +166,86 @@ func TestDataRefreshClients_NeverReloadDocument(t *testing.T) {
 	require.Contains(t, string(navigationJS), "morphNode(currentMain, freshMain)")
 	require.Contains(t, string(navigationJS), "The current data is unchanged")
 }
+
+// Every registered screen is a real GET route this console mounts -- not the
+// styled-404 catch-all. A registry entry pointing at nothing would put a dead
+// link in the sidebar, the palette, the shortcut map, and the docs at once.
+func TestScreenRegistry_HrefsAreRegisteredRoutes(t *testing.T) {
+	_, mux := newConsoleFeatures(t, featuresAll(true))
+	for _, sc := range screenRegistry() {
+		_, pattern := mux.Handler(httptest.NewRequest(http.MethodGet, sc.Href, nil))
+		require.NotEmpty(t, pattern, "screen %q links to %q, which no route claims", sc.ID, sc.Href)
+		require.NotEqual(t, "GET /console/", pattern,
+			"screen %q links to %q, which only the styled-404 catch-all answers: register the route, or "+
+				"fix the registry entry in screens.go", sc.ID, sc.Href)
+	}
+}
+
+// The layout renders EXACTLY the registry's visible entries, at each level and
+// feature state -- the three-way sibling of TestNav_LinkSetChangesWithFeatureState.
+// Because the g-chords, the ? sheet, and the palette's Jump to all read these
+// links (shell.js and search.js derive from the DOM), this also proves they
+// follow the level with no list of their own.
+//
+// The expected sets are the plan's screen matrix, transcribed on purpose: the
+// matrix is a product decision, so changing it should take a deliberate edit
+// here as well as in screens.go.
+func TestNav_RendersExactlyTheVisibleScreensPerLevel(t *testing.T) {
+	basic := []string{"/console/", "/console/memories", "/console/notes", "/console/gardener",
+		"/console/sessions", "/console/settings"}
+	standard := []string{"/console/", "/console/now", "/console/memories", "/console/notes",
+		"/console/gardener", "/console/projects", "/console/plans", "/console/tasks", "/console/sessions",
+		"/console/settings"}
+	standardResearch := []string{"/console/", "/console/now", "/console/memories", "/console/notes",
+		"/console/gardener", "/console/projects", "/console/plans", "/console/tasks", "/console/sessions",
+		"/console/labs", "/console/trials", "/console/settings"}
+	advanced := []string{"/console/", "/console/now", "/console/interactions", "/console/memories",
+		"/console/notes", "/console/retrieval", "/console/gardener", "/console/projects", "/console/plans",
+		"/console/tasks", "/console/sessions", "/console/settings"}
+	advancedResearch := []string{"/console/", "/console/now", "/console/interactions", "/console/memories",
+		"/console/notes", "/console/retrieval", "/console/gardener", "/console/projects", "/console/plans",
+		"/console/tasks", "/console/sessions", "/console/labs", "/console/trials", "/console/settings"}
+
+	navRe := regexp.MustCompile(`<nav class="nav".*?</nav>`)
+	linkRe := regexp.MustCompile(`<a href="(/console/[^"]*)" data-key="([^"]*)" data-tip="([^"]*)"`)
+	for _, tc := range []struct {
+		level    string
+		research bool
+		want     []string
+	}{
+		{"basic", false, basic},
+		{"basic", true, basic},
+		{"standard", false, standard},
+		{"standard", true, standardResearch},
+		{"advanced", false, advanced},
+		{"advanced", true, advancedResearch},
+	} {
+		t.Run(tc.level+map[bool]string{true: "+research", false: ""}[tc.research], func(t *testing.T) {
+			feats := config.Features{Research: tc.research}
+			_, mux := newConsoleLevel(t, feats, tc.level)
+			page := getPeek(t, mux, "/console/settings")
+			require.Equal(t, http.StatusOK, page.Code)
+			nav := navRe.FindString(strings.ReplaceAll(page.Body.String(), "\n", " "))
+			require.NotEmpty(t, nav)
+
+			var got []string
+			for _, m := range linkRe.FindAllStringSubmatch(nav, -1) {
+				got = append(got, m[1])
+				require.NotEmpty(t, m[2], "every nav link carries its g-chord: %s", m[1])
+				require.NotEmpty(t, m[3], "every nav link carries its collapsed-rail tip: %s", m[1])
+			}
+			require.Equal(t, tc.want, got, "the sidebar at %s must be exactly the matrix's entries", tc.level)
+			require.Equal(t, strings.Count(nav, "<a "), len(got), "every nav link must be a registry entry")
+
+			lvl, err := parseLevel(tc.level)
+			require.NoError(t, err)
+			var derived []string
+			for _, sc := range visibleScreens(feats, lvl) {
+				if sc.NavRow {
+					derived = append(derived, sc.Href)
+				}
+			}
+			require.Equal(t, derived, got, "the layout renders visibleScreens and nothing else")
+		})
+	}
+}

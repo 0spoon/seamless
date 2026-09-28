@@ -77,6 +77,12 @@ type Config struct {
 	// this plus the store's override row, resolved live per request (see
 	// effectiveFeatures) so a Settings save applies without a restart.
 	Features config.Features
+	// Level is the file/env console level base (config.Console.Level): how much
+	// of the console the owner sees. The effective level is this plus the
+	// store's level row, resolved live per request (see consoleLevel). Empty
+	// means the config default; any other value must be one of
+	// config.ConsoleLevels, or New refuses it.
+	Level string
 	// SessionIdleTTL is the configured live/idle threshold for session displays
 	// (gardener.session_idle_minutes); <= 0 falls back to core.SessionIdleTTL.
 	SessionIdleTTL time.Duration
@@ -107,6 +113,9 @@ type Service struct {
 	// list can tag only the sessions that ran on a DIFFERENT machine instead
 	// of stamping this one's name on every row.
 	hostName string
+	// baseLevel is cfg.Level parsed once: the level in force when no stored
+	// row overrides it.
+	baseLevel level
 }
 
 // New builds a console Service, parsing its templates once.
@@ -114,6 +123,14 @@ func New(cfg Config) (*Service, error) {
 	logger := cfg.Logger
 	if logger == nil {
 		logger = slog.Default()
+	}
+	baseName := cfg.Level
+	if baseName == "" {
+		baseName = config.Defaults().Console.Level
+	}
+	baseLevel, err := parseLevel(baseName)
+	if err != nil {
+		return nil, fmt.Errorf("console.New: %w", err)
 	}
 	pages, fragments, err := parseTemplates()
 	if err != nil {
@@ -124,7 +141,10 @@ func New(cfg Config) (*Service, error) {
 		host = "server " + strings.TrimSpace(name)
 		hostName = normHost(name)
 	}
-	return &Service{cfg: cfg, logger: logger, pages: pages, fragments: fragments, host: host, hostName: hostName}, nil
+	return &Service{
+		cfg: cfg, logger: logger, pages: pages, fragments: fragments,
+		host: host, hostName: hostName, baseLevel: baseLevel,
+	}, nil
 }
 
 // Register mounts the console routes on mux under /console. Public routes are the

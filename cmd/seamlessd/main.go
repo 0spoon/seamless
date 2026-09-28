@@ -344,7 +344,10 @@ func runServe(args []string) error {
 		Budgets: cfg.Budgets, GardenerCfg: cfg.Gardener, BriefingCfg: cfg.Briefing,
 		// The file/env optional-features base; the console layers its own stored
 		// override on top per request (same precedence as BriefingCfg).
-		Features:       cfg.Features,
+		Features: cfg.Features,
+		// The file/env console level base, layered the same way. Presentation
+		// only: nothing an agent receives reads it.
+		Level:          cfg.Console.Level,
 		Embedding:      embedRT,
 		SessionIdleTTL: time.Duration(cfg.Gardener.SessionIdleMinutes) * time.Minute,
 		// Secure only under TLS: a browser drops a Secure cookie arriving over

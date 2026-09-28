@@ -2,6 +2,7 @@ package console
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -67,8 +68,12 @@ var entityPeekPages = map[string]bool{"event": true}
 // pageData is the envelope every rendered page receives. Data holds the
 // page-specific payload; Nav/Active/Title drive the shared chrome.
 type pageData struct {
-	Title    string
-	Active   string // nav key to highlight
+	Title  string
+	Active string // nav key to highlight
+	// Screen is the registry screen this page IS, for the level banner, when
+	// that differs from the nav entry it highlights (Context highlights
+	// Projects but is its own, advanced, screen). Empty means Active.
+	Screen   string
 	Nav      navCounts
 	Host     string // machine this console runs on, for the sidebar account row
 	HostName string // the same machine's bare hostname, for sameHost comparisons
@@ -77,10 +82,60 @@ type pageData struct {
 	// Features is the effective optional-feature state for this request; page
 	// templates reach it as $.Features to hide a feature's copy.
 	Features config.Features
-	// NavOff marks the sidebar nav ids belonging to a disabled optional feature
-	// (registry-derived, see navOff). The layout guards each entry with it.
-	NavOff map[string]bool
-	Data   any
+	// Level is the console level in force for this request; page templates
+	// gate level-dependent markup with {{if $.Level.AtLeast "standard"}}.
+	Level level
+	// LevelOverridden reports a stored level row in force (else file/env).
+	LevelOverridden bool
+	// Screens are the screens offered at this level and feature state, in
+	// registry order; NavGroups lays the ones with a nav row out as sidebar
+	// sections. A screen missing here keeps working by URL.
+	Screens   []screen
+	NavGroups []navGroup
+	// LevelBanner is set when this page's screen is above the current level:
+	// it still renders in full, under a note offering the switch.
+	LevelBanner *levelBanner
+	Data        any
+}
+
+// levelBanner is the soft note a below-level screen carries: which screen, the
+// level whose sidebar shows it, and the level in force.
+type levelBanner struct {
+	Label   string
+	Min     level
+	Current level
+}
+
+// levelBannerFor returns the banner for the screen id at the current level, or
+// nil when the level already shows it (or the id names no screen).
+func levelBannerFor(id string, current level) *levelBanner {
+	sc, ok := screenByID(id)
+	if !ok || current >= sc.Min {
+		return nil
+	}
+	return &levelBanner{Label: sc.Label, Min: sc.Min, Current: current}
+}
+
+// withChrome fills the per-request chrome every layout-wrapped page shares: the
+// effective features, the level and the screens it offers, the sidebar
+// sections and badges, and the host.
+func (s *Service) withChrome(ctx context.Context, pd pageData) pageData {
+	pd.Features = s.effectiveFeatures(ctx)
+	lvl := s.consoleLevel(ctx)
+	pd.Level, pd.LevelOverridden = lvl.Level, lvl.Overridden
+	pd.Screens = visibleScreens(pd.Features, pd.Level)
+	pd.Nav = s.navCounts(ctx, pd.Features)
+	pd.NavGroups = navGroups(pd.Screens, pd.Active, pd.Nav)
+	if pd.LevelBanner == nil {
+		id := pd.Screen
+		if id == "" {
+			id = pd.Active
+		}
+		pd.LevelBanner = levelBannerFor(id, pd.Level)
+	}
+	pd.Host = s.host
+	pd.HostName = s.hostName
+	return pd
 }
 
 // withFlash populates the banner fields from the ?notice= / ?error= query params
@@ -429,11 +484,7 @@ func (s *Service) render(w http.ResponseWriter, r *http.Request, page string, pd
 		writeJSON(w, http.StatusOK, pd.Data)
 		return
 	}
-	pd.Features = s.effectiveFeatures(r.Context())
-	pd.NavOff = navOff(pd.Features)
-	pd.Nav = s.navCounts(r.Context(), pd.Features)
-	pd.Host = s.host
-	pd.HostName = s.hostName
+	pd = s.withChrome(r.Context(), pd)
 	pd = withFlash(r, pd)
 	tmpl, ok := s.pages[page]
 	if !ok {
@@ -507,15 +558,10 @@ func (s *Service) renderErrorPage(w http.ResponseWriter, r *http.Request, status
 		http.Error(w, msg, status)
 		return
 	}
-	feats := s.effectiveFeatures(r.Context())
-	pd := pageData{
-		Title:    heading,
-		Nav:      s.navCounts(r.Context(), feats),
-		Features: feats,
-		NavOff:   navOff(feats),
-		Host:     s.host,
-		Data:     errorData{Status: status, Heading: heading, Message: msg},
-	}
+	pd := s.withChrome(r.Context(), pageData{
+		Title: heading,
+		Data:  errorData{Status: status, Heading: heading, Message: msg},
+	})
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "layout", pd); err != nil {
 		http.Error(w, msg, status)

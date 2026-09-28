@@ -10,7 +10,6 @@ package console
 // registered.
 
 import (
-	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -130,55 +129,45 @@ func TestGatedRoutes_AreCoveredByARegistryRoutePrefix(t *testing.T) {
 			"registration moved, and this guard needs to follow it", registerSite)
 }
 
-// navOffGuard finds the nav ids the layout hides behind the .NavOff map.
-var navOffGuard = regexp.MustCompile(`index \.NavOff "([^"]+)"`)
-
-// Invariant 5: the registry's NavIDs and the layout's nav guards are the same
-// set, and each guard wraps a link into the feature's own routes.
+// Invariant 5: the registry's NavIDs and the console's screen registry are the
+// same set, and each such screen links into the feature's own routes.
 //
-// navOff() builds .NavOff from the registry, so the two are useless apart: an id
-// in the registry with no guard leaves a live sidebar link to a screen that
-// answers "switched off", and a guard with no owning feature is dead markup that
-// can never be set.
-func TestFeatureNavIDs_MatchTheLayoutGuards(t *testing.T) {
-	source, err := templateFS.ReadFile("templates/layout.html")
-	require.NoError(t, err)
-	layout := string(source)
-
-	guarded := map[string]bool{}
-	for _, match := range navOffGuard.FindAllStringSubmatch(layout, -1) {
-		guarded[match[1]] = true
-	}
-
-	registered := map[string]bool{}
+// The sidebar is rendered from the screen registry (screens.go), and a screen
+// with a Feature leaves it while that feature is off. So the two registries are
+// useless apart: a NavID with no screen names nothing the sidebar can hide (the
+// Settings "what this hides" line would promise a screen that does not exist),
+// and a feature-owned screen missing from NavIDs would vanish from the sidebar
+// while every registry reader -- Settings, the docs -- says the feature owns
+// nothing there.
+func TestFeatureNavIDs_MatchTheScreenRegistry(t *testing.T) {
+	registered := map[string]features.Key{}
 	for _, f := range features.Registry() {
 		for _, id := range f.NavIDs {
-			registered[id] = true
-			require.True(t, guarded[id],
-				"feature %q claims nav id %q, but templates/layout.html has no "+
-					`{{if not (index .NavOff %q)}} guard around a nav entry: `+
-					"the sidebar would keep linking to a screen the gate answers with the "+
-					"switched-off page. Wrap the entry, or drop the id from the registry.",
-				f.Key, id, id)
-
-			anchor := regexp.MustCompile(
-				regexp.QuoteMeta(`(index .NavOff "`+id+`")}}<a href="`) + `([^"]+)"`)
-			match := anchor.FindStringSubmatch(layout)
-			require.NotNil(t, match,
-				"templates/layout.html guards nav id %q but the guard does not immediately wrap an "+
-					"<a href=...> nav entry: the guard must sit on the link itself, or the entry it "+
-					"hides is not the one the feature owns", id)
-			require.Contains(t, f.RoutePrefixes, match[1],
-				"the %q nav entry links to %q, which is not one of feature %q's route prefixes (%v): "+
-					"a gated nav entry must point into gated routes, or hiding the entry hides nothing.",
-				id, match[1], f.Key, f.RoutePrefixes)
+			registered[id] = f.Key
+			sc, ok := screenByID(id)
+			require.True(t, ok,
+				"feature %q claims nav id %q, but internal/console/screens.go registers no such screen: "+
+					"the sidebar cannot hide an entry it never renders. Register the screen with "+
+					"Feature: features.%s, or drop the id from the feature's NavIDs.",
+				f.Key, id, titleWord(string(f.Key)))
+			require.Equal(t, f.Key, sc.Feature,
+				"screen %q is claimed by feature %q but its registry entry names feature %q: the sidebar "+
+					"would hide it on the wrong switch", id, f.Key, sc.Feature)
+			require.Contains(t, f.RoutePrefixes, sc.Href,
+				"the %q screen links to %q, which is not one of feature %q's route prefixes (%v): a gated "+
+					"nav entry must point into gated routes, or hiding the entry hides nothing.",
+				id, sc.Href, f.Key, f.RoutePrefixes)
 		}
 	}
 
-	for _, id := range slices.Sorted(maps.Keys(guarded)) {
-		require.True(t, registered[id],
-			"templates/layout.html hides nav id %q behind .NavOff, but no feature in "+
-				"internal/features claims it, so navOff() never sets the key and the guard is dead "+
-				"markup: add the id to the owning feature's NavIDs, or remove the guard.", id)
+	for _, sc := range screenRegistry() {
+		if sc.Feature == "" {
+			continue
+		}
+		owner, ok := registered[sc.ID]
+		require.True(t, ok,
+			"screen %q names feature %q, but that feature's NavIDs do not list it, so Settings and the "+
+				"docs would describe a feature that hides fewer screens than it does", sc.ID, sc.Feature)
+		require.Equal(t, sc.Feature, owner)
 	}
 }

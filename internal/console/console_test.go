@@ -38,7 +38,19 @@ func newConsole(t *testing.T) (*sql.DB, *http.ServeMux) {
 
 // newConsoleFeatures builds a console over a fresh DB with an explicit
 // optional-feature base (the file/env layer), for the gating tests.
+//
+// The console level is ADVANCED here, deliberately, for the same reason
+// newConsole turns features on: these helpers back the tests of the screens and
+// controls themselves, which would otherwise be testing the level gates instead
+// of the surface. The level tests pick their level with newConsoleLevel.
 func newConsoleFeatures(t *testing.T, feats config.Features) (*sql.DB, *http.ServeMux) {
+	t.Helper()
+	return newConsoleLevel(t, feats, "advanced")
+}
+
+// newConsoleLevel builds a console over a fresh DB with an explicit
+// optional-feature base and file/env console level base.
+func newConsoleLevel(t *testing.T, feats config.Features, lvl string) (*sql.DB, *http.ServeMux) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
 	require.NoError(t, err)
@@ -49,6 +61,7 @@ func newConsoleFeatures(t *testing.T, feats config.Features) (*sql.DB, *http.Ser
 		// A nil embedder keeps search lexical-only: no test needs a provider.
 		Retrieve: retrieve.New(db, nil, config.Defaults().Budgets, nil),
 		Features: feats,
+		Level:    lvl,
 	})
 	require.NoError(t, err)
 	mux := http.NewServeMux()

@@ -146,7 +146,7 @@ func (s *Service) contextView(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Scope = scope
 	data.Project = selected
-	s.render(w, r, "context", pageData{Title: "Context", Active: "projects", Data: data})
+	s.render(w, r, "context", pageData{Title: "Context", Active: "projects", Screen: "context", Data: data})
 }
 
 // contextParams treats the Context query string as a bookmarkable API: a
