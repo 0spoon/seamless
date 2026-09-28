@@ -589,6 +589,48 @@ func TestBriefingTunables_ConsoleOverrideApplies(t *testing.T) {
 	require.Contains(t, b, "a finding to hide")
 }
 
+// The Settings preview assembles under the knobs it is handed, not the stored
+// override row, because what it previews is the owner's unsaved values. Handed
+// the saved knobs, it is exactly the briefing a session in that project gets.
+func TestPreviewBriefing_UsesTheGivenKnobs(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.NoError(t, store.SetSetting(ctx, db, store.SettingRepoProjectMap, `{"/w":"p"}`))
+	insMemAt(t, db, "M1", "gotcha", "newest-mem", "one", "p", time.Now().Add(-1*time.Hour))
+	insMemAt(t, db, "M2", "gotcha", "recent-mem", "two", "p", time.Now().Add(-2*time.Hour))
+	svc := New(db, nil, budgets(), nil)
+
+	capped := briefingWith(func(b *config.Briefing) { b.MemoryMaxItems = 1 })
+	require.NoError(t, store.SetBriefingConfig(ctx, db, capped))
+	session, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
+	require.NoError(t, err)
+	require.NotContains(t, session, "recent-mem", "the saved row caps the index at one line")
+
+	unsaved, err := svc.PreviewBriefing(ctx, "p", config.Defaults().Briefing)
+	require.NoError(t, err)
+	require.Contains(t, unsaved, "newest-mem")
+	require.Contains(t, unsaved, "recent-mem", "the preview follows the knobs it is handed, not the row")
+
+	saved, err := svc.PreviewBriefing(ctx, "p", capped)
+	require.NoError(t, err)
+	require.Equal(t, session, saved, "previewing the saved knobs is the session's own briefing")
+}
+
+// BriefingBudget reports the numbers the assembler packs and cuts by, with the
+// same fallbacks, so the preview's meter can never disagree with the briefing.
+func TestBriefingBudget_MatchesTheAssembler(t *testing.T) {
+	db := setupDB(t)
+	budget, hardCap := New(db, nil, config.Budgets{}, nil).BriefingBudget(config.Briefing{})
+	require.Equal(t, 1500, budget, "an unset budget falls back to 1500")
+	require.Equal(t, 3000, hardCap, "an unset multiplier is 2")
+
+	svc := New(db, nil, config.Budgets{MaxBriefingTokens: 800}, nil)
+	budget, hardCap = svc.BriefingBudget(config.Briefing{HardCapMultiplier: 3})
+	require.Equal(t, 800, budget)
+	require.Equal(t, 2400, hardCap)
+	require.Equal(t, hardCap, svc.briefingHardCap(config.Briefing{HardCapMultiplier: 3}))
+}
+
 func TestPromptRecall(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()

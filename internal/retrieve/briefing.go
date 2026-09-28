@@ -52,6 +52,32 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	if err != nil {
 		return "", nil, err
 	}
+	return s.briefingFor(ctx, project, in, cfg)
+}
+
+// PreviewBriefing assembles the briefing a new session in project would start
+// with under cfg rather than the effective knobs: the console's Settings
+// preview of values the owner may not have saved. It is the session-start
+// assembly exactly (Source "startup", not a subagent), and a pure read, like
+// Briefing itself. What differs is the caller's side: a hook records the ids
+// Briefing returns as an injection, and a preview must record nothing, because
+// no agent received it and counting it would feed the utility signal exposure
+// that never happened (constraint closed-loop-utility-signal-contract). So it
+// returns no ids to record.
+func (s *Service) PreviewBriefing(ctx context.Context, project string, cfg config.Briefing) (string, error) {
+	text, _, err := s.briefingFor(ctx, project, BriefingInput{Source: "startup"}, cfg)
+	return text, err
+}
+
+// BriefingBudget reports the token budget an assembly under cfg packs its
+// droppable rows into and the hard cap it truncates at, with the assembler's
+// own fallbacks, so a preview can state both without restating them.
+func (s *Service) BriefingBudget(cfg config.Briefing) (budget, hardCap int) {
+	return s.packingBudget(), s.briefingHardCap(cfg)
+}
+
+// briefingFor is Briefing past project resolution, under explicit knobs.
+func (s *Service) briefingFor(ctx context.Context, project string, in BriefingInput, cfg config.Briefing) (string, []string, error) {
 	// Isolation is resolved once per briefing, for the header line that tells the
 	// agent which world it is in. The narrowing itself is not decided here: the
 	// scope query (scopedActiveMemories) and every family surface (familyPeers)
@@ -652,10 +678,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	constraints, index := sec.constraints, sec.index
 	findings, ready := sec.findings, sec.ready
 	label := projectLabel(project)
-	budget := s.budgets.MaxBriefingTokens
-	if budget <= 0 {
-		budget = 1500
-	}
+	budget := s.packingBudget()
 	hardCap := s.briefingHardCap(cfg)
 
 	ids := make([]string, 0, len(constraints)+len(sec.stages)+len(index))
@@ -1020,19 +1043,24 @@ func (s *Service) subagentRelevant(ctx context.Context, project, prompt string, 
 	return out
 }
 
-// briefingHardCap is the absolute ceiling hardTruncate enforces on an
-// assembled briefing: the token budget times cfg.HardCapMultiplier, with the
-// same fallbacks assembleBriefing applies to its packing budget.
-func (s *Service) briefingHardCap(cfg config.Briefing) int {
-	budget := s.budgets.MaxBriefingTokens
-	if budget <= 0 {
-		budget = 1500
+// packingBudget is the token budget assembleBriefing packs droppable rows
+// into: budgets.max_briefing_tokens, or 1500 when unset.
+func (s *Service) packingBudget() int {
+	if budget := s.budgets.MaxBriefingTokens; budget > 0 {
+		return budget
 	}
+	return 1500
+}
+
+// briefingHardCap is the absolute ceiling hardTruncate enforces on an
+// assembled briefing: the packing budget times cfg.HardCapMultiplier (2 when
+// unset).
+func (s *Service) briefingHardCap(cfg config.Briefing) int {
 	mult := cfg.HardCapMultiplier
 	if mult <= 0 {
 		mult = 2
 	}
-	return budget * mult
+	return s.packingBudget() * mult
 }
 
 // assembleSubagent renders the briefing for a subagent, or "" if there are no

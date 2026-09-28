@@ -192,6 +192,7 @@
              only fills the fields below: the briefing form still submits the whole
              struct through its one route, validation unchanged. */}}
         <form id="briefing-preset-picker" hidden></form>
+        <form id="briefing-preview-picker" hidden></form>
         <form method="post" action="/console/settings/briefing" data-briefing-form>
           <fieldset class="brief-presets" data-brief-presets>
             <legend>Presets</legend>
@@ -207,6 +208,35 @@
             </div>
             <p class="brief-preset-custom" data-preset-custom{{range .BriefingPresets}}{{if .Selected}} hidden{{end}}{{end}}>{{icon "sliders"}}<span><strong>Custom</strong> &mdash; these values match no preset. Pick one to replace them, or keep your own.</span></p>
           </fieldset>
+
+          {{/* The preview sits inside the form only for layout: its project
+               select belongs to the never-submitted picker form, so a save
+               never carries it. Script fills the body from
+               /console/settings/briefing/preview; without script it stays hidden. */}}
+          <section class="brief-preview" data-brief-preview aria-labelledby="brief-preview-title">
+            <header class="brief-preview-head">
+              <div>
+                <span class="brief-preview-kicker">{{icon "eye"}}Preview</span>
+                <h4 id="brief-preview-title">What a new session starts with</h4>
+              </div>
+              {{if .PreviewProjects}}
+              <label class="brief-preview-project">
+                <span>in</span>
+                <select name="project" form="briefing-preview-picker" data-brief-preview-project aria-label="Project to preview">
+                  {{range .PreviewProjects}}<option value="{{.}}"{{if eq . $.Data.PreviewProject}} selected{{end}}>{{.}}</option>{{end}}
+                </select>
+              </label>
+              {{end}}
+            </header>
+            {{if .PreviewProjects}}
+            <div class="brief-preview-body" data-brief-preview-body aria-live="polite" aria-busy="true">
+              <p class="brief-preview-wait">Assembling the briefing&hellip;</p>
+            </div>
+            <p class="brief-preview-note">Follows the values above as you change them, saved or not. A preview saves nothing and no agent receives it.</p>
+            {{else}}
+            <p class="brief-preview-empty">No projects yet. The preview appears once an agent has worked in a mapped repo.</p>
+            {{end}}
+          </section>
 
           <details class="brief-customize"{{if .CustomizeOpen}} open{{end}}>
             <summary>{{icon "sliders"}}<span>Customize</span><small>every knob, grouped by what it shapes</small></summary>
@@ -930,14 +960,78 @@ window.SEAM_NO_LIVE_REFRESH = true; // preserve unsaved form state on this contr
     if (event.target.closest && event.target.closest('[data-briefing-form]') && event.target.name !== 'briefing-preset') syncPresets();
   });
   document.addEventListener('seam:content-updated', syncPresets);
+  // Briefing preview: the form's CURRENT values -- saved or not -- and the
+  // chosen project, assembled by the server and swapped into the panel body.
+  // A preview is a read: nothing is saved, and no agent receives it. Edits are
+  // debounced, and a newer request always wins over a slower older one.
+  var previewTimer = null;
+  var previewSeq = 0;
+  function refreshPreview() {
+    var form = document.querySelector('[data-briefing-form]');
+    var select = document.querySelector('[data-brief-preview-project]');
+    var body = document.querySelector('[data-brief-preview-body]');
+    if (!form || !select || !body || !window.FormData || !window.URLSearchParams) return;
+    var params = new URLSearchParams(new FormData(form));
+    params.set('project', select.value);
+    var seq = ++previewSeq;
+    body.setAttribute('aria-busy', 'true');
+    fetch('/console/settings/briefing/preview', {
+      method: 'POST',
+      body: params,
+      credentials: 'same-origin',
+      headers: { Accept: 'text/html' }
+    }).then(function (response) {
+      // A refused preview (invalid knobs, an unknown project) still answers
+      // with a fragment: the same error flash the save would show.
+      return response.text();
+    }).then(function (html) {
+      if (seq !== previewSeq) return;
+      body.innerHTML = html;
+      body.removeAttribute('aria-busy');
+    }).catch(function () {
+      if (seq !== previewSeq) return;
+      body.removeAttribute('aria-busy');
+      if (window.SeamConsole) window.SeamConsole.flash('Could not update the preview. Nothing was saved.', 'error');
+    });
+  }
+  function schedulePreview() {
+    if (previewTimer) clearTimeout(previewTimer);
+    previewTimer = setTimeout(refreshPreview, 300);
+  }
+  document.addEventListener('input', function (event) {
+    // A preset pick and Discard both announce themselves as an input event on
+    // the form, so this one listener follows every way the values change.
+    if (event.target.closest && event.target.closest('[data-briefing-form]') && !event.target.closest('[data-brief-preview]')) schedulePreview();
+  });
+  document.addEventListener('change', function (event) {
+    if (event.target.closest && event.target.closest('[data-brief-preview-project]')) refreshPreview();
+  });
   function enhanceSettings() {
     enhanceDirtyForm('[data-briefing-form]', 'brief-state', 'Unsaved changes — save to use them for new sessions.');
     enhanceDirtyForm('[data-features-form]', 'features-state', 'Unsaved changes — save to apply them.');
     enhanceFamilies();
+    refreshPreview();
   }
   enhanceSettings();
   document.addEventListener('seam:content-updated', enhanceSettings);
 })();
 </script>
 {{end}}
+{{end}}
+
+{{/* The briefing preview's fragments (briefing_preview.go), fetched into the
+     panel's body. */}}
+{{define "briefing-preview"}}
+<div class="brief-preview-meter{{if .OverBudget}} is-over{{end}}{{if .Capped}} is-capped{{end}}">
+  <p><strong>{{.TokensLabel}}</strong> of {{.BudgetLabel}} tokens<span class="brief-preview-cap"> &middot; hard cap {{.HardCapLabel}}</span></p>
+  <span class="brief-preview-bar" aria-hidden="true"><i style="width:{{.FillPct}}%"></i></span>
+  {{if .Capped}}<p class="brief-preview-flag">Cut at the hard cap: agents in {{.Project}} would get this briefing truncated.</p>
+  {{else if .OverBudget}}<p class="brief-preview-flag">Over the budget: constraints, pinned stages, and starred rows are never dropped for it.</p>{{end}}
+</div>
+{{if .Text}}<pre class="brief-preview-text" tabindex="0" aria-label="Briefing for {{.Project}}">{{.Text}}</pre>
+{{else}}<p class="brief-preview-empty">Nothing to brief: nothing is in scope for {{.Project}} yet, so a new session there starts without a briefing.</p>{{end}}
+{{end}}
+
+{{define "briefing-preview-error"}}
+<div class="login-err brief-preview-error" role="alert" data-flash="error">{{.}}</div>
 {{end}}

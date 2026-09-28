@@ -1508,6 +1508,21 @@ thing you wrote. The token budget (<code>budgets.max_briefing_tokens</code>) is 
 briefing knob and no preset moves it. The form validates: a non-numeric knob or a
 value that fails <code>Briefing.Validate()</code> comes back as an error flash, not a
 silently-dropped save.</p>
+<p>The <strong>preview</strong> shows the <code>&lt;seam-briefing&gt;</code> a new session in one project would
+start with, under the values the form holds right now, saved or not. It sits
+between the presets and Customize, or beside the form when the section is wide
+enough. Pick a preset or change a knob and it follows within a moment. It
+also shows the token estimate against <code>budgets.max_briefing_tokens</code> and the hard
+cap, and flags a briefing that runs over the budget (only constraints, pinned
+stages, and starred rows can put it there) or would be cut at the cap. The project picker
+lists the registered projects and opens on the one your agents worked in last.
+A preview is a read: it saves nothing, records no event, and no agent receives
+it, so it never counts toward retrieval stats or utility. Values the save would
+refuse, it refuses with the same message. For scripts,
+<code>GET /console/settings/briefing/preview?project=&lt;slug&gt;&amp;format=json</code> previews the
+saved values. <code>POST</code> to the same path, with the form's fields plus <code>project</code>,
+previews unsaved ones. It is the one POST in the console that writes nothing,
+which is why it is not in the table of write routes above.</p>
 <p>The <strong>utility ranking</strong> group holds <code>utility_weight</code> (utility's share of the
 briefing sort key; 0 restores pure recency) and <code>utility_mode</code> (<code>auto</code> arms each
 project as its demand history matures, <code>on</code> everywhere now, <code>off</code> never). Where

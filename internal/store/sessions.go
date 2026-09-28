@@ -548,6 +548,24 @@ func RecentFindings(ctx context.Context, db *sql.DB, project string, limit int) 
 	return out, rows.Err()
 }
 
+// LatestSessionProject returns the project of the most recently updated session
+// that has one -- the project the owner's agents worked in last -- or "" when
+// no session names a project. It is the console's default for "which project"
+// questions, such as the Settings briefing preview.
+func LatestSessionProject(ctx context.Context, db *sql.DB) (string, error) {
+	var project string
+	err := db.QueryRowContext(ctx, `SELECT project_slug FROM sessions
+		WHERE project_slug <> ''
+		ORDER BY updated_at DESC, id DESC LIMIT 1`).Scan(&project)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("store.LatestSessionProject: %w", err)
+	}
+	return project, nil
+}
+
 // ListSessions returns sessions newest-updated first, optionally filtered by
 // status and to those updated since a cutoff (a zero `since` means all time),
 // capped at limit (default 100). It backs the console Sessions list.

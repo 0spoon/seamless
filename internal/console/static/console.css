@@ -6169,3 +6169,62 @@ html:not(.js) [data-form-discard] { display: none; }
 .level-card-items ul.level-card-details li::before {
   content: ""; position: absolute; left: 1px; top: 0.62em; width: 4px; height: 4px; border-radius: 50%; background: var(--faint);
 }
+
+/* ---- Briefing preview (console levels T12) ----------------------------------
+   The briefing a new session would start with, under the form's current values,
+   between the presets and Customize. Where the section is wide enough it moves
+   beside the form and stays in view while the knobs scroll: container-sized, so
+   a collapsed sidebar counts, and a browser without container queries keeps the
+   stacked layout. Without script the panel has nothing to show, so it hides. */
+.briefing-workbench { container: briefing / inline-size; }
+html:not(.js) .brief-preview { display: none; }
+.brief-preview {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0; margin: 0 0 14px; padding: 13px 14px 12px;
+  border: 1px solid color-mix(in oklab, var(--brand) 22%, var(--border)); border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--brand) 4%, var(--surface));
+}
+.brief-preview-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px 14px; flex-wrap: wrap; }
+.brief-preview-kicker {
+  display: inline-flex; align-items: center; gap: 6px; color: var(--brand); font-family: var(--font-mono);
+  font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase;
+}
+.brief-preview-kicker .ico { width: 13px; height: 13px; }
+.brief-preview-head h4 { margin: 3px 0 0; font-family: var(--font-display); font-size: var(--text-md); line-height: 1.2; color: var(--ink); }
+.brief-preview-project { display: inline-flex; align-items: center; gap: 7px; min-width: 0; color: var(--muted); font-size: var(--text-xs); }
+.brief-preview-project select { max-width: 220px; min-width: 0; }
+.brief-preview-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+.brief-preview-body[aria-busy="true"] { opacity: 0.6; }
+.brief-preview-wait, .brief-preview-empty, .brief-preview-note { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.45; }
+.brief-preview-note { color: var(--faint); font-size: var(--text-2xs); }
+.brief-preview-meter { display: grid; gap: 6px; }
+.brief-preview-meter > p { margin: 0; color: var(--ink-2); font-size: var(--text-xs); }
+.brief-preview-meter strong { color: var(--ink); font-family: var(--font-mono); font-size: var(--text-sm); }
+.brief-preview-cap { color: var(--faint); }
+.brief-preview-bar { display: block; height: 6px; overflow: hidden; border-radius: var(--radius-pill); background: color-mix(in oklab, var(--ink) 9%, transparent); }
+.brief-preview-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--brand); transition: width var(--dur-med) var(--ease-out); }
+.brief-preview-meter.is-over .brief-preview-bar > i { background: var(--pop); }
+.brief-preview-meter.is-capped .brief-preview-bar > i { background: var(--danger); }
+.brief-preview-meter > p.brief-preview-flag { margin: 0; color: var(--pop-strong); font-size: var(--text-2xs); line-height: 1.4; }
+.brief-preview-meter.is-capped > p.brief-preview-flag { color: var(--danger); }
+.brief-preview-text {
+  max-height: 340px; margin: 0; padding: 11px 12px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--ink-2); font-family: var(--font-mono); font-size: 11.5px; line-height: 1.55;
+  white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2;
+}
+.brief-preview-error { margin: 0; }
+@container briefing (min-width: 1040px) {
+  .briefing-workbench form[data-briefing-form] {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 0.72fr);
+    grid-template-areas: "presets preview" "customize preview" "savebar savebar"; column-gap: 18px; align-items: start;
+  }
+  form[data-briefing-form] > .brief-presets { grid-area: presets; }
+  form[data-briefing-form] > .brief-customize { grid-area: customize; }
+  form[data-briefing-form] > .settings-savebar { grid-area: savebar; }
+  form[data-briefing-form] > .brief-preview { grid-area: preview; position: sticky; top: 14px; margin: 0; }
+  /* Beside the preview the form column is laptop-narrow: stack its groups the
+     way the narrower viewports already do. */
+  .brief-customize .brief-group { grid-column: 1 / -1; }
+  .brief-customize .brief-group.utility-group { grid-template-columns: minmax(0, 1fr); grid-template-areas: "heading" "copy" "fields" "scopes"; gap: 8px; }
+  .brief-customize .brief-group.utility-group > p { max-width: none; margin-bottom: 5px; }
+  .brief-preview-text { max-height: calc(100vh - 300px); min-height: 180px; }
+}

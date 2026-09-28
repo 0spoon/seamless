@@ -57,3 +57,32 @@ func TestGetHealthFacts(t *testing.T) {
 	require.Equal(t, "01E2", facts.LastBriefing.EventID)
 	require.Equal(t, now.Add(-5*time.Minute), facts.LastBriefing.At)
 }
+
+// LatestSessionProject names where the owner's agents worked last: the newest
+// session that has a project, skipping ones that do not.
+func TestLatestSessionProject(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	project, err := LatestSessionProject(ctx, db)
+	require.NoError(t, err)
+	require.Empty(t, project, "no session names a project yet")
+
+	now := time.Now().UTC()
+	for _, s := range []struct {
+		id, project string
+		updated     time.Duration
+	}{
+		{"01L1", "orbital", 3 * time.Hour},
+		{"01L2", "homelab", 2 * time.Hour},
+		{"01L3", "", time.Minute}, // newer, but in no project
+	} {
+		require.NoError(t, CreateSession(ctx, db, core.Session{
+			ID: s.id, Name: "cc/" + s.id, ProjectSlug: s.project, Status: core.SessionActive,
+			CreatedAt: now.Add(-s.updated), UpdatedAt: now.Add(-s.updated),
+		}))
+	}
+	project, err = LatestSessionProject(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, "homelab", project)
+}

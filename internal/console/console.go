@@ -223,6 +223,10 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/settings", s.auth(s.settings))
 	post("POST /console/settings/briefing", formBodyStandard, s.settingsBriefingSave)
 	post("POST /console/settings/briefing/reset", formBodySmall, s.settingsBriefingReset)
+	// The preview is a read that POSTs only to carry the unsaved form; it
+	// writes nothing (briefing_preview.go).
+	handle("GET /console/settings/briefing/preview", s.auth(s.settingsBriefingPreview))
+	post("POST /console/settings/briefing/preview", formBodyStandard, s.settingsBriefingPreview)
 	post("POST /console/settings/utility", formBodySmall, s.settingsUtilityForce)
 	post("POST /console/settings/embeddings/mode", formBodySmall, s.settingsEmbeddingsMode)
 	post("POST /console/settings/embeddings/reembed", formBodySmall, s.settingsEmbeddingsReembed)

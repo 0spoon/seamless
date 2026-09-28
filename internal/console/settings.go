@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -220,6 +221,12 @@ type settingsData struct {
 	CustomizeOpen bool `json:"-"`
 	// Setup is the Your setup section's plain-language facts.
 	Setup setupPanel `json:"-"`
+	// PreviewProjects are the projects the Briefing section's preview offers
+	// (registered and live, in slug order), and PreviewProject the one it
+	// opens on: where the owner's agents worked last, else the first. Filled
+	// only for the Briefing section.
+	PreviewProjects []string `json:"-"`
+	PreviewProject  string   `json:"-"`
 }
 
 // briefingPresetCard is one preset as the Briefing section offers it.
@@ -384,6 +391,12 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("console: settings feature counts", "error", cerr)
 	}
 
+	var previewProjects []string
+	var previewProject string
+	if section.ID == "briefing" && !wantsJSON(r) {
+		previewProjects, previewProject = s.previewChoices(ctx, projects)
+	}
+
 	lvl := s.consoleLevel(ctx)
 	pd := pageData{
 		Title:       "Settings \u00b7 " + section.Label,
@@ -419,9 +432,30 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 			BriefingPresets:        briefingPresetCards(briefing),
 			CustomizeOpen:          lvl.Level >= levelAdvanced,
 			Setup:                  s.setupData(ctx),
+			PreviewProjects:        previewProjects,
+			PreviewProject:         previewProject,
 		},
 	}
 	s.render(w, r, "settings", pd)
+}
+
+// previewChoices lists the live projects the briefing preview can be for and
+// picks the one it opens on: the project of the most recent session, when it
+// is still live, else the first in slug order. A failed recency read costs the
+// smart default, never the page.
+func (s *Service) previewChoices(ctx context.Context, projects []core.Project) ([]string, string) {
+	live := liveProjectSlugs(projects)
+	if len(live) == 0 {
+		return nil, ""
+	}
+	latest, err := store.LatestSessionProject(ctx, s.cfg.DB)
+	if err != nil {
+		s.logger.Warn("console: briefing preview default project", "error", err)
+	}
+	if slices.Contains(live, latest) {
+		return live, latest
+	}
+	return live, live[0]
 }
 
 // utilityActivationRows joins the activation state with each scope's demand
@@ -562,6 +596,44 @@ func (s *Service) settingsUtilityForce(w http.ResponseWriter, r *http.Request) {
 // layers over file/env values and takes effect on the next session start, so no
 // daemon restart is needed. Redirects back with a flash either way.
 func (s *Service) settingsBriefingSave(w http.ResponseWriter, r *http.Request) {
+	b, err := briefingFromForm(r)
+	if err != nil {
+		settingsBriefingFlash(w, r, err.Error())
+		return
+	}
+	if err := store.SetBriefingConfig(r.Context(), s.cfg.DB, b); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	settingsBriefingNotice(w, r, "Briefing settings saved -- they apply from the next session start.")
+}
+
+// briefingIntFields are the briefing form's whole-number knobs, by form field.
+var briefingIntFields = []struct {
+	name string
+	dst  func(*config.Briefing) *int
+}{
+	{"constraint_max_full", func(b *config.Briefing) *int { return &b.ConstraintMaxFull }},
+	{"convention_max_full", func(b *config.Briefing) *int { return &b.ConventionMaxFull }},
+	{"memory_max_age_days", func(b *config.Briefing) *int { return &b.MemoryMaxAgeDays }},
+	{"memory_max_items", func(b *config.Briefing) *int { return &b.MemoryMaxItems }},
+	{"findings_count", func(b *config.Briefing) *int { return &b.FindingsCount }},
+	{"findings_max_age_days", func(b *config.Briefing) *int { return &b.FindingsMaxAgeDays }},
+	{"ready_tasks_shown", func(b *config.Briefing) *int { return &b.ReadyTasksShown }},
+	{"pending_plan_max_days", func(b *config.Briefing) *int { return &b.PendingPlanMaxDays }},
+	{"stage_unknown_max_age_days", func(b *config.Briefing) *int { return &b.StageUnknownMaxAgeDays }},
+	{"hard_cap_multiplier", func(b *config.Briefing) *int { return &b.HardCapMultiplier }},
+	{"sibling_findings_count", func(b *config.Briefing) *int { return &b.SiblingFindingsCount }},
+}
+
+// briefingFromForm reads the briefing form into a validated config.Briefing:
+// the ONE parse the save and the preview share, so a preview can never accept
+// knobs a save would refuse. It rebuilds the WHOLE struct -- a checkbox left
+// unchecked submits nothing, and an empty number reads as 0 -- because the
+// override row replaces the struct, and a field left out would silently zero
+// (constraint closed-loop-utility-signal-contract). The error is the owner-facing
+// message the save flashes.
+func briefingFromForm(r *http.Request) (config.Briefing, error) {
 	b := config.Briefing{
 		IncludeParentMemories:  r.PostFormValue("include_parent_memories") != "",
 		IncludeSiblingMemories: r.PostFormValue("include_sibling_memories") != "",
@@ -573,43 +645,24 @@ func (s *Service) settingsBriefingSave(w http.ResponseWriter, r *http.Request) {
 	}
 	weight, err := strconv.ParseFloat(weightStr, 64)
 	if err != nil {
-		settingsBriefingFlash(w, r, "utility_weight must be a number between 0 and 1")
-		return
+		return config.Briefing{}, errors.New("utility_weight must be a number between 0 and 1")
 	}
 	b.UtilityWeight = weight
-	for name, dst := range map[string]*int{
-		"constraint_max_full":        &b.ConstraintMaxFull,
-		"convention_max_full":        &b.ConventionMaxFull,
-		"memory_max_age_days":        &b.MemoryMaxAgeDays,
-		"memory_max_items":           &b.MemoryMaxItems,
-		"findings_count":             &b.FindingsCount,
-		"findings_max_age_days":      &b.FindingsMaxAgeDays,
-		"ready_tasks_shown":          &b.ReadyTasksShown,
-		"pending_plan_max_days":      &b.PendingPlanMaxDays,
-		"stage_unknown_max_age_days": &b.StageUnknownMaxAgeDays,
-		"hard_cap_multiplier":        &b.HardCapMultiplier,
-		"sibling_findings_count":     &b.SiblingFindingsCount,
-	} {
-		v := strings.TrimSpace(r.PostFormValue(name))
+	for _, f := range briefingIntFields {
+		v := strings.TrimSpace(r.PostFormValue(f.name))
 		if v == "" {
 			v = "0"
 		}
 		n, err := strconv.Atoi(v)
 		if err != nil {
-			settingsBriefingFlash(w, r, name+" must be a whole number")
-			return
+			return config.Briefing{}, errors.New(f.name + " must be a whole number")
 		}
-		*dst = n
+		*f.dst(&b) = n
 	}
 	if err := b.Validate(); err != nil {
-		settingsBriefingFlash(w, r, err.Error())
-		return
+		return config.Briefing{}, err
 	}
-	if err := store.SetBriefingConfig(r.Context(), s.cfg.DB, b); err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	settingsBriefingNotice(w, r, "Briefing settings saved -- they apply from the next session start.")
+	return b, nil
 }
 
 // eventFeaturesChanged records an optional-feature toggle in the event log, so
