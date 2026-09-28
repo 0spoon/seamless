@@ -222,6 +222,7 @@ func returnPath(r *http.Request) string {
 // funcs are the template helpers shared by every page.
 var funcs = template.FuncMap{
 	"ago":           ago,
+	"agoPhrase":     agoPhrase,
 	"ts":            ts,
 	"day":           day,
 	"shortID":       shortID,

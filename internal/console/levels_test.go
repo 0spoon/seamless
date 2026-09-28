@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -431,4 +433,267 @@ func TestLevels_PaletteJumpsFollowTheLevel(t *testing.T) {
 	require.Contains(t, page, `data-jump="Settings › Briefing" data-hint="What every new agent session starts with"`)
 	require.Contains(t, string(searchJS), "a.getAttribute('data-jump')", "the palette reads the jump rows")
 	require.NotContains(t, string(searchJS), "title: 'Context'", "no hand-listed pages left in the palette")
+}
+
+// levelEvents returns the recorded level-change payloads, oldest first.
+func levelEvents(t *testing.T, db *sql.DB) []map[string]any {
+	t.Helper()
+	evs, err := events.NewRecorder(db).ByKinds(context.Background(), []core.EventKind{eventLevelChanged}, "", "", 50)
+	require.NoError(t, err)
+	out := make([]map[string]any, 0, len(evs))
+	for i := len(evs) - 1; i >= 0; i-- {
+		out = append(out, evs[i].Payload)
+	}
+	return out
+}
+
+// The level POST: strict at the boundary, logged like a features toggle, and
+// landing where the redirect rule says.
+func TestLevelPost_ValidatesRecordsAndRedirects(t *testing.T) {
+	db, mux := newConsoleLevel(t, config.Features{}, "basic")
+	ctx := context.Background()
+
+	// Absent is a malformed request; present-but-unknown flashes the values.
+	rr := postForm(mux, "/console/settings/level", "")
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+	require.Contains(t, rr.Body.String(), "valid values are basic, standard, advanced")
+	rr = postForm(mux, "/console/settings/level", "level=expert")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.True(t, strings.HasPrefix(rr.Header().Get("Location"), "/console/settings?s=experience&error="))
+	require.Contains(t, rr.Header().Get("Location"), url.QueryEscape("valid values are basic, standard, advanced"))
+	rr = postForm(mux, "/console/settings/level", "level=standard&level=advanced")
+	require.Contains(t, rr.Header().Get("Location"), "error=")
+	_, found, err := store.GetSetting(ctx, db, store.SettingConsoleLevel)
+	require.NoError(t, err)
+	require.False(t, found, "a refused level never reaches the row")
+
+	// Up from Basic while standing on a hidden screen: back to it.
+	rr = postForm(mux, "/console/settings/level", "level=advanced&return="+url.QueryEscape("/console/retrieval?w=7d"))
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Equal(t, "/console/retrieval?notice=Switched+to+Advanced.&w=7d", rr.Header().Get("Location"))
+	level, overridden, source, welcomed, err := store.ConsoleLevel(ctx, db, "basic")
+	require.NoError(t, err)
+	require.Equal(t, "advanced", level)
+	require.True(t, overridden)
+	require.Equal(t, store.ConsoleLevelChosen, source)
+	require.True(t, welcomed, "a choice anywhere answers the welcome card")
+
+	// Down while standing on a screen the new level hides: Home, with the note.
+	rr = postForm(mux, "/console/settings/level", "level=basic&return="+url.QueryEscape("/console/retrieval"))
+	require.Equal(t, "/console/?notice="+url.QueryEscape("Switched to Basic. Retrieval is not in the Basic sidebar, so you are back on Home."),
+		rr.Header().Get("Location"))
+
+	// Down from a Settings section the new level hides: Experience.
+	setLevel(t, db, "advanced")
+	rr = postForm(mux, "/console/settings/level", "level=standard&return="+url.QueryEscape("/console/settings?s=engine"))
+	require.True(t, strings.HasPrefix(rr.Header().Get("Location"), "/console/settings?notice="), rr.Header().Get("Location"))
+	require.Contains(t, rr.Header().Get("Location"), "s=experience")
+
+	// No return: the Experience section. An off-console return: Home.
+	rr = postForm(mux, "/console/settings/level", "level=basic")
+	require.True(t, strings.HasPrefix(rr.Header().Get("Location"), "/console/settings?notice=Switched+to+Basic."))
+	rr = postForm(mux, "/console/settings/level", "level=standard&return="+url.QueryEscape("https://evil.example/"))
+	require.Equal(t, "/console/?notice=Switched+to+Standard.", rr.Header().Get("Location"))
+
+	// The same level again records the choice but logs no change.
+	rr = postForm(mux, "/console/settings/level", "level=standard&return=/console/")
+	require.Equal(t, "/console/?notice=Staying+on+Standard.", rr.Header().Get("Location"))
+
+	evs := levelEvents(t, db)
+	require.Len(t, evs, 5, "one event per real change; the refused posts and the no-op log nothing")
+	require.Equal(t, map[string]any{"from": "basic", "to": "advanced", "by": "console"}, evs[0])
+	require.Equal(t, map[string]any{"from": "advanced", "to": "basic", "by": "console"}, evs[1])
+}
+
+// Reset goes back to the file/env level, keeps the welcome, logs the change,
+// and says so plainly when there was nothing to reset.
+func TestLevelReset_BackToFileAndEnv(t *testing.T) {
+	db, mux := newConsoleLevel(t, config.Features{}, "standard")
+	ctx := context.Background()
+
+	rr := postForm(mux, "/console/settings/level/reset", "")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), url.QueryEscape("Already following the file and environment (Standard)."))
+	require.Empty(t, levelEvents(t, db))
+
+	setLevel(t, db, "advanced")
+	rr = postForm(mux, "/console/settings/level/reset", "return="+url.QueryEscape("/console/retrieval"))
+	require.Equal(t, "/console/?notice="+url.QueryEscape("Switched to Standard. Retrieval is not in the Standard sidebar, so you are back on Home."),
+		rr.Header().Get("Location"))
+	level, overridden, _, welcomed, err := store.ConsoleLevel(ctx, db, "standard")
+	require.NoError(t, err)
+	require.Equal(t, "standard", level)
+	require.False(t, overridden)
+	require.True(t, welcomed, "a reset keeps the welcome")
+	evs := levelEvents(t, db)
+	require.Len(t, evs, 1)
+	require.Equal(t, map[string]any{"from": "advanced", "to": "standard", "by": "console", "reset": true}, evs[0])
+}
+
+// The welcome card shows on Home until the owner picks a level or dismisses
+// it -- on any device, since the flag is server-side.
+func TestLevelWelcomeCard_UntilChosenOrDismissed(t *testing.T) {
+	db, mux := newConsoleLevel(t, config.Features{}, "basic")
+	ctx := context.Background()
+
+	page := getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, page, `<section class="level-welcome" id="level-welcome" data-live-skip`)
+	require.Contains(t, page, "Choose how much of the console you want to see")
+	for _, lvl := range config.ConsoleLevels {
+		require.Contains(t, page, `data-level-card="`+lvl+`"`)
+	}
+	require.Contains(t, page, `action="/console/settings/level/welcome"`)
+	require.Contains(t, page, "You can change this any time in")
+	require.NotContains(t, getPeek(t, mux, "/console/memories").Body.String(), "level-welcome", "Home only")
+
+	// Dismiss: gone, level unchanged, and nothing to announce.
+	rr := postForm(mux, "/console/settings/level/welcome", "return=/console/")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Equal(t, "/console/", rr.Header().Get("Location"))
+	require.NotContains(t, getPeek(t, mux, "/console/").Body.String(), "level-welcome")
+	level, overridden, _, _, err := store.ConsoleLevel(ctx, db, "basic")
+	require.NoError(t, err)
+	require.Equal(t, "basic", level)
+	require.False(t, overridden, "dismissing is not choosing")
+
+	// An upgraded installation (the migration's seeded row) is told what is new.
+	require.NoError(t, store.SetSetting(ctx, db, store.SettingConsoleLevel,
+		`{"level":"advanced","source":"seeded","welcomed":false}`))
+	page = getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, page, "New: choose how much of the console you see")
+	// Choosing any level from the card answers it.
+	rr = postForm(mux, "/console/settings/level", "level=standard&return=/console/")
+	require.Equal(t, "/console/?notice=Switched+to+Standard.", rr.Header().Get("Location"))
+	require.NotContains(t, getPeek(t, mux, "/console/").Body.String(), "level-welcome")
+
+	// JSON never carries the card.
+	require.NotContains(t, rawJSONString(t, mux, "/console/?format=json"), "welcome")
+}
+
+func rawJSONString(t *testing.T, mux *http.ServeMux, path string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	return rr.Body.String()
+}
+
+// Settings -> Experience: three cards, the current one marked, each with a
+// list GENERATED from the registries; the precedence line names who set it.
+func TestExperienceSection_CardsAreGenerated(t *testing.T) {
+	db, mux := newConsoleLevel(t, config.Features{Research: true}, "basic")
+	page := getPeek(t, mux, "/console/settings?s=experience").Body.String()
+
+	card := func(lvl string) string {
+		re := regexp.MustCompile(`(?s)<form class="level-card[^"]*" method="post" action="/console/settings/level" data-level-card="` + lvl + `">.*?</form>`)
+		m := re.FindString(page)
+		require.NotEmpty(t, m, "card %s", lvl)
+		return m
+	}
+	basic, standard, advanced := card("basic"), card("standard"), card("advanced")
+	require.Contains(t, basic, "is-current")
+	require.Contains(t, basic, "In use")
+	require.Contains(t, standard, "Use Standard")
+	for _, item := range []string{"Overview", "Memories", "Notes", "Gardener", "Sessions", "Settings", "Search",
+		"Settings: Experience, Features, and Your setup"} {
+		require.Contains(t, basic, "<li>"+item+"</li>")
+	}
+	for _, item := range []string{"Now", "Projects", "Plans", "Tasks", "Labs", "Trials", "Settings: Briefing and Workspaces"} {
+		require.Contains(t, standard, "<li>"+item+"</li>")
+	}
+	for _, item := range []string{"Interactions", "Retrieval", "Context", "Settings: Knowledge engine"} {
+		require.Contains(t, advanced, "<li>"+item+"</li>")
+	}
+	require.NotContains(t, standard, "<li>Interactions</li>", "each card lists what IT adds")
+	require.Contains(t, page, "Following file + env")
+	require.Contains(t, page, `data-theme-choice`)
+	require.Contains(t, page, `data-keys-open`)
+
+	// Research off: its screens leave the lists, like they leave the sidebar.
+	_, muxOff := newConsoleLevel(t, config.Features{}, "basic")
+	offPage := getPeek(t, muxOff, "/console/settings?s=experience").Body.String()
+	require.NotContains(t, offPage, "<li>Labs</li>")
+
+	setLevel(t, db, "standard")
+	page = getPeek(t, mux, "/console/settings?s=experience").Body.String()
+	require.Contains(t, card("standard"), "is-current")
+	require.Contains(t, page, "Chosen in the console")
+	require.Contains(t, page, `action="/console/settings/level/reset"`)
+
+	require.NoError(t, store.SetSetting(context.Background(), db, store.SettingConsoleLevel,
+		`{"level":"advanced","source":"seeded","welcomed":true}`))
+	page = getPeek(t, mux, "/console/settings?s=experience").Body.String()
+	require.Contains(t, page, "Set by the upgrade")
+}
+
+// The sidebar's account row names the level as a link to the picker, stays one
+// row, and the level switch reaches it on the no-reload path.
+func TestSidebar_NamesTheLevel(t *testing.T) {
+	db, mux := newConsoleLevel(t, config.Features{}, "basic")
+	page := getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, page, `<a class="account-level" href="/console/settings?s=experience" title="Console level: Basic. Change it in Settings." aria-label="Console level: Basic">Basic</a>`)
+	setLevel(t, db, "advanced")
+	require.Contains(t, getPeek(t, mux, "/console/").Body.String(), `aria-label="Console level: Advanced">Advanced</a>`)
+
+	require.Contains(t, string(navigationJS), "morphNode(currentAccount, freshAccount)",
+		"a level switch must re-render the account row in place")
+	require.Contains(t, string(searchJS), "title: 'Change experience level', href: '/console/settings?s=experience'")
+	require.Contains(t, string(shellJS), "[data-keys-open]")
+
+	layout, err := templateFS.ReadFile("templates/layout.html")
+	require.NoError(t, err)
+	require.Contains(t, string(layout), "window.SeamTheme = { set: set };")
+	require.Contains(t, string(layout), "'seam:theme'")
+}
+
+// The level POSTs ride the console's write guard: a cookie write must prove
+// same-origin like every other.
+func TestLevelPost_RequiresSameOriginForCookies(t *testing.T) {
+	_, mux := newConsoleLevel(t, config.Features{}, "basic")
+	for _, path := range []string{"/console/settings/level", "/console/settings/level/reset", "/console/settings/level/welcome"} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("level=advanced"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(consoleCookie())
+		req.Header.Set("Sec-Fetch-Site", "same-site")
+		require.Equal(t, http.StatusForbidden, do(mux, req).Code, path)
+	}
+}
+
+// Settings -> Your setup: the facts a Basic owner can check and act on.
+func TestSetupSection_Facts(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateSession(context.Background(), db, core.Session{
+		ID: mustID(t), Name: "cc/s1", ExternalClient: "claude-code", Status: core.SessionActive,
+		CreatedAt: now.Add(-10 * time.Minute), UpdatedAt: now.Add(-10 * time.Minute),
+	}))
+	svc, err := New(Config{
+		DB: db, APIKey: testKey, DataDir: "/home/owner/.seamless", DBPath: "/home/owner/.seamless/seam.db",
+		ConfigPath: "/home/owner/.config/seamless/seamless.yaml", Version: "0.5.3",
+		GardenerCfg: config.Gardener{Enabled: true, IntervalMinutes: 60},
+		Embedding:   EmbeddingRuntime{Provider: "openai", Reason: "llm.NewEmbedder: openai selected but api_key is empty"},
+	})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+
+	page := getPeek(t, mux, "/console/settings?s=setup").Body.String()
+	for _, want := range []string{
+		"<dt>Version</dt>", "0.5.3",
+		"<dt>Running on</dt>",
+		"/home/owner/.config/seamless/seamless.yaml", `href="vscode://file/home/owner/.config/seamless/seamless.yaml"`,
+		"<dt>Data folder</dt>", "/home/owner/.seamless",
+		"<dt>Agents connected</dt>", "Claude Code", "last active 10m ago",
+		"<dt>Semantic recall</dt>", "Add an OpenAI key", "recall-returns-junk-or-misses-what-you-just-wrote",
+		"<dt>Gardener</dt>", "suggests cleanups every 60 minutes",
+		"https://thereisnospoon.org/docs/quickstart/",
+	} {
+		require.Contains(t, page, want)
+	}
+	for _, advanced := range []string{"max_briefing_tokens", "Dedup threshold", "Schema version"} {
+		require.NotContains(t, page, advanced, "budgets and policy stay in Knowledge engine")
+	}
 }

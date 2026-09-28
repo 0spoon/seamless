@@ -79,6 +79,8 @@
       out.push({ title: 'Collapse or expand the sidebar', hint: '[', run: function () { window.SeamShell.toggleSidebar(); } });
       out.push({ title: 'Keyboard shortcuts', hint: '?', run: function () { window.SeamShell.openKeys(); } });
     }
+    // A navigation, not a run(): the level is chosen on its own Settings page.
+    out.push({ title: 'Change experience level', href: '/console/settings?s=experience' });
     return out;
   }
   function recents() {
@@ -122,7 +124,7 @@
     return { title: p.title, meta: p.hint || '', key: p.key ? 'g ' + p.key : '', href: p.href, svg: p.icon };
   }
   function actionRow(a) {
-    return { title: a.title, key: a.hint || '', run: a.run };
+    return { title: a.title, key: a.hint || '', run: a.run, href: a.href };
   }
 
   /* ---- Open / close -------------------------------------------------------- */

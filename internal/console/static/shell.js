@@ -174,6 +174,11 @@
   if (keys) keys.addEventListener('click', function (e) {
     if (e.target === keys || (e.target.closest && e.target.closest('[data-keys-close]'))) closeKeys();
   });
+  // Any [data-keys-open] control (Settings -> Experience) opens the sheet;
+  // delegated so a morph-replaced button keeps working.
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('[data-keys-open]')) { e.preventDefault(); openKeys(); }
+  });
   window.SeamShell = { openKeys: openKeys, toggleSidebar: function () { setCollapsed(!collapsed()); } };
 
   /* ---- g-chords ------------------------------------------------------------ */

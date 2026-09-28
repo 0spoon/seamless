@@ -228,6 +228,9 @@ func (s *Service) Register(mux *http.ServeMux) {
 	post("POST /console/settings/embeddings/reembed", formBodySmall, s.settingsEmbeddingsReembed)
 	post("POST /console/settings/families/save", formBodyFamily, s.settingsFamilySave)
 	post("POST /console/settings/families/delete", formBodySmall, s.settingsFamilyDelete)
+	post("POST /console/settings/level", formBodySmall, s.settingsLevelSave)
+	post("POST /console/settings/level/reset", formBodySmall, s.settingsLevelReset)
+	post("POST /console/settings/level/welcome", formBodySmall, s.settingsLevelWelcome)
 	post("POST /console/settings/features", formBodySmall, s.settingsFeaturesSave)
 	post("POST /console/settings/features/reset", formBodySmall, s.settingsFeaturesReset)
 	handle("GET /console/events", s.auth(s.sse))
@@ -639,6 +642,20 @@ type overviewData struct {
 	// Health is the "is it working?" strip (HTML only): at Basic it leads the
 	// page; above Basic it closes the vitals as one quiet line.
 	Health []healthFact `json:"-"`
+
+	// Welcome is the one-time level picker (HTML only), shown until the owner
+	// chooses a level or dismisses it; nil once they have.
+	Welcome *welcomeCard `json:"-"`
+}
+
+// welcomeCard is the Home welcome card: the first-run level choice, made
+// non-blocking on purpose -- a newcomer cannot judge a level before seeing
+// anything, and a wrong pick costs one click.
+type welcomeCard struct {
+	// Seeded marks an upgraded installation (the migration chose advanced):
+	// the card announces the picker rather than asking a newcomer.
+	Seeded bool
+	Cards  []levelCard
 }
 
 // spotlightData is the memory-of-the-month panel payload: the winner (when
@@ -767,7 +784,8 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 	// workspaces table, and the rail are Standard screens' furniture. Their
 	// queries run only when something will show them -- but a JSON caller always
 	// gets the complete answer, whatever the level (hidden, not different).
-	lvl := s.consoleLevel(ctx).Level
+	lvlState := s.consoleLevel(ctx)
+	lvl := lvlState.Level
 	analytics := wantsJSON(r) || lvl >= levelStandard
 	var (
 		report   store.RetrievalReport
@@ -878,6 +896,12 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 	data.Sky = s.knowledgeSky(ctx, now, r)
 	if !wantsJSON(r) {
 		data.Health = s.healthFacts(ctx)
+		if !lvlState.Welcomed {
+			data.Welcome = &welcomeCard{
+				Seeded: lvlState.Source == store.ConsoleLevelSeeded,
+				Cards:  levelCards(s.effectiveFeatures(ctx), lvl),
+			}
+		}
 	}
 	s.render(w, r, "overview", pageData{Title: "Overview", Active: "overview", Data: data})
 }

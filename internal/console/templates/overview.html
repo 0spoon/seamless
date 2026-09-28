@@ -16,6 +16,37 @@
     {{end}}
   </header>
 
+  {{/* The first-run level choice: shown until the owner picks a level (any
+       card) or dismisses it, on any device -- the flag is server-side. Each
+       card is a POST back to Home; the morph after it drops the card. */}}
+  {{with .Welcome}}
+  <section class="level-welcome" id="level-welcome" data-live-skip aria-labelledby="level-welcome-title">
+    <header class="level-welcome-head">
+      <div>
+        <h2 id="level-welcome-title">{{if .Seeded}}New: choose how much of the console you see{{else}}Choose how much of the console you want to see{{end}}</h2>
+        <p>{{if .Seeded}}This installation kept every screen through the upgrade. Pick a simpler level if you would rather see less.{{else}}Start with the essentials, or turn on more. Your agents get exactly the same either way.{{end}}</p>
+      </div>
+      <form method="post" action="/console/settings/level/welcome">
+        <input type="hidden" name="return" value="/console/">
+        <button class="btn small" type="submit">Dismiss</button>
+      </form>
+    </header>
+    <div class="level-welcome-cards">
+      {{range .Cards}}
+      <form class="level-welcome-card{{if .Current}} is-current{{end}}" method="post" action="/console/settings/level" data-level-card="{{.Level}}">
+        <input type="hidden" name="level" value="{{.Level}}">
+        <input type="hidden" name="return" value="/console/">
+        <button type="submit">
+          <span class="level-welcome-name"><strong>{{.Level.Label}}</strong>{{if .Current}}<span class="badge ok">Current</span>{{end}}</span>
+          <span class="level-welcome-line">{{.Line}}</span>
+        </button>
+      </form>
+      {{end}}
+    </div>
+    <p class="level-welcome-foot">You can change this any time in <a href="/console/settings?s=experience">Settings</a>.</p>
+  </section>
+  {{end}}
+
   {{/* Basic's first question is "is it working?": the health strip leads the
        page. Above Basic the same facts close the vitals as one quiet line. */}}
   {{if and .Health (not ($.Level.AtLeast "standard"))}}

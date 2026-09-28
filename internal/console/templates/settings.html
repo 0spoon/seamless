@@ -26,10 +26,47 @@
         <div>
           <div class="settings-zone-kicker">You and this console</div>
           <h2>Experience</h2>
-          <p>How much of the console you see. A level changes what is shown here, never what your agents receive.</p>
+          <p>How much of the console you see. A level changes what is shown here, never what your agents receive &mdash; and a screen a level hides still opens from any link.</p>
         </div>
+        <span class="settings-access editable">{{icon "settings"}} Editable here</span>
       </header>
-      <p class="settings-lede">This console is showing the <strong>{{.ConsoleLevel}}</strong> level.</p>
+
+      <div class="settings-precedence{{if .ConsoleLevelOverridden}} is-override{{end}}">
+        <span class="state-dot"></span>
+        {{if .ConsoleLevelOverridden}}{{if eq .ConsoleLevelSource "seeded"}}<span><strong>Set by the upgrade</strong> &mdash; this installation was in use before levels existed, so it kept every screen.</span>{{else}}<span><strong>Chosen in the console</strong> &mdash; this choice wins over the file and environment until reset.</span>{{end}}
+        <button class="btn small" type="submit" form="level-reset">Reset to file + env</button>
+        {{else}}<span><strong>Following file + env</strong> &mdash; choosing a level here stores it and wins until reset.</span>{{end}}
+      </div>
+
+      <div class="level-cards">
+        {{range .LevelCards}}
+        <form class="level-card{{if .Current}} is-current{{end}}" method="post" action="/console/settings/level" data-level-card="{{.Level}}">
+          <input type="hidden" name="level" value="{{.Level}}">
+          <input type="hidden" name="return" value="/console/settings?s=experience">
+          <header class="level-card-head"><h3>{{.Level.Label}}</h3>{{if .Current}}<span class="badge ok">Current</span>{{end}}</header>
+          <p class="level-card-line">{{.Line}}</p>
+          <div class="level-card-items"><span class="level-card-lead">{{.Lead}}</span><ul>{{range .Items}}<li>{{.}}</li>{{end}}</ul></div>
+          {{if .Current}}<button class="btn small" type="button" disabled>In use</button>{{else}}<button class="btn small primary" type="submit">Use {{.Level.Label}}</button>{{end}}
+        </form>
+        {{end}}
+      </div>
+      {{if .ConsoleLevelOverridden}}<form id="level-reset" method="post" action="/console/settings/level/reset"><input type="hidden" name="return" value="/console/settings?s=experience"></form>{{end}}
+
+      <div class="experience-extras">
+        <section class="experience-group" aria-labelledby="experience-theme-title">
+          <h3 id="experience-theme-title">Theme</h3>
+          <div class="seg theme-choice" role="radiogroup" aria-labelledby="experience-theme-title" data-theme-choice>
+            <label><input type="radio" name="theme" value="dark"><span>Dark</span></label>
+            <label><input type="radio" name="theme" value="light"><span>Light</span></label>
+          </div>
+          <p>Kept in this browser only; the sidebar&rsquo;s sun and moon switch the same setting.</p>
+        </section>
+        <section class="experience-group" aria-labelledby="experience-keys-title">
+          <h3 id="experience-keys-title">Keyboard</h3>
+          <p>Press <kbd>?</kbd> anywhere for every shortcut, <kbd>&#8984;</kbd><kbd>K</kbd> to search or jump.</p>
+          <button class="btn small" type="button" data-keys-open>{{icon "keyboard"}} Show shortcuts</button>
+        </section>
+      </div>
     </section>
     {{end}}
 
@@ -100,14 +137,25 @@
         <div>
           <div class="settings-zone-kicker">This installation</div>
           <h2>Your setup</h2>
-          <p>Where Seamless keeps its files and how this daemon was configured.</p>
+          <p>What is running, where it keeps things, and which agents are connected.</p>
         </div>
         <span class="settings-access">{{icon "lock"}} Read only</span>
       </header>
       <dl class="setup-facts">
-        <div><dt>Data folder</dt><dd><span class="mono">{{.DataDir}}</span>{{copyBtn .DataDir}}</dd></div>
-        <div><dt>Config file</dt><dd>{{if .ConfigPath}}<span class="mono">{{.ConfigPath}}</span>{{copyBtn .ConfigPath}}{{else}}none &mdash; defaults and environment only{{end}}</dd></div>
+        {{with .Setup.Version}}<div><dt>Version</dt><dd><span class="mono">{{.}}</span></dd></div>{{end}}
+        <div><dt>Running on</dt><dd>{{.Setup.Host}}</dd></div>
+        <div><dt>Config file</dt><dd>{{if .Setup.ConfigPath}}<span class="mono">{{.Setup.ConfigPath}}</span>{{copyBtn .Setup.ConfigPath}}<a href="{{.Setup.ConfigEditURL}}">Open in editor</a>{{else}}None &mdash; this daemon runs on its defaults and environment variables.{{end}}</dd></div>
+        {{with .DataDir}}<div><dt>Data folder</dt><dd><span class="mono">{{.}}</span>{{copyBtn .}}</dd></div>{{end}}
+        {{with .Database}}{{if .Path}}<div><dt>Database</dt><dd>{{with .SizeHuman}}<strong>{{.}}</strong>{{end}}<span class="mono">{{.Path}}</span>{{copyBtn .Path}}</dd></div>{{end}}{{end}}
+        <div><dt>Agents connected</dt><dd>{{if .Setup.Clients}}{{range $i, $c := .Setup.Clients}}{{if $i}}<span class="faint">&middot;</span>{{end}}<span>{{$c.Name}} <small class="faint">last active {{agoPhrase $c.LastSeen}}</small></span>{{end}}{{else}}None yet &mdash; an agent appears here once it starts a session with the hooks installed.{{end}}</dd></div>
+        {{with .Embeddings}}<div><dt>Semantic recall</dt><dd>{{if .Enabled}}<span class="badge ok">on</span><span>with <span class="mono">{{.Model}}</span></span>{{else}}<span class="badge warn">off</span><span>{{if .OverriddenOff}}Switched off in this console. Search and recall use keywords only.{{else if .Misconfigured}}The model settings in the config file have a mistake: <span class="mono">{{.Reason}}</span>{{else}}Search and recall use keywords only. Add an OpenAI key (or point Ollama at a local model) in the config file, then restart.{{end}}</span><a href="https://thereisnospoon.org/docs/guides/troubleshooting/#recall-returns-junk-or-misses-what-you-just-wrote" target="_blank" rel="noopener">What this changes &nearr;</a>{{end}}</dd></div>{{end}}
+        <div><dt>Gardener</dt><dd>{{if .Gardener.Enabled}}<span class="badge ok">on</span><span>suggests cleanups every {{.Gardener.IntervalMinutes}} minutes</span>{{else}}<span class="badge">paused</span><span>no cleanup suggestions are made</span>{{end}}</dd></div>
       </dl>
+      <nav class="setup-docs" aria-label="Documentation">
+        <a href="https://thereisnospoon.org/docs/quickstart/" target="_blank" rel="noopener">Quickstart &nearr;</a>
+        <a href="https://thereisnospoon.org/docs/reference/console/" target="_blank" rel="noopener">Console guide &nearr;</a>
+        <a href="https://thereisnospoon.org/docs/reference/configuration/" target="_blank" rel="noopener">Configuration &nearr;</a>
+      </nav>
     </section>
     {{end}}
 
@@ -770,6 +818,22 @@ window.SEAM_NO_LIVE_REFRESH = true; // preserve unsaved form state on this contr
       });
     });
   }
+  // The Experience theme radios and the sidebar's toggle drive one per-browser
+  // setting (layout.html's SeamTheme); each follows the other, and a morph
+  // (which resets the radios to the unchecked server markup) re-syncs them.
+  function syncThemeChoice() {
+    var current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    document.querySelectorAll('[data-theme-choice] input[name="theme"]').forEach(function (input) {
+      input.checked = input.value === current;
+    });
+  }
+  document.addEventListener('change', function (event) {
+    var input = event.target.closest ? event.target.closest('[data-theme-choice] input[name="theme"]') : null;
+    if (input && window.SeamTheme) window.SeamTheme.set(input.value);
+  });
+  document.addEventListener('seam:theme', syncThemeChoice);
+  document.addEventListener('seam:content-updated', syncThemeChoice);
+  syncThemeChoice();
   // Discard puts a dirty form back to what the server rendered: the markup's
   // own default values are that baseline, so form.reset() is exact.
   document.addEventListener('click', function (event) {

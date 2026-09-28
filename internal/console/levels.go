@@ -149,7 +149,9 @@ func screenForPath(reg []screen, path string) (screen, bool) {
 // owner goes back where they were; switching UP always does. When the new level
 // hides it, standing on a bannered page would be a strange welcome to a level
 // just chosen, so the owner lands on Home with a note naming what left the
-// sidebar. returnPath passes the login open-redirect guard first.
+// sidebar. A Settings section the new level hides lands on Experience instead,
+// where the switch was most likely made. returnPath passes the login
+// open-redirect guard first.
 func redirectAfterLevelChange(reg []screen, newLevel level, returnPath string) string {
 	switched := "Switched to " + newLevel.Label() + "."
 	target, err := url.Parse(safeNext(returnPath))
@@ -160,11 +162,85 @@ func redirectAfterLevelChange(reg []screen, newLevel level, returnPath string) s
 		target = &url.URL{Path: "/console/"}
 		switched += " " + sc.Label + " is not in the " + newLevel.Label() +
 			" sidebar, so you are back on Home."
+	} else if ok && sc.ID == "settings" {
+		if sec, found := settingsSectionByID(target.Query().Get("s")); found && newLevel < sec.Min {
+			target = &url.URL{Path: "/console/settings", RawQuery: "s=" + defaultSettingsSection}
+			switched += " " + sec.Label + " is not in the " + newLevel.Label() +
+				" Settings menu, so you are back on Experience."
+		}
 	}
+	return withNotice(target, switched)
+}
+
+// withNotice sets the one-shot notice on a console URL (dropping any stale
+// error and fragment) and returns it as a redirect target.
+func withNotice(target *url.URL, notice string) string {
 	q := target.Query()
 	q.Del("error")
-	q.Set("notice", switched)
+	q.Set("notice", notice)
 	target.RawQuery = q.Encode()
 	target.Fragment = ""
 	return target.RequestURI()
+}
+
+// levelCard is one level as the Experience section and the Home welcome card
+// offer it: the pitch, and what the level shows beyond the one below it.
+type levelCard struct {
+	Level level
+	// Line is the one-sentence pitch.
+	Line string
+	// Lead introduces Items: "Shows" for the first level, "Adds" after it.
+	Lead string
+	// Items are generated from the registries (screens, Settings sections, and
+	// in-page surfaces), so a card can never promise what the gates do not do.
+	Items []string
+	// Current marks the level in force.
+	Current bool
+}
+
+// levelPitches are the one-line pitches, by level.
+var levelPitches = map[level]string{
+	levelBasic:    "Just the essentials: what your agents remember and what they are doing.",
+	levelStandard: "Curate knowledge and follow the work.",
+	levelAdvanced: "Every screen, every knob, every number.",
+}
+
+// levelCards builds the three cards for the current feature state, marking the
+// level in force.
+func levelCards(feats config.Features, current level) []levelCard {
+	out := make([]levelCard, 0, len(config.ConsoleLevels))
+	for _, lvl := range allLevels() {
+		card := levelCard{Level: lvl, Line: levelPitches[lvl], Lead: "Adds", Current: lvl == current}
+		if lvl == levelBasic {
+			card.Lead = "Shows"
+		}
+		card.Items = levelAdds(feats, lvl)
+		out = append(out, card)
+	}
+	return out
+}
+
+// levelAdds names what lvl shows that the level below it does not (for the
+// first level: everything it shows): its screens, then its Settings sections,
+// then the in-page surfaces registered at it.
+func levelAdds(feats config.Features, lvl level) []string {
+	var items []string
+	for _, sc := range screens {
+		if sc.Min == lvl && sc.visibleAt(feats, lvl) {
+			items = append(items, sc.Label)
+		}
+	}
+	var sections []string
+	for _, sec := range settingsSections {
+		if sec.Min == lvl {
+			sections = append(sections, sec.Label)
+		}
+	}
+	if len(sections) > 0 {
+		items = append(items, "Settings: "+joinWithAnd(sections))
+	}
+	for _, sf := range surfacesAt(lvl) {
+		items = append(items, sf.Label)
+	}
+	return items
 }

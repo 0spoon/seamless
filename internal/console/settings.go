@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/url"
 	"os"
@@ -207,9 +208,46 @@ type settingsData struct {
 	// state only, so JSON callers get the same payload whatever s says.
 	Section string             `json:"-"`
 	Subnav  []settingsNavEntry `json:"-"`
-	// ConfigPath is the config file this daemon loaded ("" = env-only), for
-	// the Your setup section.
-	ConfigPath string `json:"-"`
+	// LevelCards are the Experience section's three levels, the one in force
+	// marked, each with its generated list of what it shows.
+	LevelCards []levelCard `json:"-"`
+	// Setup is the Your setup section's plain-language facts.
+	Setup setupPanel `json:"-"`
+}
+
+// setupPanel is the Your setup section: what a non-technical owner can check
+// and act on -- the version, where things live, which agents are connected --
+// and none of the budgets or policy numbers (those stay in Knowledge engine).
+type setupPanel struct {
+	Version       string
+	Host          string
+	ConfigPath    string
+	ConfigEditURL template.URL
+	Clients       []setupClient
+}
+
+// setupClient is one agent client that has recorded sessions here.
+type setupClient struct {
+	Name     string
+	LastSeen time.Time
+}
+
+// setupData builds the Your setup facts. The clients line is best-effort: a
+// read failure costs that line, never the section.
+func (s *Service) setupData(ctx context.Context) setupPanel {
+	p := setupPanel{Version: strings.TrimSpace(s.cfg.Version), Host: s.host, ConfigPath: strings.TrimSpace(s.cfg.ConfigPath)}
+	if p.ConfigPath != "" {
+		_, p.ConfigEditURL = absAndEditURL("", p.ConfigPath)
+	}
+	facts, err := store.GetHealthFacts(ctx, s.cfg.DB)
+	if err != nil {
+		s.logger.Warn("console: setup clients", "error", err)
+	}
+	for _, c := range facts.Clients {
+		_, _, name := agentDisplay(c.Client)
+		p.Clients = append(p.Clients, setupClient{Name: name, LastSeen: c.LastSeen})
+	}
+	return p
 }
 
 func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
@@ -294,7 +332,8 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 			ConsoleLevelSource:     lvl.Source,
 			Section:                section.ID,
 			Subnav:                 settingsSubnav(lvl.Level, section.ID),
-			ConfigPath:             strings.TrimSpace(s.cfg.ConfigPath),
+			LevelCards:             levelCards(featuresCfg, lvl.Level),
+			Setup:                  s.setupData(ctx),
 		},
 	}
 	s.render(w, r, "settings", pd)
@@ -557,6 +596,110 @@ func (s *Service) settingsFeaturesSave(w http.ResponseWriter, r *http.Request) {
 			" on. Agents pick the change up on their next session."
 	}
 	settingsFeaturesNotice(w, r, msg)
+}
+
+// settingsLevelSave stores the owner's console level -- presentation only, so
+// nothing an agent receives changes. The boundary is strict: a missing level is
+// a malformed request (400), a level outside config.ConsoleLevels flashes an
+// error naming them, and neither ever falls back to a default. Choosing a level
+// also answers the Home welcome card. The redirect follows
+// redirectAfterLevelChange: back where the owner was when the new level shows
+// it, Home (or Experience) with a note when it does not.
+func (s *Service) settingsLevelSave(w http.ResponseWriter, r *http.Request) {
+	values, present := r.PostForm["level"]
+	if !present {
+		s.formError(w, r, http.StatusBadRequest,
+			"level is required: valid values are "+strings.Join(config.ConsoleLevels, ", "))
+		return
+	}
+	if len(values) != 1 {
+		settingsLevelFlash(w, r, "level must be given exactly once")
+		return
+	}
+	next, err := parseLevel(values[0])
+	if err != nil {
+		settingsLevelFlash(w, r, err.Error())
+		return
+	}
+	ctx := r.Context()
+	prev := s.consoleLevel(ctx).Level
+	if err := store.SetConsoleLevel(ctx, s.cfg.DB, next.String(), store.ConsoleLevelChosen); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	back := levelReturn(r)
+	if next == prev {
+		// The row now records the choice (and the welcome), but nothing on
+		// screen changed, so there is no change to log.
+		http.Redirect(w, r, withNotice(back, "Staying on "+next.Label()+"."), http.StatusSeeOther)
+		return
+	}
+	s.recordLevelChange(ctx, prev, next, false)
+	http.Redirect(w, r, redirectAfterLevelChange(screenRegistry(), next, back.RequestURI()), http.StatusSeeOther)
+}
+
+// settingsLevelReset clears the stored level so the file/env level applies
+// again. The welcome is kept -- a reset is not a request to be asked again --
+// and a reset with no stored level is a no-op that says so.
+func (s *Service) settingsLevelReset(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	before := s.consoleLevel(ctx)
+	if !before.Overridden {
+		http.Redirect(w, r, withNotice(levelReturn(r),
+			"Already following the file and environment ("+before.Level.Label()+")."), http.StatusSeeOther)
+		return
+	}
+	if err := store.ClearConsoleLevel(ctx, s.cfg.DB); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	after := s.baseLevel
+	s.recordLevelChange(ctx, before.Level, after, true)
+	http.Redirect(w, r, redirectAfterLevelChange(screenRegistry(), after, levelReturn(r).RequestURI()), http.StatusSeeOther)
+}
+
+// settingsLevelWelcome dismisses the Home welcome card without changing the
+// level. It lands back where it was posted from, with nothing to announce.
+func (s *Service) settingsLevelWelcome(w http.ResponseWriter, r *http.Request) {
+	if err := store.MarkConsoleWelcomed(r.Context(), s.cfg.DB); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	target := levelReturn(r)
+	q := target.Query()
+	q.Del("notice")
+	q.Del("error")
+	target.RawQuery = q.Encode()
+	http.Redirect(w, r, target.RequestURI(), http.StatusSeeOther)
+}
+
+// levelReturn is the level forms' optional return path, through the login
+// open-redirect guard; absent means the Experience section.
+func levelReturn(r *http.Request) *url.URL {
+	raw := strings.TrimSpace(r.PostFormValue("return"))
+	if raw == "" {
+		raw = "/console/settings?s=" + defaultSettingsSection
+	}
+	u, err := url.Parse(safeNext(raw))
+	if err != nil {
+		return &url.URL{Path: "/console/"}
+	}
+	return u
+}
+
+// recordLevelChange logs a level change in the event log so it shows in
+// Activity like a features toggle. Best-effort: the change already happened.
+func (s *Service) recordLevelChange(ctx context.Context, from, to level, reset bool) {
+	if s.cfg.Events == nil {
+		return
+	}
+	payload := map[string]any{"from": from.String(), "to": to.String(), "by": "console"}
+	if reset {
+		payload["reset"] = true
+	}
+	if _, err := s.cfg.Events.Record(ctx, core.Event{Kind: eventLevelChanged, Payload: payload}); err != nil {
+		s.logger.Warn("console: record level event", "error", err)
+	}
 }
 
 // settingsFeaturesReset clears the stored override row, so the effective state
@@ -859,6 +1002,10 @@ func settingsBack(w http.ResponseWriter, r *http.Request, section, param, msg, a
 		target += "#" + anchor
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+func settingsLevelFlash(w http.ResponseWriter, r *http.Request, msg string) {
+	settingsBack(w, r, "experience", "error", msg, "experience")
 }
 
 func settingsBriefingFlash(w http.ResponseWriter, r *http.Request, msg string) {

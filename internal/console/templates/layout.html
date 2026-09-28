@@ -61,7 +61,7 @@
     <div class="side-foot">
       <div class="account">
         <span class="account-dot" aria-hidden="true"></span>
-        <span class="account-copy"><strong>Owner</strong><small title="{{.Host}}">{{.Host}}</small></span>
+        <span class="account-copy"><strong>Owner</strong><small title="{{.Host}}"><a class="account-level" href="/console/settings?s=experience" title="Console level: {{.Level.Label}}. Change it in Settings." aria-label="Console level: {{.Level.Label}}">{{.Level.Label}}</a> &middot; {{.Host}}</small></span>
         {{/* Icon-only, fixed width: the old buttons carried their state as text
              ("Light theme" / "Dark theme"), so every theme flip resized the
              sidebar footer under the cursor that had just clicked it. */}}
@@ -413,12 +413,18 @@
     btn.setAttribute('title', next);
   }
   label();
-  btn.onclick = function () {
-    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
-    try { localStorage.setItem('seamless-theme', next); } catch (e) {}
+  // One setter for the per-browser theme, shared with Settings -> Experience,
+  // so the toggle and the radio pair can never disagree: both write through
+  // here and both listen for seam:theme.
+  function set(theme) {
+    if (theme !== 'dark' && theme !== 'light') return;
+    root.setAttribute('data-theme', theme);
+    try { localStorage.setItem('seamless-theme', theme); } catch (e) {}
     label();
-  };
+    document.dispatchEvent(new CustomEvent('seam:theme', { detail: { theme: theme } }));
+  }
+  window.SeamTheme = { set: set };
+  btn.onclick = function () { set(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); };
 })();
 (function () {
   /* Quick-copy: document-level delegation on .copy-btn[data-copy] so it keeps

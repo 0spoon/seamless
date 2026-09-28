@@ -223,3 +223,27 @@ func (n navCounts) count(badge string) (int, bool) {
 		return 0, false
 	}
 }
+
+// surface is an in-page gate: an element woven into a screen the level shows,
+// hidden below Min. Its Label is the owner-facing phrase the Experience cards
+// and the docs matrix list -- register it in the same change that adds the
+// gate, exactly like features.Surfaces.
+type surface struct {
+	Screen string
+	Label  string
+	Min    level
+}
+
+// surfaces is the in-page gate registry, in screen order.
+var surfaces = []surface{}
+
+// surfacesAt lists the surfaces whose minimum level is exactly lvl.
+func surfacesAt(lvl level) []surface {
+	var out []surface
+	for _, sf := range surfaces {
+		if sf.Min == lvl {
+			out = append(out, sf)
+		}
+	}
+	return out
+}

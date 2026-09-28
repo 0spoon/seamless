@@ -177,6 +177,12 @@
       currentMain.replaceChildren.apply(currentMain, children);
     }
     syncNav(currentNav, freshNav);
+    // The account row names the console level: a level switch must reach it
+    // too. Only its copy is morphed -- the theme toggle beside it keeps the
+    // label its own script manages.
+    var freshAccount = doc.querySelector('.side-foot .account-copy');
+    var currentAccount = document.querySelector('.side-foot .account-copy');
+    if (freshAccount && currentAccount) morphNode(currentAccount, freshAccount);
     if (doc.title) document.title = doc.title;
     try {
       if (window.IX && window.IX.enhance) window.IX.enhance(currentMain);
