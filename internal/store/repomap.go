@@ -52,6 +52,11 @@ const SettingLocalHost = "local_host"
 // says so (a hook.error event, a session_start warning).
 var ErrRemoteRootUnknown = errors.New("store: remote host sent no repo root")
 
+// ErrRepoMappingNotFound is returned by RemoveRepoMappings when a path has no
+// mapping on this machine. Nothing is removed: the call is all-or-nothing, so
+// one mistyped path never half-applies a batch.
+var ErrRepoMappingNotFound = errors.New("store: no repo mapping for that path on this machine")
+
 // RepoMapRow is one (host, path) -> project mapping.
 type RepoMapRow struct {
 	Host string `json:"host"` // "" = the machine that has not named itself
@@ -229,6 +234,86 @@ func AddRepoMapping(ctx context.Context, db *sql.DB, repoPath, slug string) erro
 		return fmt.Errorf("store.AddRepoMapping: %w", err)
 	}
 	return putRepoMapRow(ctx, db, RepoMapRow{Host: host, Path: repoPath, Slug: slug})
+}
+
+// LocalRepoMappings returns THIS machine's mappings: the rows of the host
+// recorded by AdoptLocalHost plus the unnamed ("") bucket, which carries rows
+// written before the machine named itself and entries that only ever existed in
+// the legacy JSON mirror. They are the rows `seamlessd unmap-repo` can remove.
+func LocalRepoMappings(ctx context.Context, db *sql.DB) ([]RepoMapRow, error) {
+	host, err := localHostSetting(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("store.LocalRepoMappings: %w", err)
+	}
+	rows, err := RepoMapRows(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("store.LocalRepoMappings: %w", err)
+	}
+	var out []RepoMapRow
+	for _, r := range rows {
+		if r.Host == host || r.Host == "" {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+// RemoveRepoMappings deletes THIS machine's mapping for each path -- the
+// owner-facing inverse of AddRepoMapping, behind `seamlessd unmap-repo`. The
+// table row and the legacy JSON mirror entry go in one transaction: removing
+// only the row would be undone at the next daemon start, when AdoptLocalHost
+// imports the mirror back into the table. Paths match exactly after
+// normalization, never by prefix, so unmapping a repo leaves the mappings of
+// repos nested under it alone. Other hosts' rows are never touched.
+//
+// Only the route goes: the project and its memories, notes and tasks stay, and a
+// repo that is still on disk maps itself again on its next session. A path with
+// no mapping here fails the whole call with ErrRepoMappingNotFound. The removed
+// rows are returned in the order the paths were given.
+func RemoveRepoMappings(ctx context.Context, db *sql.DB, paths []string) ([]RepoMapRow, error) {
+	var removed []RepoMapRow
+	err := inRepoMapTx(ctx, db, "store.RemoveRepoMappings", func(tx *sql.Tx) error {
+		host, err := localHostSetting(ctx, tx)
+		if err != nil {
+			return err
+		}
+		rows, err := repoMapSnapshot(ctx, tx)
+		if err != nil {
+			return err
+		}
+		done := map[string]bool{}
+		var del []string
+		for _, p := range paths {
+			want := normPath(p)
+			if done[want] {
+				continue // the same path twice in one call is one removal
+			}
+			found := false
+			for _, r := range rows {
+				if (r.Host != host && r.Host != "") || normPath(r.Path) != want {
+					continue
+				}
+				// A mirror-only entry has no table row, so this can legitimately
+				// delete nothing; the mirror mutation below is what removes it.
+				if _, err := tx.ExecContext(ctx,
+					`DELETE FROM repo_map WHERE host = ? AND path = ?`, r.Host, r.Path); err != nil {
+					return err
+				}
+				removed = append(removed, r)
+				del = append(del, r.Path)
+				found = true
+			}
+			if !found {
+				return fmt.Errorf("%w: %s", ErrRepoMappingNotFound, p)
+			}
+			done[want] = true
+		}
+		return mirrorRepoMapMutation(ctx, tx, host, nil, del)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return removed, nil
 }
 
 // RegisterProjectForCWD resolves a working directory to a project slug like

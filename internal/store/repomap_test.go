@@ -385,3 +385,102 @@ func TestPathHasPrefix_BothSeparators(t *testing.T) {
 	require.False(t, pathHasPrefix("/a/bc", "/a/b"))
 	require.False(t, pathHasPrefix(`C:\a\bc`, `C:\a\b`))
 }
+
+// RemoveRepoMappings drops the local row AND its mirror entry, and the removal
+// survives a restart: AdoptLocalHost re-imports the mirror into the table on
+// every daemon start, so a row-only delete would come back. Another host's row
+// for the same path and a nested repo's own mapping are left alone.
+func TestRemoveRepoMappings_DropsRowAndMirror(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	require.NoError(t, AdoptLocalHost(ctx, db, "alpha"))
+	require.NoError(t, AddRepoMapping(ctx, db, "/work/app", "app"))
+	require.NoError(t, AddRepoMapping(ctx, db, "/work/app/nested", "nested"))
+	require.NoError(t, AddRepoMapping(ctx, db, "/work/keep", "keep"))
+	_, _, err := RegisterProjectForCWD(ctx, db, CWDIdentity{
+		Host: "beta", CWD: "/work/app", RepoRoot: "/work/app",
+	}, "alpha")
+	require.NoError(t, err)
+
+	removed, err := RemoveRepoMappings(ctx, db, []string{"/work/app/"})
+	require.NoError(t, err)
+	require.Len(t, removed, 1)
+	require.Equal(t, "alpha", removed[0].Host)
+	require.Equal(t, "/work/app", removed[0].Path)
+	require.Equal(t, "app", removed[0].Slug)
+
+	check := func() {
+		slug, err := ResolveProjectForCWD(ctx, db, "alpha", "/work/app/src")
+		require.NoError(t, err)
+		require.Empty(t, slug, "the unmapped path no longer resolves on this machine")
+		slug, err = ResolveProjectForCWD(ctx, db, "alpha", "/work/app/nested")
+		require.NoError(t, err)
+		require.Equal(t, "nested", slug, "exact match only: a nested repo keeps its mapping")
+		slug, err = ResolveProjectForCWD(ctx, db, "beta", "/work/app")
+		require.NoError(t, err)
+		require.Equal(t, "app", slug, "another host's row for the same path is not ours to remove")
+		mirror, err := RepoProjectMap(ctx, db)
+		require.NoError(t, err)
+		require.Equal(t, map[string]string{"/work/app/nested": "nested", "/work/keep": "keep"}, mirror)
+	}
+	check()
+	require.NoError(t, AdoptLocalHost(ctx, db, "alpha"))
+	check()
+}
+
+// One unknown path fails the whole call and removes nothing, so a typo never
+// half-applies a batch.
+func TestRemoveRepoMappings_UnknownPathRemovesNothing(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	require.NoError(t, AdoptLocalHost(ctx, db, "alpha"))
+	require.NoError(t, AddRepoMapping(ctx, db, "/work/app", "app"))
+
+	removed, err := RemoveRepoMappings(ctx, db, []string{"/work/app", "/work/typo"})
+	require.ErrorIs(t, err, ErrRepoMappingNotFound)
+	require.ErrorContains(t, err, "/work/typo")
+	require.Empty(t, removed)
+
+	slug, err := ResolveProjectForCWD(ctx, db, "alpha", "/work/app")
+	require.NoError(t, err)
+	require.Equal(t, "app", slug)
+}
+
+// An entry that only ever existed in the legacy JSON mirror (a hand-written
+// setting, a database never adopted) is a local mapping too, and removing it
+// clears the mirror even though there is no table row to delete.
+func TestRemoveRepoMappings_MirrorOnlyEntry(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	require.NoError(t, SetSetting(ctx, db, SettingRepoProjectMap, `{"/legacy/repo":"legacy","/legacy/other":"other"}`))
+
+	local, err := LocalRepoMappings(ctx, db)
+	require.NoError(t, err)
+	require.Len(t, local, 2)
+
+	removed, err := RemoveRepoMappings(ctx, db, []string{"/legacy/repo", "/legacy/repo"})
+	require.NoError(t, err)
+	require.Len(t, removed, 1, "the same path twice is one removal")
+
+	mirror, err := RepoProjectMap(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"/legacy/other": "other"}, mirror)
+}
+
+// LocalRepoMappings is this machine's view: the adopted host's rows, never
+// another host's.
+func TestLocalRepoMappings_ExcludesOtherHosts(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	require.NoError(t, AdoptLocalHost(ctx, db, "alpha"))
+	require.NoError(t, AddRepoMapping(ctx, db, "/local/app", "app"))
+	_, _, err := RegisterProjectForCWD(ctx, db, CWDIdentity{
+		Host: "beta", CWD: "/remote/app", RepoRoot: "/remote/app",
+	}, "alpha")
+	require.NoError(t, err)
+
+	local, err := LocalRepoMappings(ctx, db)
+	require.NoError(t, err)
+	require.Len(t, local, 1)
+	require.Equal(t, "/local/app", local[0].Path)
+}

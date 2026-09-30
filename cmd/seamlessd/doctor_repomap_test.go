@@ -30,7 +30,8 @@ func TestRepoMapCheck(t *testing.T) {
 	require.Contains(t, c.detail, "1 local mapped paths, all present")
 
 	// A dangling entry warns, names the path and slug, and points at map-repo
-	// for the moved-and-renamed case the auto-adoption cannot recognize.
+	// for the moved-and-renamed case the auto-adoption cannot recognize, and at
+	// unmap-repo --stale for clearing the dead entry.
 	missing := filepath.Join(t.TempDir(), "gone")
 	require.NoError(t, store.AddRepoMapping(ctx, db, missing, "gone-project"))
 	c = repoMapCheck(db)
@@ -38,7 +39,8 @@ func TestRepoMapCheck(t *testing.T) {
 	require.Contains(t, c.detail, "1 of 2 local mapped paths missing")
 	require.Contains(t, c.detail, missing)
 	require.Contains(t, c.detail, "gone-project")
-	require.Contains(t, c.detail, "map-repo")
+	require.Contains(t, c.detail, "map-repo --path")
+	require.Contains(t, c.detail, "unmap-repo --stale")
 }
 
 // A path on another machine is missing from THIS disk by definition. Stat'ing it

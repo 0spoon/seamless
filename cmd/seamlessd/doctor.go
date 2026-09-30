@@ -253,7 +253,7 @@ func chmodRepairCommand(mode, path string) string {
 // derived slug is dead), but a repo moved AND renamed derives a different slug
 // and cannot be recognized; the printed map-repo override is the fix for that
 // case. Dangling entries are otherwise harmless, so this warns rather than
-// fails.
+// fails, and names unmap-repo --stale as the way to clear them.
 //
 // Only LOCAL rows are stat'd. A path on another machine is missing from this
 // disk by definition, so stat'ing it would report every remote device's repos as
@@ -319,7 +319,7 @@ func repoMapCheck(db *sql.DB) check {
 	}
 	slices.Sort(missing)
 	return check{statusWarn, "repo map", fmt.Sprintf(
-		"%d of %d local mapped paths missing on disk: %s -- a moved repo adopts its project at its next session start; a renamed one needs `seamlessd map-repo --path <new-root> --project <slug>`%s",
+		"%d of %d local mapped paths missing on disk: %s -- a moved repo adopts its project at its next session start; a renamed one needs `seamlessd map-repo --path <new-root> --project <slug>`; `seamlessd unmap-repo --stale` removes the dead entries%s",
 		len(missing), localCount, strings.Join(missing, "; "), remote)}
 }
 

@@ -116,7 +116,8 @@ working directory via the repo map. Three outcomes:
   project automatically when the old path is gone (a `repo.moved` event lands
   in the console feed); if a split already happened, point the path back with
   `seamlessd map-repo --path <new-root> --project <slug>`. `seamlessd doctor`
-  lists mapped paths that no longer exist on disk.
+  lists mapped paths that no longer exist on disk, and
+  `seamlessd unmap-repo --stale` removes them.
 - **No project at all** - the cwd is not inside a git repo, so nothing resolved
   and the session is global.
 

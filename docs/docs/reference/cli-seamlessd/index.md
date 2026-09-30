@@ -1,12 +1,12 @@
 # seamlessd CLI
 
-> The daemon and operator CLI - serve, doctor, export, import, install-hooks, client-config, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.
+> The daemon and operator CLI - serve, doctor, export, import, install-hooks, client-config, uninstall, update, map-repo, unmap-repo, family, console-open, start/stop/restart/status, and version.
 
 `seamlessd` is both the server and the operator CLI. `serve` runs the daemon;
 every other subcommand is a one-shot that opens the same config and database
 directly, without going through a running server. That means most of them work
-whether or not the daemon is up - and that `map-repo` and `family` write state
-the running daemon reads.
+whether or not the daemon is up - and that `map-repo`, `unmap-repo` and `family`
+write state the running daemon reads.
 
 Each subcommand parses its own flags. None of them take positional arguments
 except `family`, which takes only positionals.
@@ -91,7 +91,7 @@ Checks stop early if config or the database cannot be loaded at all.
 | `tls` | Off, or the certificate's expiry (a warning from 30 days out, nothing auto-renews) and whether its SANs cover the host of `server_url` - the one that fails at the client's handshake with a message that names no file on the server. |
 | `database` | Path, schema version, and table count. Opens and migrates if needed. |
 | `schema version` | An **info** line pairing what the database has applied with what this binary compiles - `v25 applied / v25 compiled`. A database *ahead* of the binary warns: it was written by a newer `seamlessd`, which is also why an archive from it would be refused. |
-| `repo map` | Warns when mapped paths belonging to **this** host name directories that no longer exist on disk. A moved repo adopts its project at its next session start; a moved-and-renamed repo needs the printed `map-repo` override. Rows belonging to other hosts are counted and reported as not verifiable from here - never stat'd, never treated as missing. |
+| `repo map` | Warns when mapped paths belonging to **this** host name directories that no longer exist on disk. A moved repo adopts its project at its next session start; a moved-and-renamed repo needs the printed `map-repo` override, and `unmap-repo --stale` clears the dead entries. Rows belonging to other hosts are counted and reported as not verifiable from here - never stat'd, never treated as missing. |
 | `remote sessions` | An **info** line: which other machines used this daemon in the last 24 hours, and how many daemon-side captures were skipped for them. `none in 24h` on a single-machine install. |
 | `mcp_tools` | On a server install, fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in. On a `role: client` install it is the live count instead: `tools/list` against the server, judged against that server's effective feature state. |
 | `claude CLI runtime` / `claude app runtime` | Each discoverable Claude Code runtime's self-reported version, separately: the PATH CLI and, on macOS, every runtime the desktop app has retained - they can differ, and collapsing them would hide exactly that skew. No discoverable runtime means no lines. |
@@ -472,6 +472,33 @@ derived slug, or to map a directory that is not a git repo.
 `--project` is required. `--path` defaults to the current directory and is made
 absolute. The command also ensures the project exists, so mapping a new slug
 registers it. Writes straight to the database; no running daemon needed.
+
+## seamlessd unmap-repo {#seamlessd_unmap_repo}
+
+```bash
+seamlessd unmap-repo --path DIR [--dry-run]
+seamlessd unmap-repo --stale [--dry-run]
+```
+
+Removes this machine's repo mappings - the inverse of `map-repo`. `--path`
+removes the mapping for exactly that directory (made absolute; a directory
+nested under a mapped repo is not a match). `--stale` removes every mapping on
+this machine whose path no longer exists on disk: the entries `doctor`'s
+`repo map` check warns about after a repo is moved, renamed or deleted. Pass
+exactly one of the two.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--path` | - | The repo root whose mapping to remove. Unmapped on this machine is an error, and nothing is removed. |
+| `--stale` | `false` | Remove every local mapping whose path is gone. Only a clean "does not exist" counts; a path that cannot be stat'd for another reason is kept. |
+| `--dry-run` | `false` | Print what would be removed and change nothing. |
+
+Only the route goes. The project stays, with its memories, notes and tasks,
+and a repo still on disk maps itself again on its next session - so to move a
+repo to another project, `map-repo` its root there rather than unmapping it.
+Mappings belonging to other hosts are never touched. The table row and the
+legacy `repo_project_map` entry are removed together, so the removal survives a
+daemon restart. Writes straight to the database; no running daemon needed.
 
 ## seamlessd family {#seamlessd_family}
 

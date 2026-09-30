@@ -11,6 +11,7 @@
 //	seamlessd uninstall     remove Seamless (service, hooks, MCP, skills, binaries)
 //	seamlessd update        upgrade in place to the latest release (re-runs the installer)
 //	seamlessd map-repo      override a repo's auto-derived project slug (rarely needed)
+//	seamlessd unmap-repo    remove this machine's mapping for a repo path, or every stale one
 //	seamlessd family        manage project families
 //	seamlessd console-open  open the console in a browser, pre-authenticated
 //	seamlessd start         start|stop|restart|status the installed service
@@ -108,6 +109,8 @@ func main() {
 		err = runUpdate(args)
 	case "map-repo":
 		err = runMapRepo(args)
+	case "unmap-repo":
+		err = runUnmapRepo(args)
 	case "family":
 		err = runFamily(args)
 	case "console-open":
@@ -154,6 +157,8 @@ usage:
                            (--check reports installed vs latest; --dry-run previews; honors SEAMLESS_VERSION)
   seamlessd map-repo       override a repo's auto-derived project slug (rarely needed;
                            repos self-map on first session -- repo_project_map)
+  seamlessd unmap-repo     remove this machine's mapping for a repo (--path DIR), or every mapping
+                           whose path no longer exists (--stale); --dry-run previews. Projects stay
   seamlessd family         manage project families (list|add|remove)
   seamlessd console-open   open the console in a browser, pre-authenticated
                            (--browser "Google Chrome" targets a specific browser; macOS only)
