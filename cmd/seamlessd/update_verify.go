@@ -34,12 +34,20 @@ const (
 
 	// signingIdentityRegexp pins WHO may have signed the installer: this
 	// repository's release workflow running on a version tag, and nothing
-	// else. It is the same identity docs/install and docs/install.ps1 pin
-	// when they verify checksums.txt, so the whole supply chain enforces one
-	// identity contract. A signature from any other repo, workflow file, or
-	// ref (a branch, a PR) fails the policy even though it chains to the
-	// same Fulcio root.
-	signingIdentityRegexp = `^https://github\.com/0spoon/seamless/\.github/workflows/release\.yml@refs/tags/v`
+	// else. A signature from any other repo, workflow file, or ref (a branch,
+	// a PR) fails the policy even though it chains to the same Fulcio root.
+	//
+	// The (0spoon|arctop) alternation is a TRANSITION for the repository's
+	// move from github.com/0spoon/seamless to github.com/arctop/seamless
+	// (plan:move-to-arctop). Releases signed before the move carry the 0spoon
+	// identity; the first release cut from arctop carries the arctop one, and
+	// this binary (signed under 0spoon) must accept it or `seamlessd update`
+	// could never cross the move. Once releases come from arctop the module
+	// rename narrows this back to arctop only, while docs/install and
+	// docs/install.ps1 -- which today pin the 0spoon identity alone when they
+	// verify checksums.txt -- learn to accept both permanently, so a pinned
+	// pre-move SEAMLESS_VERSION keeps verifying.
+	signingIdentityRegexp = `^https://github\.com/(0spoon|arctop)/seamless/\.github/workflows/release\.yml@refs/tags/v`
 )
 
 // sigstoreTrustedRoot parses the embedded trusted-root snapshot.
