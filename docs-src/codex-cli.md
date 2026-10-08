@@ -163,7 +163,10 @@ URL directly **or** launch a local MCP server over stdio. Seamless chooses the
 second form by default: Codex launches `seam mcp-proxy`, which forwards each
 JSON-RPC frame to the daemon's `/api/mcp` endpoint with the bearer key from your
 config and preserves `Mcp-Session-Id` across calls so session binding keeps
-working.
+working. The bridge also names the Codex process that launched it on every
+request, which binds the agent's tool calls to the `cx/...` session its
+SessionStart hook opened - no `session_start` needed
+([how](/concepts/sessions/#process-binding)).
 
 The bridge is transport-thin - no tool knowledge, no caching - and it is what the
 installer registers. It exists so the key stays in `~/.config/seamless/seamless.yaml`
@@ -200,7 +203,11 @@ bridge exists to avoid. `codex mcp add seamless --url http://127.0.0.1:8081/api/
 --bearer-token-env-var SEAMLESS_MCP_API_KEY` is a third route, but it reads the
 key from an environment variable that Codex's own process must have set when it
 launches - fragile to arrange reliably, which is the other reason the bridge is
-the default.
+the default. A direct entry also sends no agent-process header, so the agent's
+tool calls are not bound to its session automatically: with agents active in
+several repos, it binds with `session_start name=cx/...` - the handle on its
+briefing's `Seam session` line - when a call reports an ambiguous scope,
+session, or agent.
 
 </details>
 

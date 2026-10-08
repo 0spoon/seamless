@@ -39,6 +39,9 @@ internal/store/    SQLite: schema, FTS5, embeddings (BLOB + cosine), migrations;
                    layer fills with memories and notes
 internal/events/   append-only event log; SSE fan-out; retrieval stats
 internal/validate/ path/title/name guards
+internal/agentproc/ names the agent process (claude/codex) that launched a seam
+                   process: the identity the session-start hook stamps and the
+                   MCP bridge sends, which binds a connection to its session
 internal/files/    markdown layer: frontmatter, atomic writes, watcher     [P1]
 internal/markdown/ agent markdown -> sanitized console HTML (goldmark + bluemonday)
 internal/llm/      OpenAI (default), Ollama, Anthropic chat + embeddings   [P1]
@@ -199,7 +202,10 @@ natural-language `gardener_request` and the project-split planner
 `gardener_split` -- both LLM-backed, and both only ever propose), utility
 (`capture_url`, `usage_summary`, `favorite_set` -- star/unstar any entity;
 starred memories pin into briefings and boost recall). Project and session are inherited from the
-session binding; agents in mapped repos rarely pass `project` explicitly.
+session binding; agents in mapped repos rarely pass `project` explicitly. A
+Claude Code or Codex agent's connection is bound to its own ambient session
+automatically (the agent-process identity, `internal/mcp/agent_binding.go`), so
+those agents never need `session_start`.
 
 ## Plans as composition
 

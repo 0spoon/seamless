@@ -55,6 +55,15 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	return s.briefingFor(ctx, project, in, cfg)
 }
 
+// ProjectBriefing is Briefing for a project the caller already resolved, so the
+// input's cwd is not consulted. session_start binds a project by routes a cwd
+// does not capture -- a project argument, a resumed session, the agent's own
+// session -- and the briefing it returns must describe the project the session
+// actually got, not whatever the cwd (often none) resolves to.
+func (s *Service) ProjectBriefing(ctx context.Context, project string, in BriefingInput) (string, []string, error) {
+	return s.briefingFor(ctx, project, in, s.effectiveBriefing(ctx))
+}
+
 // PreviewBriefing assembles the briefing a new session in project would start
 // with under cfg rather than the effective knobs: the console's Settings
 // preview of values the owner may not have saved. It is the session-start

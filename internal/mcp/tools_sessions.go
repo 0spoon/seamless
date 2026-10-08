@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -17,10 +18,20 @@ import (
 
 func sessionStartTool() mcp.Tool {
 	return mcp.NewTool("session_start", hintSet(),
-		mcp.WithDescription("Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again."),
-		mcp.WithString("name", mcp.Description("Optional stable session name; reusing a name resumes that session")),
-		mcp.WithString("cwd", mcp.Description("Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug)")),
-		mcp.WithString("source", enumOf(core.SessionSources), mcp.Description("what began this session (default explicit)")),
+		mcp.WithDescription("Bind this connection to a work session and return its project briefing. "+
+			"Claude Code and Codex agents running the Seamless hooks are bound to their own session automatically "+
+			"(the 'Seam session' line in the briefing) and do not need this. Call it to bind a client without hooks, "+
+			"to move this connection to another project, or to resume a named session. Later calls inherit the "+
+			"session's project, so they need no project argument."),
+		mcp.WithString("project", mcp.Description("Project slug to bind. Defaults to the project of the git repository "+
+			"cwd is in, then to your own session's project. If cwd is in a repository too, the two must agree. "+
+			"project=global binds the global scope; an unknown slug creates that project.")),
+		mcp.WithString("cwd", mcp.Description("Absolute working directory. The git repository it is in decides the project, "+
+			"and a repository maps itself to a project on its first session -- no setup step (`seamlessd map-repo` only "+
+			"overrides the derived slug)")),
+		mcp.WithString("name", mcp.Description("Resume the session with this name: a sess/* name from an earlier call, "+
+			"or the cc/... or cx/... on your briefing's 'Seam session' line. A new name starts a separate session under "+
+			"that name; omit it to use your own session, or a fresh one")),
 		mcp.WithString("model", mcp.Description("Model id powering this agent, exactly as the provider names it (e.g. claude-fable-5, gpt-5.5). Stamped onto memories/notes this session writes; hooks keep it current for Claude Code/Codex sessions, so pass it mainly from other clients")),
 		// Machine identity. Only a client on a DIFFERENT machine than the daemon
 		// needs these: cwd alone is ambiguous across devices, and the daemon will
@@ -33,14 +44,22 @@ func sessionStartTool() mcp.Tool {
 	)
 }
 
+// scopeSource says how session_start arrived at the project it bound, so the
+// result can tell the agent -- in the one place it is guaranteed to look -- what
+// it got and what it did not need to do.
+type scopeSource int
+
+const (
+	scopeFromCWD     scopeSource = iota // the repository cwd is in (or no project at all)
+	scopeFromArg                        // the project argument
+	scopeFromSession                    // the session being resumed
+	scopeFromOwn                        // the agent's own process-bound session
+)
+
 func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	name := argString(req, "name")
 	cwd := argString(req, "cwd")
-	source := argString(req, "source")
 	model := strings.TrimSpace(argString(req, "model"))
-	if source == "" {
-		source = "explicit"
-	}
 	// Explicit arg beats the connection header beats the daemon's own host: the
 	// arg is the only one an agent can correct when its transport strips headers.
 	host := strings.ToLower(strings.TrimSpace(argString(req, "host")))
@@ -78,6 +97,28 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 		})
 	}
 
+	// A project argument names the scope outright -- the way agents expect to
+	// start a session, and the only way for a client with no meaningful cwd (the
+	// Claude app's chat surface). It is checked against the cwd rather than
+	// silently preferred: the two disagreeing is a caller mistake worth one
+	// round-trip, not a coin flip.
+	how := scopeFromCWD
+	if raw := strings.TrimSpace(argString(req, "project")); raw != "" {
+		named, created, err := s.sessionProjectArg(ctx, raw, cwd, project)
+		if err != nil {
+			return errResult("session_start", err)
+		}
+		project, how = named, scopeFromArg
+		warning = "" // the project argument placed the session, so an unplaceable cwd no longer matters
+		if created {
+			warning = "project " + raw + " did not exist and was created; if that was a typo, " +
+				"session_start again with the project you meant"
+		}
+	}
+	// Whether the caller chose a scope at all. A cwd outside any repository chose
+	// nothing, and neither did a call with no cwd and no project.
+	pinned := how == scopeFromArg || project != ""
+
 	// Resume a named session if it already exists.
 	if name != "" {
 		existing, ok, err := store.SessionByName(ctx, s.cfg.DB, name)
@@ -85,8 +126,8 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			return errResult("session_start", err)
 		}
 		if ok {
-			if project == "" {
-				project = existing.ProjectSlug
+			if !pinned {
+				project, how = existing.ProjectSlug, scopeFromSession
 			}
 			// Reactivate: a resumed session is live again. Without this a
 			// completed/expired session stays terminal -- the per-call heartbeat
@@ -102,19 +143,42 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			s.record(ctx, core.EventSessionStarted, existing.ID, project, "", map[string]any{"resumed": true})
 			return jsonResult(withWarning(map[string]any{
 				"session_id": existing.ID, "name": existing.Name,
-				"project": project, "resumed": true, "scope": scopeNote(project),
-				"briefing": s.briefing(ctx, host, cwd, source),
+				"project": project, "resumed": true, "scope": scopeNote(project, how),
+				"briefing": s.briefing(ctx, host, project, "resume"),
 			}, warning))
 		}
 	}
 
-	// Adopt the connection's ambient session: with no explicit name and exactly
-	// one active ambient (cc/* or cx/*) session sharing the cwd, the SessionStart hook
-	// already created this agent's session -- resume that row instead of minting
-	// a second sess/* one. Zero or many candidates (no hook ran, or two agents in
-	// one cwd) fall through to a fresh session, the same unambiguous-or-fallback
-	// guard as linkedExternalIdentity, so adoption can never bind a sibling's session.
-	if name == "" {
+	// The caller's own session, identified by the agent process that launched
+	// this connection (agent_binding.go). Claude Code and Codex agents are already
+	// bound to it, so this call only hands the connection back to it -- dropping a
+	// session chosen by an earlier session_start -- and says the call was not
+	// needed. A caller pinning a DIFFERENT project falls through to a fresh
+	// session there instead: re-scoping its own session would leave the hooks,
+	// which keep describing the repository it runs in, at odds with the binding.
+	own, hasOwn := s.processSession(ctx)
+	if name == "" && hasOwn && (!pinned || project == own.ProjectSlug) {
+		s.clearBinding(ctx)
+		stashAttribution(ctx, own.ID, own.ProjectSlug)
+		s.stampSessionModel(ctx, own.ID, model)
+		s.record(ctx, core.EventSessionStarted, own.ID, own.ProjectSlug, "",
+			map[string]any{"resumed": true, "adopted": true, "agent_process": true})
+		return jsonResult(withWarning(map[string]any{
+			"session_id": own.ID, "name": own.Name,
+			"project": own.ProjectSlug, "resumed": true, "scope": scopeNote(own.ProjectSlug, scopeFromOwn),
+			"briefing": s.briefing(ctx, host, own.ProjectSlug, "explicit"),
+		}, warning))
+	}
+
+	// Without an agent process to identify the caller (an older seam, or a
+	// client Seamless did not launch), fall back to adopting the sole active
+	// ambient session sharing the cwd: with no explicit name and exactly one
+	// candidate, the SessionStart hook most likely created it for this agent, so
+	// resume that row instead of minting a second sess/* one. Zero or many
+	// candidates fall through to a fresh session. A caller that DID name its
+	// process never gets here: it owns no live ambient (or several), and a sole
+	// same-cwd ambient would then be some other agent's.
+	if name == "" && callerAgentProcess(ctx) == "" {
 		if ambient, ok := s.soleAmbientByCWD(ctx, host, cwd); ok {
 			if project == "" {
 				project = ambient.ProjectSlug
@@ -130,8 +194,8 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 				map[string]any{"resumed": true, "adopted": true})
 			return jsonResult(withWarning(map[string]any{
 				"session_id": ambient.ID, "name": ambient.Name,
-				"project": project, "resumed": true, "scope": scopeNote(project),
-				"briefing": s.briefing(ctx, host, cwd, source),
+				"project": project, "resumed": true, "scope": scopeNote(project, how),
+				"briefing": s.briefing(ctx, host, project, "explicit"),
 			}, warning))
 		}
 	}
@@ -147,7 +211,7 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	externalSessionID, externalClient := s.linkedExternalIdentity(ctx, host, cwd)
 	sess := core.Session{
 		ID: id, Name: name, ProjectSlug: project, Status: core.SessionActive,
-		CWD: cwd, Host: host, Source: source, Model: model,
+		CWD: cwd, Host: host, Source: "explicit", Model: model,
 		ExternalSessionID: externalSessionID, ExternalClient: externalClient,
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -157,9 +221,38 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	s.setBinding(ctx, id, project)
 	s.record(ctx, core.EventSessionStarted, id, project, "", nil)
 	return jsonResult(withWarning(map[string]any{
-		"session_id": id, "name": name, "project": project, "scope": scopeNote(project),
-		"briefing": s.briefing(ctx, host, cwd, source),
+		"session_id": id, "name": name, "project": project, "scope": scopeNote(project, how),
+		"briefing": s.briefing(ctx, host, project, "explicit"),
 	}, warning))
+}
+
+// sessionProjectArg resolves session_start's project argument: validated like
+// every project argument (validateProjectArg is the path-traversal defense),
+// refused when it contradicts the repository cwd is in, and registered when new
+// -- the same rule a durable write follows (constraint
+// write-scope-registers-the-project-it-names), so naming a new project is an
+// ordinary choice rather than an error that sends the agent to the global scope.
+// created reports a registration, which the caller surfaces so a typo is seen.
+func (s *Server) sessionProjectArg(ctx context.Context, raw, cwd, cwdProject string) (project string, created bool, err error) {
+	project, err = validateProjectArg(raw)
+	if err != nil {
+		return "", false, err
+	}
+	if cwdProject != "" && project != cwdProject {
+		return "", false, fmt.Errorf("project %q conflicts with cwd %q, which is in project %q: "+
+			"pass one or the other (cwd places the session in its repository's project)", raw, cwd, cwdProject)
+	}
+	if project == "" {
+		return "", false, nil
+	}
+	_, exists, err := store.ProjectBySlug(ctx, s.cfg.DB, project)
+	if err != nil {
+		return "", false, err
+	}
+	if _, err := store.EnsureProject(ctx, s.cfg.DB, project, project); err != nil {
+		return "", false, err
+	}
+	return project, !exists, nil
 }
 
 // stampSessionModel records a self-reported model id on a resumed/adopted
@@ -177,25 +270,46 @@ func (s *Server) stampSessionModel(ctx context.Context, sessionID, model string)
 }
 
 // scopeNote explains, in the session_start result, how project scope was
-// resolved -- so an agent sees that the repo->project mapping is automatic and
-// never mistakes `seamlessd map-repo` for a required setup step. The map grows
-// itself on a repo's first session (see store.RegisterProjectForCWD); map-repo
-// only overrides the derived slug.
-func scopeNote(project string) string {
-	if project == "" {
-		return "global scope: this cwd is not inside a git repo, so nothing auto-mapped. " +
-			"Pass project=<slug> on durable writes to target a project."
+// resolved -- so an agent sees what it got and what it did not need to do. The
+// own-session case says outright that the call was unnecessary: that is the
+// lesson that keeps a Claude Code or Codex agent from calling it again. The cwd
+// case says the repo->project mapping is automatic, so `seamlessd map-repo` is
+// never mistaken for a required setup step (the map grows itself on a repo's
+// first session; see store.RegisterProjectForCWD).
+func scopeNote(project string, how scopeSource) string {
+	switch {
+	case how == scopeFromOwn:
+		where := fmt.Sprintf("project %q", project)
+		if project == "" {
+			where = "the global scope"
+		}
+		return "This is your own session (" + where + "). Claude Code and Codex bind it to your tool calls " +
+			"automatically, so you did not need session_start for it; call session_start only to move to " +
+			"another project or resume a named session."
+	case project == "" && how == scopeFromArg:
+		return "global scope, as named: unscoped writes from this connection land in EVERY project's briefing."
+	case project == "":
+		return "global scope: no project argument, and this cwd is not inside a git repo, so nothing mapped. " +
+			"Pass project=<slug> here, or on each durable write, to target a project."
+	case how == scopeFromArg:
+		return fmt.Sprintf("project %q, as named.", project)
+	case how == scopeFromSession:
+		return fmt.Sprintf("project %q, the resumed session's.", project)
+	default:
+		return fmt.Sprintf("project %q. Repo->project mapping is automatic -- a repo maps itself to a "+
+			"project on its first session, so there is no setup step. `seamlessd map-repo` only "+
+			"overrides a repo's derived slug.", project)
 	}
-	return fmt.Sprintf("project %q. Repo->project mapping is automatic -- a repo maps itself to a "+
-		"project on its first session, so there is no setup step. `seamlessd map-repo` only "+
-		"overrides a repo's derived slug.", project)
 }
 
-// briefing assembles the session_start briefing, degrading to "" on error. The
-// failure is logged (it was previously discarded silently): a broken briefing
-// should never fail a session_start, but it must not vanish without a trace.
-func (s *Server) briefing(ctx context.Context, host, cwd, source string) string {
-	briefing, _, err := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Host: host, Source: source})
+// briefing assembles the session_start briefing for the project the session was
+// bound to, degrading to "" on error. The project is passed rather than
+// re-derived from the cwd, because a project argument, a resumed session and the
+// agent's own session all bind projects the cwd does not name. The failure is
+// logged (it was previously discarded silently): a broken briefing should never
+// fail a session_start, but it must not vanish without a trace.
+func (s *Server) briefing(ctx context.Context, host, project, source string) string {
+	briefing, _, err := s.cfg.Retrieve.ProjectBriefing(ctx, project, retrieve.BriefingInput{Host: host, Source: source})
 	if err != nil {
 		s.logger.Warn("session_start: briefing", "error", err)
 		return ""
@@ -204,12 +318,20 @@ func (s *Server) briefing(ctx context.Context, host, cwd, source string) string 
 }
 
 // linkedExternalIdentity resolves the client/id pair to stamp on a freshly
-// created NAMED explicit session, so a graceful SessionEnd closes it alongside
-// its ambient rather than leaving it for the idle reaper. (An unnamed
-// session_start with a sole same-cwd ambient adopts that session outright and
-// never gets here.) Ambiguity yields empty values so the session falls back to
+// created explicit session, so a graceful SessionEnd closes it alongside its
+// ambient rather than leaving it for the idle reaper. The agent's own
+// process-bound session is the exact answer. A caller that named its process but
+// owns no single live session gets no link -- any other candidate would be some
+// other agent's. Only a caller that named no process falls back to the sole
+// same-cwd ambient. Ambiguity yields empty values so the session falls back to
 // the reaper instead of risking a link to the wrong agent. Best-effort.
 func (s *Server) linkedExternalIdentity(ctx context.Context, host, cwd string) (externalSessionID, externalClient string) {
+	if own, ok := s.processSession(ctx); ok {
+		return own.ExternalSessionID, own.ExternalClient
+	}
+	if callerAgentProcess(ctx) != "" {
+		return "", ""
+	}
 	ambient, ok := s.soleAmbientByCWD(ctx, host, cwd)
 	if !ok {
 		return "", ""
@@ -234,11 +356,20 @@ func (s *Server) soleAmbientByCWD(ctx context.Context, host, cwd string) (core.S
 	return ambients[0], true
 }
 
+// sessionArgDesc documents the `session` argument of session_update/session_end.
+// The default is the connection's own session -- bound automatically for a
+// Claude Code or Codex agent -- so the argument is the exception, and it says
+// so: the old wording ("pass it whenever you have not run session_start") taught
+// agents that session_start was a prerequisite.
+const sessionArgDesc = "Session to operate on: a name (the cc/<id> or cx/<id> on your briefing's 'Seam session' line, " +
+	"or a sess/* name) or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code " +
+	"and Codex agents -- so pass it only to act on another session, or when a call reports the session as ambiguous"
+
 func sessionUpdateTool() mcp.Tool {
 	return mcp.NewTool("session_update", hintSet(),
 		mcp.WithDescription("Record interim progress on the current session (working findings so far). Uses the bound session unless you pass one."),
 		mcp.WithString("findings", mcp.Required(), mcp.Description("Working findings / progress note so far")),
-		mcp.WithString("session", mcp.Description("Session name to operate on: the cc/<id> or cx/<id> on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses")),
+		mcp.WithString("session", mcp.Description(sessionArgDesc)),
 		mcp.WithString("session_id", mcp.Description("Session ULID to operate on; takes precedence over session and the bound session")),
 	)
 }
@@ -287,7 +418,7 @@ func sessionEndTool() mcp.Tool {
 		mcp.WithDescription("Complete the current session, persisting its findings for future briefings. Uses the bound session unless you pass one."),
 		mcp.WithString("findings", mcp.Required(), mcp.Description("Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected.")),
 		mcp.WithArray("mishaps", mcp.WithStringItems(), mcp.Description("Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. When a mishap violated a stored memory, name that memory by its exact slug in the entry (e.g. \"violated chroma-boot-race by ...\") -- the report is then linked to it. Recorded for recurrence review, not blame -- report them even when fully recovered.")),
-		mcp.WithString("session", mcp.Description("Session name to operate on: the cc/<id> or cx/<id> on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses")),
+		mcp.WithString("session", mcp.Description(sessionArgDesc)),
 		mcp.WithString("session_id", mcp.Description("Session ULID to operate on; takes precedence over session and the bound session")),
 	)
 }
@@ -387,10 +518,18 @@ func (s *Server) mishapMatchCorpus(ctx context.Context, project string, mishapCo
 // completing the wrong session is destructive, not merely mis-scoped.
 func (s *Server) resolveSession(ctx context.Context, req mcp.CallToolRequest) (core.Session, bool, error) {
 	if id := argString(req, "session_id"); id != "" {
-		return store.SessionByID(ctx, s.cfg.DB, id)
+		sess, ok, err := store.SessionByID(ctx, s.cfg.DB, id)
+		if err == nil && !ok {
+			err = fmt.Errorf("session_id %q not found", id)
+		}
+		return sess, ok, err
 	}
-	if name := argString(req, "session"); name != "" {
-		return store.SessionByName(ctx, s.cfg.DB, name)
+	if ref := argString(req, "session"); ref != "" {
+		sess, ok, err := sessionByRef(ctx, s.cfg.DB, ref)
+		if err == nil && !ok {
+			err = errSessionRefNotFound(ref)
+		}
+		return sess, ok, err
 	}
 	if b, ok := s.getBinding(ctx); ok {
 		return store.SessionByID(ctx, s.cfg.DB, b.sessionID)
@@ -413,7 +552,7 @@ func (s *Server) resolveSession(ctx context.Context, req mcp.CallToolRequest) (c
 // cx/* ambients in one project -- yields ambiguous=true and no session, so the caller
 // must name the session. Exactly one candidate (the solo-agent case) resolves.
 func (s *Server) ambientSessionTarget(ctx context.Context) (sess core.Session, ok bool, ambiguous bool, err error) {
-	projects, scope, err := s.ambientProjectsNearestFirst(ctx)
+	projects, scope, _, err := s.ambientProjectsNearestFirst(ctx)
 	if err != nil {
 		return core.Session{}, false, false, err
 	}
@@ -433,6 +572,30 @@ func (s *Server) ambientSessionTarget(ctx context.Context) (sess core.Session, o
 		return core.Session{}, false, len(sessions) > 1, nil
 	}
 	return sessions[0], true, false, nil
+}
+
+// sessionByRef resolves a session= argument: a session name, or -- when shaped
+// like one -- a session ULID. Agents routinely pass the session_id a
+// session_start returned as session=, and reading that only as a name turned a
+// correct reference into "no active session: call session_start first", sending
+// an agent that had just called it to call it again.
+func sessionByRef(ctx context.Context, db *sql.DB, ref string) (core.Session, bool, error) {
+	sess, ok, err := store.SessionByName(ctx, db, ref)
+	if err != nil || ok {
+		return sess, ok, err
+	}
+	if store.LooksLikeSessionULID(ref) {
+		return store.SessionByID(ctx, db, ref)
+	}
+	return core.Session{}, false, nil
+}
+
+// errSessionRefNotFound is the refusal for a session= that names nothing. It
+// says what the argument takes, because the usual cause is passing the wrong
+// kind of value rather than a wrong one.
+func errSessionRefNotFound(ref string) error {
+	return fmt.Errorf("session %q not found: session= takes a session name -- the cc/... or cx/... on your "+
+		"briefing's 'Seam session' line, or a sess/* name -- or a session ULID", ref)
 }
 
 // withWarning attaches a non-fatal warning to a tool result. It is only ever

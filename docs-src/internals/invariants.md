@@ -129,7 +129,8 @@ on precisely the edit it exists to refuse.
 
 ## Session binding and scope
 
-Enforced in `internal/mcp`. Concepts: [Projects & scope](/concepts/projects/).
+Enforced in `internal/mcp`. Concepts: [Projects & scope](/concepts/projects/),
+[How tool calls find their session](/concepts/sessions/#process-binding).
 
 ### Never read `project` from tool args directly
 
@@ -190,10 +191,46 @@ guess. Inheriting the machine-latest ambient in that situation is exactly how a
 write bleeds into a concurrent agent's project - and the agent that wrote it will
 never see the mistake, because from its side the call succeeded.
 
-### Only `session_start` binds a connection
+### A connection binds two ways, and `getBinding` reads both
 
-Bindings are keyed by the MCP client session id. They evict on `session_end` and
-via an opportunistic sweep.
+An explicit `session_start` binding - held in memory, keyed by the MCP client
+session id, evicted on `session_end` and by an opportunistic sweep - wins over
+the **process binding**: the single active ambient session stamped with the
+agent process the request names in `X-Seamless-Agent-Process`
+(`agent_binding.go`). The process binding is identification, not inference. It
+lives in the session row and on every request, survives restarts and
+reconnects, and counts as a binding for the isolation fence.
+
+### One process, two live sessions: bind neither
+
+Two active sessions stamped with one process are a host running several
+sessions at once, so the call stays unbound. Never pick between them by recency
+or cwd - that is the cross-agent bleed in a new place.
+
+### An identified caller is never inferred into another agent's session
+
+`store.AmbientScope.Caller` filters every ambient-fallback lookup: a caller that
+named its process never resolves into a session stamped with a different one.
+Once such a caller's own session has ended, the sole live ambient is by
+construction another agent's - inheriting it would bleed a write into that
+agent's project, and a bare `session_end` would complete that agent's work.
+
+### Revive what the reaper expired, never what was completed
+
+The process binding reactivates a session the idle reaper **expired**, because
+a call from the same live process is proof of life. A session **completed** on
+purpose - by `session_end` or the client's SessionEnd - stays ended.
+
+### `session_start` adopts only the caller's own session
+
+When the request names a process. The sole-same-cwd adoption heuristic is for
+callers that name none; for one that does, a sole same-cwd ambient that is not
+its own belongs to another agent.
+
+### Agent process identities are opaque
+
+Validate with `agentproc.Valid` at every boundary (the header, the hook query)
+and compare for equality. Never parse one for its pid or start time.
 
 ### A lost binding does NOT error
 

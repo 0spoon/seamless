@@ -16,7 +16,7 @@ func TestMemoryWriteStageHint(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// Headerless body: the write proceeds, the hint fires.
 	w := callJSON(t, ctx, cli, "memory_write", map[string]any{
@@ -57,7 +57,7 @@ func TestMemoryAppendStageHint(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	callJSON(t, ctx, cli, "memory_write", map[string]any{
 		"name": "headerless-stage", "kind": "stage", "description": "no header yet",

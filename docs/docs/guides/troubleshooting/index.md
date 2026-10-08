@@ -124,29 +124,45 @@ An empty briefing for a project that genuinely has no constraints and no memorie
 is correct behavior, not a fault. The header counts what exists; if it says zero,
 the store is telling the truth.
 
-## A write is rejected as ambiguous scope
+## A call is rejected as ambiguous scope, session, or agent
 
 **What is happening.** This is the [fail-closed rule](https://thereisnospoon.org/docs/concepts/projects/) doing
-its job. A durable write with no resolvable scope is rejected rather than landing
-in the global scope, because a global memory is seen by every agent in every repo
-forever - and that must never be what happens when the system is *unsure*.
+its job. A call on a connection bound to no session has to infer its project or
+session from the agents that are live, and it refuses rather than guesses when
+that inference has no single answer. A durable write with no resolvable scope is
+rejected rather than landing in the global scope, because a global memory is seen
+by every agent in every repo forever - and that must never be what happens when
+the system is *unsure*.
 
-**Fix.** The message tells you which of two cases you are in:
+**From Claude Code or Codex, suspect the `seam` binary first.** Their tool calls
+are [bound to the agent's own session](https://thereisnospoon.org/docs/concepts/sessions/#process-binding)
+automatically, so they should rarely see these errors. A `seam` older than that
+binding sends no agent-process identity, which leaves the connection unbound -
+and the briefing's `Seam session` line then tells the agent to
+`bind once with session_start name=...` instead of saying no `session_start` is
+needed. [Update](https://thereisnospoon.org/docs/updating/) Seamless on the agent's machine and start a new
+session. An agent that has ended its own session is unbound too, by design: its
+next bare call - a read as much as a write - is refused rather than borrowing
+another agent's project or quietly falling back to the global scope.
+
+**Fix.** The message tells you which case you are in:
 
 | Message says | Cause | Fix |
 |---|---|---|
-| *no bound or ambient session to infer the project from* | No `session_start`, and no ambient session for this cwd | Call `session_start` with your `cwd`, or pass `project=<slug>` |
-| *active ambient sessions span multiple projects* | You are unbound and other agents are live in several repos, so inheriting would bleed your write into someone else's project | Pass `project=<slug>` explicitly |
+| *no bound or ambient session to infer the project from* | Nothing bound, and no ambient session this caller may inherit | Bind with `session_start` (`cwd`, or `project=<slug>`), or pass `project=<slug>` on the write |
+| *the active ones belong to other agents* | This connection names its agent process but owns no live session - an agent that ended its own session, or `seam` run by hand - and every live session is another agent's | Pass `project=<slug>` (`--project` on the CLI); an agent that ended its own session can resume it with `session_start name=` the `cc/...` or `cx/...` on its briefing's `Seam session` line |
+| *active ambient sessions span multiple projects* | You are unbound and other agents are live in several repos, so inheriting would bleed your write into someone else's project | Pass `project=<slug>`, or bind once with `session_start` (`name=` the `cc/...` or `cx/...` on your briefing's `Seam session` line, or `project=<slug>`) |
+| *ambiguous session* or *ambiguous agent* | `session_update`, `session_end`, or a task claim or release named no session while several agents are live | Pass `session=` with the `cc/...` or `cx/...` on your briefing's `Seam session` line, or bind once with `session_start name=<that name>` |
 
-In both cases `project=<slug>` may name a project that does not exist yet - the
-write creates it. Do not answer this error with `project=global` because a new
+In the scope cases, `project=<slug>` may name a project that does not exist yet -
+the write creates it. Do not answer this error with `project=global` because a new
 slug felt riskier: an invented project is cheap and local, while global puts the
 item in every project's briefing forever. The error text lists the slugs that do
 exist, so you can match one instead of coining a near-duplicate.
 
-If a call that worked all morning starts failing this way, suspect a **lost
-binding** - see the daemon-restart section below. `project: global` is always
-accepted; it is a token you pass on purpose.
+If a call that worked all morning starts failing this way on a connection bound
+with `session_start`, suspect a **lost binding** - see the daemon-restart section
+below. `project: global` is always accepted; it is a token you pass on purpose.
 
 ## Recall returns junk, or misses what you just wrote
 
@@ -204,15 +220,17 @@ What *does* re-queue it is the session reaper: it expires sessions idle past
 
 ## `tasks_update` says the task is already claimed - by my own session
 
-**What is happening.** The connection binding was lost. The task is genuinely held
-by your session id; your *connection* no longer knows that, so the holder check
-sees a stranger.
+**What is happening.** The connection lost its `session_start` binding. The task
+is genuinely held by your session id; your *connection* no longer knows that, so
+the holder check sees a stranger.
 
 **Fix.** Re-run `session_start` with the **same name** to rebind. It resumes the
 session rather than opening a second one.
 
 The binding is keyed by the transport's `Mcp-Session-Id`, held in the daemon's
-memory. Any daemon restart drops it - see below.
+memory. Any daemon restart drops it - see below. A Claude Code or Codex agent's
+automatic binding is not held there - it is matched from the agent process on
+every request - so this bites only a connection bound with `session_start`.
 
 ## A `seam` flag did nothing
 
@@ -317,9 +335,10 @@ older code.
   port is the right way to test in isolation, but that pattern matches the real
   service's command line too and kills it. Under launchd it comes back in about a
   second with a new pid and no data loss - but **every agent's MCP connection
-  drops and their session bindings are lost mid-task**, which resurfaces as the
-  ambiguous-scope and self-claimed-task symptoms above. Kill the throwaway by its
-  own pid, or by its port.
+  drops, and bindings made with `session_start` are lost mid-task**, which
+  resurfaces as the ambiguous-scope and self-claimed-task symptoms above (a
+  Claude Code or Codex agent's automatic binding survives). Kill the throwaway by
+  its own pid, or by its port.
 - **Tools missing in some repos?** That is not a daemon problem. `claude mcp add`
   defaults to `local` scope, tying the registration to the directory you ran it
   from. Register with `--scope user`.

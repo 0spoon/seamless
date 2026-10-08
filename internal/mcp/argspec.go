@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"reflect"
 	"slices"
@@ -10,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/0spoon/seamless/internal/core"
 )
 
 // Argument normalization and validation against a tool's declared input schema.
@@ -59,9 +62,59 @@ const maxSafeInteger = 1 << 53
 // the gardener's tool-error evidence showed agents sending notes_read the
 // other vocabulary. A tool declaring both (project_create) is unaffected --
 // an exactly-declared name always wins over an alias.
+// findings/summary is the same story for session_update/session_end: "summary"
+// is the word agents reach for when closing out work, and it was the most common
+// rejected parameter on session_end in the tool.call log.
 var aliasGroups = map[string][]string{
-	"body": {"content", "text"},
-	"slug": {"name"},
+	"body":     {"content", "text"},
+	"slug":     {"name"},
+	"findings": {"summary"},
+}
+
+// retiredParams are parameters a tool no longer declares but still accepts, so a
+// client written against the old schema keeps working: a value the parameter
+// always accepted is dropped before validation, and any other value is refused,
+// exactly as it would have been. They are not advertised -- the point of retiring
+// one is that agents stop seeing it -- and dropping a valid legacy value is not
+// a fallback: the tool now works the answer out itself.
+//
+// session_start.source was Claude Code hook vocabulary (startup|resume|clear|
+// compact) leaking into an agent-facing tool. Agents read "source" as the client
+// and sent claude-code or codex, or set it to change what they believed was the
+// session's lifecycle. The server now derives it from what the call actually
+// did; the integration docs once told custom clients to send source=explicit.
+var retiredParams = map[string]map[string][]string{
+	"session_start": {"source": core.SessionSources},
+}
+
+// dropRetired removes a tool's retired parameters from raw (see retiredParams),
+// refusing a value the parameter never accepted. raw is not mutated: a copy is
+// made when anything is dropped, because the interactions feed records what the
+// agent actually sent.
+func dropRetired(tool string, raw map[string]any) (map[string]any, error) {
+	retired := retiredParams[tool]
+	if len(retired) == 0 {
+		return raw, nil
+	}
+	out, copied := raw, false
+	for _, name := range slices.Sorted(maps.Keys(retired)) {
+		v, ok := raw[name]
+		if !ok {
+			continue
+		}
+		if s, isString := v.(string); !isString || !slices.Contains(retired[name], s) {
+			shown := fmt.Sprint(v)
+			if isString {
+				shown = strconv.Quote(s)
+			}
+			return nil, fmt.Errorf("invalid %s %s: %s no longer takes %s -- omit it", name, shown, tool, name)
+		}
+		if !copied {
+			out, copied = maps.Clone(raw), true
+		}
+		delete(out, name)
+	}
+	return out, nil
 }
 
 // aliasesFor returns the alternate names accepted for a canonical parameter.

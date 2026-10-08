@@ -275,7 +275,7 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	// just omits the ambient line.
 	if p.AgentType == "" {
 		if name := h.ensureAmbientSession(ctx, client, host, p); name != "" {
-			briefing = injectAmbientLine(briefing, name)
+			briefing = injectAmbientLine(briefing, name, p.Identity.AgentProcess != "")
 			h.setAmbientModel(ctx, client, host, p.SessionID, p.Model, p.TranscriptPath)
 		}
 	}
@@ -436,6 +436,7 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, client Client, host 
 		return ""
 	}
 	if found {
+		h.stampAgentProcess(ctx, client, resumed.ID, p.Identity.AgentProcess)
 		return resumed.Name
 	}
 
@@ -463,14 +464,28 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, client Client, host 
 			if existing, ok, rerr := store.ReactivateAmbientSession(
 				ctx, h.db, externalClient, p.SessionID, project, now,
 			); rerr == nil && ok {
+				h.stampAgentProcess(ctx, client, existing.ID, p.Identity.AgentProcess)
 				return existing.Name
 			}
 		}
 		h.recordHookError(ctx, "ambient-create", client, err)
 		return ""
 	}
+	h.stampAgentProcess(ctx, client, id, p.Identity.AgentProcess)
 	h.recordSession(ctx, core.EventSessionStarted, sess, map[string]any{"ambient": true})
 	return name
+}
+
+// stampAgentProcess records which agent process now runs an ambient session, so
+// that agent's MCP connection binds to it (store.ActiveAmbientByAgentProcess).
+// It runs on every start, including an empty identity from an older client: a
+// session resumed there must stop naming the process it ran in before.
+// Best-effort like the rest of the hook: a failure only costs the automatic
+// binding, and the connection falls back to the ambient inference it always had.
+func (h *Handler) stampAgentProcess(ctx context.Context, client Client, sessionID, proc string) {
+	if err := store.SetSessionAgentProcess(ctx, h.db, sessionID, proc); err != nil {
+		h.recordHookError(ctx, "ambient-agent-process", client, err)
+	}
 }
 
 // completeClaudeSessions completes every active session owned by the ending
@@ -576,13 +591,23 @@ func ambientName(client Client, externalSessionID string) string {
 // injectAmbientLine adds the "Seam session: cc/<handle> (ambient)" line to a briefing,
 // placing it just before the closing tag, or wrapping a fresh minimal briefing
 // when there was none. The line names the reading agent's own identity -- the
-// value the briefing's "session=<your Seam session>" hints refer to -- and
-// spells out when to pass it: an ambient session is not bound to the MCP
-// connection, so with several agents active, a bare tasks_claim/session_end
-// cannot infer its caller and fails asking for exactly this value.
-func injectAmbientLine(briefing, sessionName string) string {
-	line := "Seam session: " + sessionName + " (ambient) -- pass session=" + sessionName +
-		" on tasks_claim/tasks_release/session_end/session_update when several agents are active"
+// value the briefing's "session=<your Seam session>" hints refer to -- and tells
+// the agent the one thing it needs about binding.
+//
+// bound is whether the hook named the agent process. If it did, the agent's MCP
+// connection names the same process and is bound to this session on its first
+// call, so the line says no session_start is needed -- the misreading that sent
+// agents into session_start with invented arguments. If it did not (an older
+// client), the connection stays unbound and every call with several agents
+// active is ambiguous, so the line gives the single call that fixes all of them:
+// resuming this session by name binds the connection to it.
+func injectAmbientLine(briefing, sessionName string, bound bool) string {
+	line := "Seam session: " + sessionName + " (ambient) -- "
+	if bound {
+		line += "this agent's Seamless tool calls bind to it automatically; no session_start needed"
+	} else {
+		line += "if a tool reports an ambiguous scope, session, or agent, bind once with session_start name=" + sessionName
+	}
 	if briefing == "" {
 		return "<seam-briefing>\n" + line + "\n</seam-briefing>"
 	}

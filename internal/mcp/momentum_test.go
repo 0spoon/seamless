@@ -31,7 +31,7 @@ func TestMemoryRead_FirstReuseMark(t *testing.T) {
 	})
 
 	writer := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, writer, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, writer, "session_start", map[string]any{"cwd": "/work/demo"})
 	w := callJSON(t, ctx, writer, "memory_write", map[string]any{
 		"name": "payoff-mem", "kind": "gotcha", "description": "d", "body": "the lesson",
 	})
@@ -44,13 +44,13 @@ func TestMemoryRead_FirstReuseMark(t *testing.T) {
 
 	// A different session reading it is -- once, ever.
 	reader := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, reader, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup", "name": "sess/reader-one"})
+	callJSON(t, ctx, reader, "session_start", map[string]any{"cwd": "/work/demo", "name": "sess/reader-one"})
 	callJSON(t, ctx, reader, "memory_read", map[string]any{"name": "payoff-mem"})
 	require.Equal(t, 1, firstReuseEvents(t, db, memID))
 
 	callJSON(t, ctx, reader, "memory_read", map[string]any{"name": "payoff-mem"})
 	third := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, third, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup", "name": "sess/reader-two"})
+	callJSON(t, ctx, third, "session_start", map[string]any{"cwd": "/work/demo", "name": "sess/reader-two"})
 	callJSON(t, ctx, third, "memory_read", map[string]any{"name": "payoff-mem"})
 	require.Equal(t, 1, firstReuseEvents(t, db, memID), "the moment is minted once, ever")
 
@@ -71,14 +71,14 @@ func TestMemoryRead_FirstReuseOffByDefault(t *testing.T) {
 	url, db := newServer(t)
 
 	writer := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, writer, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, writer, "session_start", map[string]any{"cwd": "/work/demo"})
 	w := callJSON(t, ctx, writer, "memory_write", map[string]any{
 		"name": "quiet-mem", "kind": "gotcha", "description": "d", "body": "the lesson",
 	})
 	memID, _ := w["id"].(string)
 
 	reader := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, reader, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup", "name": "sess/off-reader"})
+	callJSON(t, ctx, reader, "session_start", map[string]any{"cwd": "/work/demo", "name": "sess/off-reader"})
 	callJSON(t, ctx, reader, "memory_read", map[string]any{"name": "quiet-mem"})
 	require.Zero(t, firstReuseEvents(t, db, memID))
 }

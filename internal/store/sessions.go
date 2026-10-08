@@ -443,6 +443,106 @@ func ActiveAmbientByCWD(ctx context.Context, db *sql.DB, host, cwd string) ([]co
 	return out, nil
 }
 
+// SetSessionAgentProcess records which agent process owns a session: an
+// agentproc identity, or "" for none. The SessionStart hook stamps it on every
+// start -- startup, resume, clear and compact -- so the row always names the
+// process running it NOW: a session resumed in a new process moves to that
+// process, and one resumed by an older client that sends no identity drops the
+// dead process it named before.
+func SetSessionAgentProcess(ctx context.Context, db *sql.DB, id, proc string) error {
+	res, err := db.ExecContext(ctx, `UPDATE sessions SET agent_process = ? WHERE id = ?`, proc, id)
+	if err != nil {
+		return fmt.Errorf("store.SetSessionAgentProcess: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store.SetSessionAgentProcess: rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("store.SetSessionAgentProcess: no session with id %q", id)
+	}
+	return nil
+}
+
+// ActiveAmbientByAgentProcess returns the active ambient (cc/* or cx/*) sessions
+// on one host that the given agent process owns, most recent first. It is how an
+// MCP connection finds the session its own agent's SessionStart hook created:
+// both name the same process. An empty identity matches nothing.
+//
+// The caller decides what more than one row means; it is not resolved here. A
+// Claude Code process runs one session at a time and ends the old one on
+// /clear or /resume, so two rows are a process hosting several live sessions,
+// and a tool call from it cannot be pinned to either.
+func ActiveAmbientByAgentProcess(ctx context.Context, db *sql.DB, host, proc string) ([]core.Session, error) {
+	if proc == "" {
+		return nil, nil
+	}
+	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
+		FROM sessions
+		WHERE status = 'active' AND ambient = 1 AND host = ? AND agent_process = ?
+		ORDER BY updated_at DESC, id DESC`, host, proc)
+	if err != nil {
+		return nil, fmt.Errorf("store.ActiveAmbientByAgentProcess: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []core.Session
+	for rows.Next() {
+		s, serr := scanSession(rows)
+		if serr != nil {
+			return nil, fmt.Errorf("store.ActiveAmbientByAgentProcess: %w", serr)
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.ActiveAmbientByAgentProcess: %w", err)
+	}
+	return out, nil
+}
+
+// ReviveExpiredAgentSession reactivates the ambient session the idle reaper
+// expired while the agent process that owns it was still alive. The reaper's TTL
+// is a guess that a quiet session is dead (a crashed agent sends no SessionEnd);
+// a tool call naming the same live process disproves it, and without the revival
+// an agent back from a long pause would lose its process binding until its next
+// SessionStart. Only EXPIRED rows qualify: a completed session was ended on
+// purpose -- by the agent's session_end or the client's SessionEnd -- and is not
+// reopened behind anyone's back. More than one expired candidate is a process
+// that ran several sessions at once and revives nothing.
+//
+// found is false when there was nothing to revive, including when a concurrent
+// call revived the row first (the UPDATE re-checks the status).
+func ReviveExpiredAgentSession(ctx context.Context, db *sql.DB, host, proc string, now time.Time) (core.Session, bool, error) {
+	if proc == "" {
+		return core.Session{}, false, nil
+	}
+	rows, err := db.QueryContext(ctx, `SELECT id FROM sessions
+		WHERE status = 'expired' AND ambient = 1 AND host = ? AND agent_process = ?
+		LIMIT 2`, host, proc)
+	if err != nil {
+		return core.Session{}, false, fmt.Errorf("store.ReviveExpiredAgentSession: %w", err)
+	}
+	ids := make(map[string]bool, 2)
+	if err := scanIDs(rows, ids); err != nil {
+		return core.Session{}, false, fmt.Errorf("store.ReviveExpiredAgentSession: %w", err)
+	}
+	if len(ids) != 1 {
+		return core.Session{}, false, nil
+	}
+	var id string
+	for k := range ids {
+		id = k
+	}
+	sess, found, err := sessionOne(ctx, db, `
+		UPDATE sessions SET status = 'active', updated_at = ?
+		 WHERE id = ? AND status = 'expired'
+		 RETURNING `+sessionCols,
+		core.FormatTime(now.UTC()), id)
+	if err != nil {
+		return core.Session{}, false, fmt.Errorf("store.ReviveExpiredAgentSession: %w", err)
+	}
+	return sess, found, nil
+}
+
 // ActiveSessionsByExternalIdentity returns every active session -- the ambient
 // cc/* or cx/* plus any explicit session_start that linked to it -- stamped with
 // the same full external id and client discriminator, ambient first. A graceful
@@ -630,23 +730,48 @@ func LiveSessionCount(ctx context.Context, db *sql.DB, cutoff time.Time) (int, e
 // provenance. A non-positive within disables the recency filter. Scoping to a
 // single project is what prevents cross-agent bleed -- see ActiveAmbientProjects.
 //
-// host narrows the candidates to one machine; "" means every host (the filter is
-// absent, not a match on the unnamed bucket), which is what lets a caller widen
-// its search after finding nothing on its own machine.
-func LatestActiveAmbientSessionForProject(ctx context.Context, db *sql.DB, host, project string, within time.Duration) (core.Session, bool, error) {
-	query := `SELECT ` + sessionCols + ` FROM sessions
-		WHERE status = 'active' AND ambient = 1 AND project_slug = ?`
-	args := []any{project}
-	if host != "" {
-		query += ` AND host = ?`
-		args = append(args, host)
-	}
+// scope narrows the candidates (see AmbientScope); a scope with no Host spans
+// every machine, which is what lets a caller widen its search after finding
+// nothing on its own.
+func LatestActiveAmbientSessionForProject(ctx context.Context, db *sql.DB, scope AmbientScope, project string, within time.Duration) (core.Session, bool, error) {
+	query, args := scope.where(`SELECT `+sessionCols+` FROM sessions
+		WHERE status = 'active' AND ambient = 1 AND project_slug = ?`, []any{project})
 	if within > 0 {
 		query += ` AND updated_at >= ?`
 		args = append(args, core.FormatTime(time.Now().UTC().Add(-within)))
 	}
 	query += ` ORDER BY updated_at DESC, id DESC LIMIT 1`
 	return sessionOne(ctx, db, query, args...)
+}
+
+// AmbientScope narrows the ambient-fallback lookups (ActiveAmbientProjects,
+// LatestActiveAmbientSessionForProject, ActiveAmbientSessionsForProject) -- the
+// inference an MCP call falls back to when its connection is bound to nothing.
+type AmbientScope struct {
+	// Host narrows the candidates to one machine; "" means every host (the filter
+	// is absent, not a match on the unnamed bucket).
+	Host string
+	// Caller is the calling agent's process identity (internal/agentproc), when
+	// it named one. A session stamped with a DIFFERENT process belongs to another
+	// agent and is never a candidate: a caller that identified itself is not
+	// guessed into someone else's session -- which, once its own session has
+	// ended, would otherwise be exactly what the sole-ambient inference picks.
+	// Unstamped sessions (older clients) stay candidates, as before identities
+	// existed.
+	Caller string
+}
+
+// where appends the scope's filters to a sessions query.
+func (a AmbientScope) where(query string, args []any) (string, []any) {
+	if a.Host != "" {
+		query += ` AND host = ?`
+		args = append(args, a.Host)
+	}
+	if a.Caller != "" {
+		query += ` AND (agent_process = '' OR agent_process = ?)`
+		args = append(args, a.Caller)
+	}
+	return query, args
 }
 
 // ActiveAmbientProjects returns the distinct project slugs that have at least one
@@ -657,16 +782,11 @@ func LatestActiveAmbientSessionForProject(ctx context.Context, db *sql.DB, host,
 // the wrong project. A non-positive within disables the recency filter. The
 // global scope is reported as the empty string, distinct from any named project.
 //
-// host narrows the candidates to one machine; "" means every host (the filter is
-// absent, not a match on the unnamed bucket).
-func ActiveAmbientProjects(ctx context.Context, db *sql.DB, host string, within time.Duration) ([]string, error) {
-	query := `SELECT project_slug FROM sessions
-		WHERE status = 'active' AND ambient = 1`
-	args := []any{}
-	if host != "" {
-		query += ` AND host = ?`
-		args = append(args, host)
-	}
+// scope narrows the candidates to one machine and away from other agents' sessions
+// (see AmbientScope).
+func ActiveAmbientProjects(ctx context.Context, db *sql.DB, scope AmbientScope, within time.Duration) ([]string, error) {
+	query, args := scope.where(`SELECT project_slug FROM sessions
+		WHERE status = 'active' AND ambient = 1`, nil)
 	if within > 0 {
 		query += ` AND updated_at >= ?`
 		args = append(args, core.FormatTime(time.Now().UTC().Add(-within)))
@@ -693,17 +813,11 @@ func ActiveAmbientProjects(ctx context.Context, db *sql.DB, host string, within 
 // uses it to refuse targeting a session by inference when more than one same-
 // project ambient could be the one meant -- two agents in the same repo -- so a
 // session_update/end without an explicit id can't complete a sibling's session.
-// A non-positive within disables the recency filter. host narrows the candidates
-// to one machine; "" means every host (the filter is absent, not a match on the
-// unnamed bucket).
-func ActiveAmbientSessionsForProject(ctx context.Context, db *sql.DB, host, project string, within time.Duration) ([]core.Session, error) {
-	query := `SELECT ` + sessionCols + ` FROM sessions
-		WHERE status = 'active' AND ambient = 1 AND project_slug = ?`
-	args := []any{project}
-	if host != "" {
-		query += ` AND host = ?`
-		args = append(args, host)
-	}
+// A non-positive within disables the recency filter. scope narrows the
+// candidates (see AmbientScope).
+func ActiveAmbientSessionsForProject(ctx context.Context, db *sql.DB, scope AmbientScope, project string, within time.Duration) ([]core.Session, error) {
+	query, args := scope.where(`SELECT `+sessionCols+` FROM sessions
+		WHERE status = 'active' AND ambient = 1 AND project_slug = ?`, []any{project})
 	if within > 0 {
 		query += ` AND updated_at >= ?`
 		args = append(args, core.FormatTime(time.Now().UTC().Add(-within)))

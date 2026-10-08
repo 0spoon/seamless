@@ -15,7 +15,7 @@ func TestPlanComposition(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// A plain task and a plan step.
 	plain := callJSON(t, ctx, cli, "tasks_add", map[string]any{"title": "plain task"})
@@ -45,7 +45,7 @@ func TestPlanComposition(t *testing.T) {
 	// flight. Read it on a separate connection so cli's session binding (and thus
 	// the claim holder) is untouched.
 	briefCli := dialClient(t, ctx, url, testKey)
-	brief := callJSON(t, ctx, briefCli, "session_start", map[string]any{"cwd": "/work/demo", "source": "resume"})
+	brief := callJSON(t, ctx, briefCli, "session_start", map[string]any{"cwd": "/work/demo"})
 	require.Contains(t, brief["briefing"], "- demo-plan -- 0/1 done, 0 claimable, 1 in flight")
 
 	// Release reopens the step so it is claimable again.
@@ -61,7 +61,7 @@ func TestNotesCreatePlanTag(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	nc := callJSON(t, ctx, cli, "notes_create", map[string]any{
 		"title": "Refactor plan", "body": "The narrative.", "plan": "refactor-x",
@@ -85,14 +85,14 @@ func TestClaimConflictAcrossSessions(t *testing.T) {
 
 	// Session A claims the task.
 	cliA := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cliA, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cliA, "session_start", map[string]any{"cwd": "/work/demo"})
 	task := callJSON(t, ctx, cliA, "tasks_add", map[string]any{"title": "contended"})
 	id := task["id"].(string)
 	callJSON(t, ctx, cliA, "tasks_claim", map[string]any{"id": id})
 
 	// Session B (a different connection/session in the same project) is refused.
 	cliB := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cliB, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup", "name": "agent-b"})
+	callJSON(t, ctx, cliB, "session_start", map[string]any{"cwd": "/work/demo", "name": "agent-b"})
 	res, err := cliB.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
 		Name: "tasks_claim", Arguments: map[string]any{"id": id},
 	}})
@@ -110,14 +110,14 @@ func TestUpdateRejectedForNonHolder(t *testing.T) {
 
 	// Session A claims the task.
 	cliA := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cliA, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cliA, "session_start", map[string]any{"cwd": "/work/demo"})
 	task := callJSON(t, ctx, cliA, "tasks_add", map[string]any{"title": "held work"})
 	id := task["id"].(string)
 	callJSON(t, ctx, cliA, "tasks_claim", map[string]any{"id": id})
 
 	// Session B cannot close it out from under the holder.
 	cliB := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cliB, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup", "name": "agent-b"})
+	callJSON(t, ctx, cliB, "session_start", map[string]any{"cwd": "/work/demo", "name": "agent-b"})
 	res, err := cliB.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
 		Name: "tasks_update", Arguments: map[string]any{"id": id, "status": "done"},
 	}})
@@ -141,7 +141,7 @@ func TestSessionEndReleasesClaims(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	task := callJSON(t, ctx, cli, "tasks_add", map[string]any{"title": "claim then leave"})
 	id := task["id"].(string)
@@ -152,7 +152,7 @@ func TestSessionEndReleasesClaims(t *testing.T) {
 
 	// The task is open again (a fresh session sees it ready).
 	cli2 := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli2, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli2, "session_start", map[string]any{"cwd": "/work/demo"})
 	ready := callJSON(t, ctx, cli2, "tasks_ready", nil)
 	require.Len(t, ready["ready"].([]any), 1)
 }

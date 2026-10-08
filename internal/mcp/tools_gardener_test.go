@@ -140,7 +140,7 @@ func TestGardenerRequestScopeGuards(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// A well-formed slug that is not a project. validate.Name only checks slug
 	// SHAPE, so "typoed" passes every shared guard -- which is why the existence

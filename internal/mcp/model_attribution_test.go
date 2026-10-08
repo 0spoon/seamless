@@ -20,7 +20,7 @@ func TestModelAttribution(t *testing.T) {
 	// Agent 1 reports its model.
 	cli1 := dialClient(t, ctx, url, testKey)
 	start := callJSON(t, ctx, cli1, "session_start", map[string]any{
-		"cwd": "/work/demo", "source": "startup", "model": "claude-fable-5",
+		"cwd": "/work/demo", "model": "claude-fable-5",
 	})
 	sess, ok, err := store.SessionByID(ctx, db, start["session_id"].(string))
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestModelAttribution(t *testing.T) {
 	// Agent 2 never reports a model: its rewrite keeps the known producer
 	// rather than erasing it with "".
 	cli2 := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli2, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli2, "session_start", map[string]any{"cwd": "/work/demo"})
 	callJSON(t, ctx, cli2, "memory_write", map[string]any{
 		"name": "attribution-check", "kind": "gotcha",
 		"description": "who wrote this memory",
@@ -58,7 +58,7 @@ func TestModelAttribution(t *testing.T) {
 	// Agent 3 runs a different model: its rewrite re-attributes the content.
 	cli3 := dialClient(t, ctx, url, testKey)
 	callJSON(t, ctx, cli3, "session_start", map[string]any{
-		"cwd": "/work/demo", "source": "startup", "model": "gpt-5.5",
+		"cwd": "/work/demo", "model": "gpt-5.5",
 	})
 	callJSON(t, ctx, cli3, "memory_write", map[string]any{
 		"name": "attribution-check", "kind": "gotcha",

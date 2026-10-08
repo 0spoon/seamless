@@ -500,7 +500,7 @@ the exact lease boundary, even while its status remains <code>in_progress</code>
 <td><code>session</code></td>
 <td>string</td>
 <td>no</td>
-<td>the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses.</td>
+<td>the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, another session name, or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code and Codex agents -- then a sole active ambient. Pass it when a call reports the agent as ambiguous: the bare call then fails rather than guesses.</td>
 </tr>
 <tr>
 <td><code>session_id</code></td>
@@ -534,7 +534,7 @@ the exact lease boundary, even while its status remains <code>in_progress</code>
 <td><code>session</code></td>
 <td>string</td>
 <td>no</td>
-<td>the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses.</td>
+<td>the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, another session name, or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code and Codex agents -- then a sole active ambient. Pass it when a call reports the agent as ambiguous: the bare call then fails rather than guesses.</td>
 </tr>
 <tr>
 <td><code>session_id</code></td>

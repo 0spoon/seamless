@@ -238,6 +238,11 @@ know them are the four <strong>disambiguation</strong> entries at the end: each 
 people routinely use interchangeably, and each pair means genuinely different
 things.</p>
 <h2 id="az">A–Z</h2>
+<p><strong>Agent process</strong> - the <code>claude</code> or <code>codex</code> process that runs an agent's hooks
+and launches its MCP transports. The SessionStart hook stamps its identity on
+the ambient session, and the agent's MCP requests name it, which binds the
+agent's tool calls to that session with no <code>session_start</code>. See <a href="../../concepts/sessions/#process-binding">Sessions &amp;
+briefings</a>.</p>
 <p><strong>Ambient session</strong> - a Seamless session opened automatically by a Claude Code
 or Codex SessionStart hook, without the agent asking, displayed with an opaque
 <code>cc/...</code> or <code>cx/...</code> handle. Lifecycle identity uses the full external session
@@ -246,8 +251,9 @@ ID plus client, not the display handle. Contrast <em>explicit session</em>.</p>
 relevant: it leaves the indexes and stays readable. Proposed by the gardener's
 staleness pass, never done to a <code>constraint</code> or a pinned <code>stage</code>.</p>
 <p><strong>Binding</strong> - the association between an MCP connection and a Seamless session,
-set by <code>session_start</code>; everything on that connection inherits the bound
-session's project.</p>
+set by <code>session_start</code> or, for a Claude Code or Codex agent, automatically
+through its <em>agent process</em>; an explicit <code>session_start</code> wins. Everything on
+that connection inherits the bound session's project.</p>
 <p><strong>Briefing</strong> - the <code>&lt;seam-briefing&gt;</code> context block Seamless injects into an
 agent at session start - constraints, pinned stages, plan rollups, the memory
 index, recent findings - assembled inside a token budget. See <a href="../../concepts/sessions/">Sessions &amp;
@@ -264,9 +270,10 @@ staleness-archived.</p>
 See <a href="../../guides/write-good-memories/">Write memories that get recalled</a>.</p>
 <p><strong>Digest</strong> - a note summarizing a Seamless project's recent activity, proposed
 by the gardener.</p>
-<p><strong>Explicit session</strong> - a Seamless session opened by calling <code>session_start</code>; it
-adopts the ambient session for the same working directory rather than opening a
-second one.</p>
+<p><strong>Explicit session</strong> - a Seamless session opened by calling <code>session_start</code>.
+Without a <code>name</code>, the call adopts the calling agent's existing ambient session
+rather than opening a second one; a Claude Code or Codex agent that names a
+different project gets a separate session there instead.</p>
 <p><strong>Family</strong> - a set of Seamless projects related by parent/child, so a child's
 briefing can carry the parent's memories and a sibling's recent findings.</p>
 <p><strong>Fail closed</strong> - the Seamless rule that a durable write with no resolvable
@@ -341,8 +348,10 @@ without the agent asking. A <em>recall call</em> is the agent choosing to search
 first two are ambient; only the third is a decision. See
 <a href="../../concepts/recall/">Recall</a>.</p>
 <p><strong>Ambient vs. explicit session.</strong> <em>Ambient</em> is opened by the hook, per agent,
-automatically. <em>Explicit</em> is <code>session_start</code>, which <strong>adopts</strong> the ambient one
-rather than creating a rival.</p>
+automatically, and the agent's tool calls are bound to it without asking.
+<em>Explicit</em> is <code>session_start</code>, which <strong>adopts</strong> the agent's own ambient session
+rather than creating a rival - so a Claude Code or Codex agent needs it only to
+move to another project or resume a named session.</p>
 <p><strong>Archive vs. supersede vs. delete.</strong> <em>Archive</em>: no longer relevant, marked
 invalid, still readable. <em>Supersede</em>: replaced by something specific, marked
 invalid, still readable, <strong>pointing at its replacement</strong>. <em>Delete</em>: gone. The

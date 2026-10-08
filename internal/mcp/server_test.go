@@ -185,7 +185,7 @@ func TestMCPLoopWithBinding(t *testing.T) {
 	cli := dialClient(t, ctx, url, testKey)
 
 	// session_start binds the connection to project "demo" via the cwd map.
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo/sub", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo/sub"})
 	require.Equal(t, "demo", start["project"])
 	require.NotEmpty(t, start["session_id"])
 
@@ -252,7 +252,7 @@ func TestConventionKindRoundTrips(t *testing.T) {
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	w := callJSON(t, ctx, cli, "memory_write", map[string]any{
 		"name": "wordmark-markup", "kind": "convention",
@@ -275,7 +275,7 @@ func TestMemorySupersession(t *testing.T) {
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	sessID := start["session_id"].(string)
 
 	// Write the original memory, then a replacement that supersedes it.
@@ -316,7 +316,7 @@ func TestTasksReadyQueue(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	a := callJSON(t, ctx, cli, "tasks_add", map[string]any{"title": "build ready queue"})
 	aID := a["id"].(string)
@@ -370,7 +370,7 @@ func TestTasksReadyQueue(t *testing.T) {
 	require.Contains(t, resultText(t, miss), "not found")
 
 	// The next session's briefing surfaces the ready-tasks line.
-	brief := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "resume"})
+	brief := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	require.Contains(t, brief["briefing"], "Ready tasks (1):\n- wire briefing line")
 }
 
@@ -378,7 +378,7 @@ func TestResearchTrials(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// Opening a fresh lab returns empty history and binds the lab.
 	open := callJSON(t, ctx, cli, "lab_open", map[string]any{"lab": "demo-dfu"})
@@ -667,7 +667,7 @@ func TestSessionTargetBindingWinsOverAmbient(t *testing.T) {
 	url, db := newServer(t)
 
 	cli := dialClient(t, ctx, url, testKey)
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	bound, _ := start["session_id"].(string)
 	require.NotEmpty(t, bound)
 
@@ -747,7 +747,7 @@ func TestSessionStart_LinksClaudeSessionID(t *testing.T) {
 	seedAmbientCWD(t, ctx, db, "cc/claude99", "claude99-full", "/work/demo", now)
 	cli := dialClient(t, ctx, url, testKey)
 	start := callJSON(t, ctx, cli, "session_start", map[string]any{
-		"name": "agent-a", "cwd": "/work/demo", "source": "startup",
+		"name": "agent-a", "cwd": "/work/demo",
 	})
 	expl, ok, err := store.SessionByID(ctx, db, start["session_id"].(string))
 	require.NoError(t, err)
@@ -760,7 +760,7 @@ func TestSessionStart_LinksClaudeSessionID(t *testing.T) {
 	seedAmbientCWD(t, ctx, db, "cc/claudeaa", "claudeaa-full", "/work/demo", now)
 	cli2 := dialClient(t, ctx, url, testKey)
 	start2 := callJSON(t, ctx, cli2, "session_start", map[string]any{
-		"name": "agent-b", "cwd": "/work/demo", "source": "startup",
+		"name": "agent-b", "cwd": "/work/demo",
 	})
 	expl2, _, err := store.SessionByID(ctx, db, start2["session_id"].(string))
 	require.NoError(t, err)
@@ -780,7 +780,7 @@ func TestSessionStart_AdoptsAmbient(t *testing.T) {
 	amb := seedAmbientCWD(t, ctx, db, "cc/claude99", "claude99-full", "/work/demo", stale)
 
 	cli := dialClient(t, ctx, url, testKey)
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	require.Equal(t, amb, start["session_id"], "adopted the ambient, no new session")
 	require.Equal(t, "cc/claude99", start["name"], "the adopted session keeps its ambient name")
 	require.Equal(t, true, start["resumed"])
@@ -810,7 +810,7 @@ func TestSessionStart_NoAmbientCreatesFresh(t *testing.T) {
 	seedAmbientCWD(t, ctx, db, "cc/elsewher", "elsewhere-full", "/work/other", time.Now().UTC())
 
 	cli := dialClient(t, ctx, url, testKey)
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	name, _ := start["name"].(string)
 	require.True(t, strings.HasPrefix(name, "sess/"), "no same-cwd ambient -> fresh sess/* session, got %q", name)
 

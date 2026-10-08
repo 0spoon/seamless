@@ -16,6 +16,7 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/0spoon/seamless/internal/agentproc"
 	"github.com/0spoon/seamless/internal/config"
 )
 
@@ -86,13 +87,24 @@ func dispatch(ctx context.Context, e *env, argv []string) int {
 // SQLite into a binary whose job is one HTTP call -- and a test pins the two.
 const hostHeader = "X-Seamless-Host"
 
+// agentProcessHeader names the agent process (agentproc.Anchor) that launched
+// this CLI. The SessionStart hook names the same process on the ambient session
+// it creates, which is how the daemon binds this connection to that session with
+// no session_start call. It mirrors internal/mcp.AgentProcessHeader, pinned by a
+// test like hostHeader.
+const agentProcessHeader = "X-Seamless-Agent-Process"
+
 // mcpHeaders is the header set every MCP client in this CLI sends: the bearer
-// key, plus the machine the caller is on. One constructor so the proxy bridge,
-// `seam mcp-headers` and dial cannot drift apart.
+// key, plus the machine the caller is on and the agent process that launched it.
+// One constructor so `seam mcp-headers` and dial cannot drift apart; the proxy
+// bridge sets the same two identity headers per request.
 func mcpHeaders(cfg config.Config) map[string]string {
 	h := map[string]string{"Authorization": "Bearer " + cfg.MCP.APIKey}
 	if host := config.Hostname(); host != "" {
 		h[hostHeader] = host
+	}
+	if proc, ok := agentproc.Anchor(); ok {
+		h[agentProcessHeader] = proc
 	}
 	return h
 }

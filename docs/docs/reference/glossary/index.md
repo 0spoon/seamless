@@ -9,6 +9,12 @@ things.
 
 ## A–Z
 
+**Agent process** - the `claude` or `codex` process that runs an agent's hooks
+and launches its MCP transports. The SessionStart hook stamps its identity on
+the ambient session, and the agent's MCP requests name it, which binds the
+agent's tool calls to that session with no `session_start`. See [Sessions &
+briefings](https://thereisnospoon.org/docs/concepts/sessions/#process-binding).
+
 **Ambient session** - a Seamless session opened automatically by a Claude Code
 or Codex SessionStart hook, without the agent asking, displayed with an opaque
 `cc/...` or `cx/...` handle. Lifecycle identity uses the full external session
@@ -19,8 +25,9 @@ relevant: it leaves the indexes and stays readable. Proposed by the gardener's
 staleness pass, never done to a `constraint` or a pinned `stage`.
 
 **Binding** - the association between an MCP connection and a Seamless session,
-set by `session_start`; everything on that connection inherits the bound
-session's project.
+set by `session_start` or, for a Claude Code or Codex agent, automatically
+through its *agent process*; an explicit `session_start` wins. Everything on
+that connection inherits the bound session's project.
 
 **Briefing** - the `<seam-briefing>` context block Seamless injects into an
 agent at session start - constraints, pinned stages, plan rollups, the memory
@@ -44,9 +51,10 @@ See [Write memories that get recalled](https://thereisnospoon.org/docs/guides/wr
 **Digest** - a note summarizing a Seamless project's recent activity, proposed
 by the gardener.
 
-**Explicit session** - a Seamless session opened by calling `session_start`; it
-adopts the ambient session for the same working directory rather than opening a
-second one.
+**Explicit session** - a Seamless session opened by calling `session_start`.
+Without a `name`, the call adopts the calling agent's existing ambient session
+rather than opening a second one; a Claude Code or Codex agent that names a
+different project gets a separate session there instead.
 
 **Family** - a set of Seamless projects related by parent/child, so a child's
 briefing can carry the parent's memories and a sibling's recent findings.
@@ -151,8 +159,10 @@ first two are ambient; only the third is a decision. See
 [Recall](https://thereisnospoon.org/docs/concepts/recall/).
 
 **Ambient vs. explicit session.** *Ambient* is opened by the hook, per agent,
-automatically. *Explicit* is `session_start`, which **adopts** the ambient one
-rather than creating a rival.
+automatically, and the agent's tool calls are bound to it without asking.
+*Explicit* is `session_start`, which **adopts** the agent's own ambient session
+rather than creating a rival - so a Claude Code or Codex agent needs it only to
+move to another project or resume a named session.
 
 **Archive vs. supersede vs. delete.** *Archive*: no longer relevant, marked
 invalid, still readable. *Supersede*: replaced by something specific, marked

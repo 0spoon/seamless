@@ -62,14 +62,19 @@ registration is scoped wrong".
 
 Use the absolute installed `seam` and config paths. The helper reads
 `mcp.api_key` at connection time; do not replace it with a literal `--header`,
-which exposes the daemon's sole credential in process argv and client config.
+which exposes the daemon's sole credential in process argv and client config -
+and drops the agent-process header the helper also prints, which is what binds
+each agent's tool calls to its own session.
 
 ## Map your repos
 
 Usually you do not have to. The first session inside a git repo maps itself: the
 SessionStart hook resolves the agent's cwd to its git root, derives a project
 slug from that directory's name, and records the mapping. Agents then inherit
-project scope from their cwd - no `project` argument on any call.
+project scope from their cwd - no `project` argument on any call, and no
+`session_start`: each agent's tool calls are
+[bound to the session its hook opened](https://thereisnospoon.org/docs/concepts/sessions/#process-binding),
+even with agents working in several repos at once.
 
 Map by hand to override the derived slug - an `ios` directory that should be the
 `arctop-ios` project:

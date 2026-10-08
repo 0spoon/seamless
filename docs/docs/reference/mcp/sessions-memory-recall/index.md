@@ -3,20 +3,43 @@
 > The nine tools an agent uses most - open a session, write, edit and read memory, and search the store.
 
 These nine tools are the agent loop. In a repo mapped to a project, most of them
-need no `project` argument at all: `session_start` binds the connection, and
-everything after it inherits that scope.
+need no `project` argument at all: the connection is bound to a session -
+automatically for a Claude Code or Codex agent, by `session_start` for any other
+client - and everything inherits that session's scope.
 
 ## The shape of a session
 
 `session_start` returns the project briefing and binds the session to the
-connection. `session_end` persists findings for the next agent's briefing. Both
-are optional in the sense that Claude Code's hooks already open an *ambient*
-session per agent - calling `session_start` explicitly adopts it and gets you the
-full briefing rather than the short injected one.
+connection. `session_end` persists findings for the next agent's briefing.
+
+A Claude Code or Codex agent does not need `session_start`: its hooks open an
+*ambient* session and bind the agent's tool calls to it
+([how](https://thereisnospoon.org/docs/concepts/sessions/#process-binding)). Called from such an agent without
+arguments, `session_start` hands back that same session, and its `scope` note
+says the call was not needed; with a different `project` it starts a separate
+session there. Every other client calls it once per connection, with `cwd` or
+`project` - see [when to call it](https://thereisnospoon.org/docs/concepts/sessions/#when-to-call-session-start).
+Whichever way it binds, the briefing it returns is for the project actually
+bound.
+
+`session_start` no longer takes `source`. The legacy values (`startup`,
+`resume`, `clear`, `compact`, `explicit`) are accepted and ignored, so older
+clients keep working; any other value is refused with
+`session_start no longer takes source -- omit it`. The server derives what the
+briefing needs from what the call did: resuming a named session adds the
+resumed-session hint to re-ground with `recall`.
+
+`session=` on `session_update` and `session_end` - and on the
+[task tools](https://thereisnospoon.org/docs/reference/mcp/tasks/) - takes a session name (the `cc/...` or
+`cx/...` on the briefing's `Seam session` line, or a `sess/*` name) or a session
+ULID; one that matches nothing is an error saying what the argument takes. Both
+tools also accept `summary` as an alias of `findings`.
 
 If `tasks_update` ever fails claiming a task is held by *your own* session id,
-the connection binding was lost. Re-run `session_start` with the same name to
-rebind.
+the connection lost an explicit `session_start` binding - those live in daemon
+memory, so a restart or reconnect drops them. Re-run `session_start` with the
+same name to rebind. A Claude Code or Codex agent's automatic binding is not lost
+this way.
 
 ## Edit, update, append, supersede, or delete?
 
@@ -111,7 +134,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 
 | Call | Success result | Failure that matters |
 |---|---|---|
-| `session_start` | `session_id`, `name`, resolved `project`, explanatory `scope`, and `briefing`; resumed/adopted sessions also say `resumed: true` | Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly |
+| `session_start` | `session_id`, `name`, resolved `project`, explanatory `scope`, and `briefing`; resumed/adopted sessions also say `resumed: true`, and a `warning` flags a named `project` that was created or a remote `cwd` that could not be placed | Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly, as does a `project` that contradicts the repository `cwd` is in |
 | `memory_write` | Stable `id`, canonical `name`, resolved `project`, `updated`, optional `similar`, and optional `superseded` | An occupied tombstone path is an error; if the new memory lands but supersession fails, the tool errors while naming the kept replacement and the still-active target |
 | `memory_edit` | `id`, `name`, `project`, the new `content_hash`, a unified `diff`, and a `stage_hint` when a `kind=stage` body still has no parseable `Status` | An `old_string` that matches zero or several places is an error naming the count, and **nothing** is written - the edits apply all-or-nothing. A stale `expect_hash` is refused rather than overwriting |
 | `recall` | `hits`, possibly empty | Remote embedder failures degrade to lexical-only; local request/config construction errors surface |
@@ -119,18 +142,18 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 
 ## session_start {#session_start}
 
-Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again.
+Bind this connection to a work session and return its project briefing. Claude Code and Codex agents running the Seamless hooks are bound to their own session automatically (the 'Seam session' line in the briefing) and do not need this. Call it to bind a client without hooks, to move this connection to another project, or to resume a named session. Later calls inherit the session's project, so they need no project argument.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `cwd` | string | no | Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug) |
+| `cwd` | string | no | Absolute working directory. The git repository it is in decides the project, and a repository maps itself to a project on its first session -- no setup step (`seamlessd map-repo` only overrides the derived slug) |
 | `host` | string | no | Machine this agent runs on (hostname). Defaults to the X-Seamless-Host header, then to the daemon's own host; pass it only when dialling a daemon on another machine |
 | `main_worktree_root` | string | no | Absolute root of the repository's MAIN checkout when repo_root is a linked worktree; defaults to repo_root |
 | `model` | string | no | Model id powering this agent, exactly as the provider names it (e.g. claude-fable-5, gpt-5.5). Stamped onto memories/notes this session writes; hooks keep it current for Claude Code/Codex sessions, so pass it mainly from other clients |
-| `name` | string | no | Optional stable session name; reusing a name resumes that session |
+| `name` | string | no | Resume the session with this name: a sess/* name from an earlier call, or the cc/... or cx/... on your briefing's 'Seam session' line. A new name starts a separate session under that name; omit it to use your own session, or a fresh one |
+| `project` | string | no | Project slug to bind. Defaults to the project of the git repository cwd is in, then to your own session's project. If cwd is in a repository too, the two must agree. project=global binds the global scope; an unknown slug creates that project. |
 | `repo_origin` | string | no | The repository's origin remote URL, which is how the same repo checked out on two machines is recognized as one project |
 | `repo_root` | string | no | Absolute git repository root enclosing cwd, resolved on YOUR machine. Required when host is not the daemon's: the daemon cannot read your filesystem to find it |
-| `source` | string | no | what began this session (default explicit). One of: `startup`, `resume`, `clear`, `compact`, `explicit`. |
 
 ## session_update {#session_update}
 
@@ -139,7 +162,7 @@ Record interim progress on the current session (working findings so far). Uses t
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `findings` | string | **yes** | Working findings / progress note so far |
-| `session` | string | no | Session name to operate on: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses |
+| `session` | string | no | Session to operate on: a name (the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a sess/* name) or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code and Codex agents -- so pass it only to act on another session, or when a call reports the session as ambiguous |
 | `session_id` | string | no | Session ULID to operate on; takes precedence over session and the bound session |
 
 ## session_end {#session_end}
@@ -150,7 +173,7 @@ Complete the current session, persisting its findings for future briefings. Uses
 |---|---|---|---|
 | `findings` | string | **yes** | Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected. |
 | `mishaps` | array | no | Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. When a mishap violated a stored memory, name that memory by its exact slug in the entry (e.g. "violated chroma-boot-race by ...") -- the report is then linked to it. Recorded for recurrence review, not blame -- report them even when fully recovered. |
-| `session` | string | no | Session name to operate on: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses |
+| `session` | string | no | Session to operate on: a name (the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a sess/* name) or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code and Codex agents -- so pass it only to act on another session, or when a call reports the session as ambiguous |
 | `session_id` | string | no | Session ULID to operate on; takes precedence over session and the bound session |
 
 ## memory_write {#memory_write}

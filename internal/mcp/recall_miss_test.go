@@ -38,7 +38,7 @@ func TestRecall_ZeroHitRecordsMiss(t *testing.T) {
 	url, db := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	sessID := start["session_id"].(string)
 
 	callJSON(t, ctx, cli, "memory_write", map[string]any{
@@ -74,7 +74,7 @@ func TestRecall_KindFilterMissAndScopeContradiction(t *testing.T) {
 	url, db := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	callJSON(t, ctx, cli, "memory_write", map[string]any{
 		"name": "boot-order", "kind": "gotcha",
 		"description": "boot order matters",
@@ -131,7 +131,7 @@ func TestRecall_BrowseRecordsExposureNotDemand(t *testing.T) {
 	url, db := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	callJSON(t, ctx, cli, "memory_write", map[string]any{
 		"name": "layout-fact", "kind": "convention",
 		"description": "where things deploy",

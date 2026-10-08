@@ -181,8 +181,30 @@ the pointer is where to look, not a substitute for reading it.
 - Precedence: explicit `project` -> the bound session's project -> the sole
   unambiguous ambient. Ambients spanning more than one project are
   `errAmbiguousScope`, not a guess.
-- Only `session_start` binds a connection (keyed by the MCP client session id).
-  Bindings evict on `session_end` and via the opportunistic sweep.
+- A connection is bound two ways, and `getBinding` is the one reader of both.
+  An explicit `session_start` binding (in memory, keyed by the MCP client
+  session id; evicted on `session_end` and by the opportunistic sweep) wins over
+  the process binding: the single active ambient session stamped with the agent
+  process the request names in `X-Seamless-Agent-Process`
+  (`agent_binding.go`). The process binding is identification, not inference --
+  it lives in the session row and on every request, survives restarts and
+  reconnects, and counts as a binding for the isolation fence.
+- Two active sessions stamped with one process are a host running several
+  sessions at once: leave the call unbound. Never pick between them by recency
+  or cwd -- that is the cross-agent bleed in a new place.
+- A caller that named its process is never inferred into a session stamped
+  with a different one: `store.AmbientScope.Caller` filters every ambient
+  fallback lookup. Once such a caller's own session has ended, the sole live
+  ambient is by construction another agent's.
+- The process binding revives a session the idle reaper EXPIRED (a call from the
+  same live process is proof of life), never one that was COMPLETED on purpose.
+- `session_start` adopts only the caller's OWN session when the request names a
+  process. The sole-same-cwd adoption heuristic is for callers that name none;
+  for one that does, a sole same-cwd ambient that is not its own belongs to
+  another agent.
+- Agent process identities (`internal/agentproc`) are opaque tokens: validate
+  with `agentproc.Valid` at every boundary (the header, the hook query) and
+  compare for equality. Never parse one for its pid or start time.
 - A lost binding does NOT error -- the call degrades to the ambient fallback.
   Never assume the binding you started with is still there.
 - Stamp provenance with `s.boundSession(ctx)`, not the raw binding.

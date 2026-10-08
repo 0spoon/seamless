@@ -241,8 +241,9 @@ start, no prompt-matched recall injection, no automatic harvest of findings -
 so the agent has to run that loop itself.</p>
 <p><a href="../../claude-code/">Claude Code</a> and <a href="../../codex-cli/">Codex</a> get Seamless mostly for
 free: <a href="../../reference/hooks/">hooks</a> open a session, inject a briefing, and harvest
-findings without the agent deciding to. Any other client is wired up by hand.
-This page is that loop.</p>
+findings without the agent deciding to, and the agent's tool calls are
+<a href="../../concepts/sessions/#process-binding">bound to that session</a> without a
+<code>session_start</code>. Any other client is wired up by hand. This page is that loop.</p>
 <h2 id="the-loop">The loop</h2>
 <figure class="doc-figure" aria-labelledby="agent-loop-caption">
   <span class="figure-kicker">The integration loop</span>
@@ -308,7 +309,7 @@ runs.</p>
 </span></span></span><span class="line"><span class="cl">  -H <span class="s2">&#34;Accept: application/json, text/event-stream&#34;</span> -H <span class="s2">&#34;Mcp-Session-Id: </span><span class="nv">$SID</span><span class="s2">&#34;</span> <span class="se">\
 </span></span></span><span class="line"><span class="cl">  -d <span class="s1">&#39;{&#34;jsonrpc&#34;:&#34;2.0&#34;,&#34;id&#34;:2,&#34;method&#34;:&#34;tools/call&#34;,
 </span></span></span><span class="line"><span class="cl"><span class="s1">       &#34;params&#34;:{&#34;name&#34;:&#34;session_start&#34;,
-</span></span></span><span class="line"><span class="cl"><span class="s1">                 &#34;arguments&#34;:{&#34;cwd&#34;:&#34;/abs/path/to/repo&#34;,&#34;source&#34;:&#34;explicit&#34;}}}&#39;</span>
+</span></span></span><span class="line"><span class="cl"><span class="s1">                 &#34;arguments&#34;:{&#34;cwd&#34;:&#34;/abs/path/to/repo&#34;}}}&#39;</span>
 </span></span></code></pre></div>
 <p>Every tool returns its payload as JSON <strong>encoded into a text content block</strong>, not
 as a JSON-RPC result object:</p>
@@ -335,7 +336,8 @@ consequences you have to design around:</p>
 <ul>
 <li><strong>The id encodes nothing about you</strong> - no working directory, no client
 identity. It is an opaque UUID. The only way scope reaches the server is the
-<code>cwd</code> you passed to <code>session_start</code>, or an explicit <code>project</code> argument.</li>
+<code>cwd</code> or <code>project</code> you passed to <code>session_start</code>, or an explicit <code>project</code>
+argument on the call.</li>
 <li><strong>It does not reliably survive a daemon restart.</strong> Sometimes the client
 re-initializes and is minted a new id, orphaning the old binding; sometimes it
 sends the old id and the fresh process accepts it. Which one happens is a race.</li>
@@ -343,6 +345,16 @@ sends the old id and the fresh process accepts it. Which one happens is a race.<
 <p>So: <strong>re-run <code>session_start</code> on reconnect</strong>, with the same <code>name</code> to resume the
 same session rather than opening a second one. Treat a sudden run of
 ambiguous-scope errors as a lost binding, not as a bug in your arguments.</p>
+<p>Claude Code and Codex agents are spared all of this: their connection names the
+agent process, and the daemon matches it to the agent's own session on every
+request, so a restart or reconnect loses nothing
+(<a href="../../concepts/sessions/#process-binding">how</a>). That only covers the session their
+hook opened. A connection they move with <code>session_start</code> holds an explicit
+binding like yours, and when that binding is lost the calls drop back to the
+agent's own session.</p>
+<p><code>session_start</code> no longer takes <code>source</code>, so send none. The legacy values (this
+guide once showed <code>&quot;source&quot;:&quot;explicit&quot;</code>) are accepted and ignored; anything else
+is refused.</p>
 <p>One more <code>session_start</code> argument worth passing from a custom client: <code>model</code>,
 the model id powering your agent exactly as the provider names it
 (<code>claude-fable-5</code>, <code>gpt-5.5</code>). Every memory and note the session writes is
@@ -371,7 +383,15 @@ knowledge lands somewhere nobody looks. The full precedence chain is in
 <td>A project is registered automatically, named after the repository root directory</td>
 </tr>
 <tr>
-<td><code>session_start</code> with a <code>cwd</code> that is not in a git repo</td>
+<td><code>session_start</code> with <code>project=&lt;slug&gt;</code></td>
+<td>That project - registered if it is new, with a <code>warning</code> in the result saying so; <code>project=global</code> binds the global scope</td>
+</tr>
+<tr>
+<td><code>session_start</code> with a <code>cwd</code> and a <code>project</code> that disagree</td>
+<td>An error - pass one or the other</td>
+</tr>
+<tr>
+<td><code>session_start</code> with no <code>project</code>, and a <code>cwd</code> outside any git repo (or none)</td>
 <td>Nothing - the session is global</td>
 </tr>
 <tr>
@@ -381,20 +401,20 @@ knowledge lands somewhere nobody looks. The full precedence chain is in
 </tbody>
 </table>
 </div>
-<p>That third row is the one that surprises people. A session started outside a git
-repo has no project, and its writes go global - silently, because a bound session
-always resolves, even to the global scope. If your agent does not run in a repo,
-pass <code>project</code> explicitly on every durable write.</p>
+<p>The global row is the one that surprises people. A session started outside a git
+repo without a <code>project</code> is global, and its writes go global - silently, because
+a bound session always resolves, even to the global scope. If your agent does not
+run in a repo, pass <code>project</code> to <code>session_start</code>, or on every durable write.</p>
 <p>Writes <strong>fail closed</strong>. A <code>memory_write</code> with nothing to infer scope from is
 rejected as ambiguous rather than landing globally, because a global memory is
 seen by every agent in every repo forever and that is not something the system
 should do when it is <em>unsure</em>. Two distinct errors say so:</p>
 <ul>
 <li><em>no bound or ambient session to infer the project from</em> - nothing to inherit.
-Call <code>session_start</code>, or pass <code>project</code>.</li>
+Call <code>session_start</code> (with <code>cwd</code> or <code>project</code>), or pass <code>project</code>.</li>
 <li><em>active ambient sessions span multiple projects</em> - you are unbound and other
 agents are live in several repos, so inheriting would bleed your write into
-someone else's project. Pass <code>project</code>.</li>
+someone else's project. Pass <code>project</code>, or bind once with <code>session_start</code>.</li>
 </ul>
 <p>Pass <code>project: global</code> when you mean global. It is a token you use on purpose,
 never a default you fall into.</p>

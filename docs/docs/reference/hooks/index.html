@@ -230,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#the-profiles-at-a-glance">The profiles at a glance</a></li><li class="lvl-2"><a href="#claude-code-seven-hooks">Claude Code: seven hooks</a></li><li class="lvl-2"><a href="#codex-local-host-five-hooks">Codex local host: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#what-rides-on-the-query-string">What rides on the query string</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#the-profiles-at-a-glance">The profiles at a glance</a></li><li class="lvl-2"><a href="#claude-code-seven-hooks">Claude Code: seven hooks</a></li><li class="lvl-2"><a href="#codex-local-host-five-hooks">Codex local host: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#what-rides-on-the-query-string">What rides on the query string</a></li><li class="lvl-3"><a href="#the-ambient-session-line">The ambient session line</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </details>
   <p>Seamless installs hooks for two clients: seven for Claude Code (including
@@ -324,7 +324,7 @@ install order:</p>
 <td>command (<code>seam hook session-start</code>)</td>
 <td>10s</td>
 <td><code>/api/hooks/session-start</code></td>
-<td>Registers the agent's cwd in the repo→project map, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes an opaque <code>cc/&lt;prefix&gt;-&lt;digest&gt;</code> ambient handle keyed by the full external ID.</td>
+<td>Registers the agent's cwd in the repo→project map, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes an opaque <code>cc/&lt;prefix&gt;-&lt;digest&gt;</code> ambient handle keyed by the full external ID, stamped with the <a href="#what-rides-on-the-query-string">agent process</a> that ran the hook.</td>
 </tr>
 <tr>
 <td><code>UserPromptSubmit</code></td>
@@ -438,7 +438,7 @@ lifecycle.</p>
 <td><code>SessionStart</code></td>
 <td>command (<code>seam hook session-start --client codex</code>)</td>
 <td><code>/api/hooks/session-start</code></td>
-<td>Registers the cwd's project, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes an opaque <code>cx/&lt;prefix&gt;-&lt;digest&gt;</code> ambient handle keyed by the full external ID.</td>
+<td>Registers the cwd's project, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes an opaque <code>cx/&lt;prefix&gt;-&lt;digest&gt;</code> ambient handle keyed by the full external ID, stamped with the <a href="#what-rides-on-the-query-string">agent process</a> that ran the hook.</td>
 </tr>
 <tr>
 <td><code>UserPromptSubmit</code></td>
@@ -518,7 +518,7 @@ with no Codex CLI, initialized home, or Seamless Codex configuration is one quie
 <p>A hook body is the agent client's schema, not Seamless's, so everything
 Seamless needs <em>about</em> the call travels beside it as query parameters on the
 same <code>/api/hooks/*</code> endpoints. <code>?client=</code> is one of them; the agent's machine
-identity is the rest.</p>
+identity and its agent process are the rest.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -554,6 +554,11 @@ identity is the rest.</p>
 <td><code>session-start</code> only</td>
 <td>the <code>origin</code> remote URL, when there is one</td>
 </tr>
+<tr>
+<td><code>agent_process</code></td>
+<td><code>session-start</code> only</td>
+<td>the agent process that ran the hook - its nearest ancestor that is not a shell, as <code>&lt;pid&gt;.&lt;start time&gt;</code></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -566,6 +571,14 @@ hook that places a working directory in a project.</p>
 <p><strong>An absent <code>host</code> means the local machine.</strong> That is what keeps an older
 <code>seam</code> binary - which only ever talked to a daemon on its own machine - working
 byte-for-byte.</p>
+<p><strong><code>agent_process</code> is the one param about the agent, not the machine.</strong> It
+names the <code>claude</code> or <code>codex</code> process, and the daemon stamps it on the ambient
+session. The MCP transports that same process launches send it back in an
+<code>X-Seamless-Agent-Process</code> header, which binds the agent's tool calls to the
+session with no <code>session_start</code> - see
+<a href="../../concepts/sessions/#process-binding">How tool calls find their session</a>. A
+malformed value is dropped; an absent one (an older <code>seam</code>) leaves the session
+reachable only through the older fallbacks.</p>
 <p>Claude Code's <code>UserPromptSubmit</code> is the one http hook, so no <code>seam</code> process
 computes an identity for it; the daemon attributes it through the ambient
 session that client already has.</p>
@@ -577,6 +590,17 @@ home layout produce the same transcript and plan-file paths, so a missing-file
 test would sometimes find a real file - the wrong one. See
 <a href="../../guides/network-install/#what-a-remote-device-does-not-get">Share one daemon across a LAN</a>
 for the full list of what that covers.</p>
+<h3 id="the-ambient-session-line">The ambient session line</h3>
+<p>Whether the hook named the agent process decides the line SessionStart appends
+to the briefing. Named:</p>
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">Seam session: cc/&lt;id&gt; (ambient) -- this agent&#39;s Seamless tool calls bind to it automatically; no session_start needed
+</span></span></code></pre></div>
+<p>Not named - an older <code>seam</code>, or one that could not identify the agent process -
+the agent's connection is not bound to the session, so the line gives the one
+call that binds it:</p>
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">Seam session: cc/&lt;id&gt; (ambient) -- if a tool reports an ambiguous scope, session, or agent, bind once with session_start name=cc/&lt;id&gt;
+</span></span></code></pre></div>
+<p>A Codex session's line carries its <code>cx/...</code> handle.</p>
 <h2 id="why-claude-code-uses-two-transports">Why Claude Code uses two transports</h2>
 <p>Six of the Claude Code hooks are <code>command</code>, one is <code>http</code>. (Codex, above, uses
 <code>command</code> for all five - its trust gate applies only to command hooks.) The
@@ -785,7 +809,7 @@ live/schema evidence and the recapture procedure.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-profiles-at-a-glance">The profiles at a glance</a></li><li class="lvl-2"><a href="#claude-code-seven-hooks">Claude Code: seven hooks</a></li><li class="lvl-2"><a href="#codex-local-host-five-hooks">Codex local host: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#what-rides-on-the-query-string">What rides on the query string</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#the-profiles-at-a-glance">The profiles at a glance</a></li><li class="lvl-2"><a href="#claude-code-seven-hooks">Claude Code: seven hooks</a></li><li class="lvl-2"><a href="#codex-local-host-five-hooks">Codex local host: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#what-rides-on-the-query-string">What rides on the query string</a></li><li class="lvl-3"><a href="#the-ambient-session-line">The ambient session line</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </aside>
   

@@ -15,20 +15,43 @@ tools:
 ---
 
 These nine tools are the agent loop. In a repo mapped to a project, most of them
-need no `project` argument at all: `session_start` binds the connection, and
-everything after it inherits that scope.
+need no `project` argument at all: the connection is bound to a session -
+automatically for a Claude Code or Codex agent, by `session_start` for any other
+client - and everything inherits that session's scope.
 
 ## The shape of a session
 
 `session_start` returns the project briefing and binds the session to the
-connection. `session_end` persists findings for the next agent's briefing. Both
-are optional in the sense that Claude Code's hooks already open an *ambient*
-session per agent - calling `session_start` explicitly adopts it and gets you the
-full briefing rather than the short injected one.
+connection. `session_end` persists findings for the next agent's briefing.
+
+A Claude Code or Codex agent does not need `session_start`: its hooks open an
+*ambient* session and bind the agent's tool calls to it
+([how](/concepts/sessions/#process-binding)). Called from such an agent without
+arguments, `session_start` hands back that same session, and its `scope` note
+says the call was not needed; with a different `project` it starts a separate
+session there. Every other client calls it once per connection, with `cwd` or
+`project` - see [when to call it](/concepts/sessions/#when-to-call-session-start).
+Whichever way it binds, the briefing it returns is for the project actually
+bound.
+
+`session_start` no longer takes `source`. The legacy values (`startup`,
+`resume`, `clear`, `compact`, `explicit`) are accepted and ignored, so older
+clients keep working; any other value is refused with
+`session_start no longer takes source -- omit it`. The server derives what the
+briefing needs from what the call did: resuming a named session adds the
+resumed-session hint to re-ground with `recall`.
+
+`session=` on `session_update` and `session_end` - and on the
+[task tools](/reference/mcp/tasks/) - takes a session name (the `cc/...` or
+`cx/...` on the briefing's `Seam session` line, or a `sess/*` name) or a session
+ULID; one that matches nothing is an error saying what the argument takes. Both
+tools also accept `summary` as an alias of `findings`.
 
 If `tasks_update` ever fails claiming a task is held by *your own* session id,
-the connection binding was lost. Re-run `session_start` with the same name to
-rebind.
+the connection lost an explicit `session_start` binding - those live in daemon
+memory, so a restart or reconnect drops them. Re-run `session_start` with the
+same name to rebind. A Claude Code or Codex agent's automatic binding is not lost
+this way.
 
 ## Edit, update, append, supersede, or delete?
 
@@ -123,7 +146,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 
 | Call | Success result | Failure that matters |
 |---|---|---|
-| `session_start` | `session_id`, `name`, resolved `project`, explanatory `scope`, and `briefing`; resumed/adopted sessions also say `resumed: true` | Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly |
+| `session_start` | `session_id`, `name`, resolved `project`, explanatory `scope`, and `briefing`; resumed/adopted sessions also say `resumed: true`, and a `warning` flags a named `project` that was created or a remote `cwd` that could not be placed | Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly, as does a `project` that contradicts the repository `cwd` is in |
 | `memory_write` | Stable `id`, canonical `name`, resolved `project`, `updated`, optional `similar`, and optional `superseded` | An occupied tombstone path is an error; if the new memory lands but supersession fails, the tool errors while naming the kept replacement and the still-active target |
 | `memory_edit` | `id`, `name`, `project`, the new `content_hash`, a unified `diff`, and a `stage_hint` when a `kind=stage` body still has no parseable `Status` | An `old_string` that matches zero or several places is an error naming the count, and **nothing** is written - the edits apply all-or-nothing. A stale `expect_hash` is refused rather than overwriting |
 | `recall` | `hits`, possibly empty | Remote embedder failures degrade to lexical-only; local request/config construction errors surface |

@@ -29,6 +29,7 @@ surface](https://thereisnospoon.org/docs/reference/mcp/) works, and nothing happ
 |---|---|---|---|
 | Every MCP tool | yes | yes | yes |
 | Briefing at session start | hook-injected | hook-injected | agent calls `session_start` |
+| Tool calls bound to the session | [automatically](https://thereisnospoon.org/docs/concepts/sessions/#process-binding) | automatically | by `session_start`, per connection |
 | Prompt-matched recall injection | every prompt | every prompt | agent calls `recall` explicitly |
 | Findings harvested | at session end | at turn end | agent calls `session_end` |
 | Plan-mode capture | yes | no | no |

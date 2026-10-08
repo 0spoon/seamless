@@ -275,7 +275,9 @@ and fetch the briefing, <code>recall</code> before guessing, durable writes for 
 outlive the conversation, <code>session_end</code> to leave findings. The MCP handshake's
 server instructions give the model that baseline workflow, but nothing forces
 it - if a conversation never calls <code>session_start</code>, Seamless never hears about
-it.</p>
+it. Nor is a chat bound to a session the way a Claude Code agent is: that
+<a href="../concepts/sessions/#process-binding">automatic binding</a> joins an agent's tool
+calls to the session its SessionStart hook opened, and a chat has no such hook.</p>
 <h2 id="register-the-bridge">Register the bridge</h2>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client claude-desktop
 </span></span></code></pre></div>
@@ -330,30 +332,32 @@ overwritten - the installer refuses and names the manual fix.</li>
 This is also the repair path whenever the automatic edit refuses to run.</p>
 <h2 id="scope-discipline-in-a-chat">Scope discipline in a chat</h2>
 <p>A chat conversation has no working directory, and cwd is how every other
-surface resolves scope. Three consequences worth knowing before the first
-durable write - the failure modes are quiet, and two of them are <strong>not</strong>
-rejections:</p>
+surface resolves scope. Three things worth knowing before the first durable
+write - the two failure modes are quiet, and neither is reliably a rejection:</p>
 <ul>
-<li><strong><code>session_start</code> has no <code>project</code> parameter.</strong> The only way a chat session
-binds to a project is passing <code>cwd</code> - so when the conversation is about a
-repo, tell Claude the repo's absolute path and have it pass that as <code>cwd</code>.
-That one argument buys the full project briefing and correctly scoped
-unscoped calls for the rest of the session.</li>
-<li><strong>A cwd-less <code>session_start</code> binds the session to the global scope.</strong> The
-response's scope line warns, but every later unscoped durable write then
-lands global silently - nothing at write time flags it.</li>
-<li><strong>Skipping <code>session_start</code> does not make writes fail closed.</strong> An unscoped
-durable write with no bound session falls back to the sole active ambient
-session - and on a machine where you also run Claude Code or Codex, that is
-usually your <em>other</em> agent's session, so the chat's write lands in <strong>that
-session's project</strong>, stamped with its provenance. The
-&quot;no session, no <code>project</code>, rejected&quot; rule only holds when zero ambient
-sessions are live.</li>
+<li><strong>Bind with <code>project</code>.</strong> When the conversation is about a project, have
+Claude call <code>session_start project=&lt;slug&gt;</code> - or pass the repo's absolute path
+as <code>cwd</code>, which resolves through the repo map. Either buys the full project
+briefing and correctly scoped unscoped calls on that connection. An unknown
+slug creates the project, and the result's <code>warning</code> says so. The binding
+lives in the daemon's memory, so after a reconnect (a daemon or app restart)
+call <code>session_start</code> again.</li>
+<li><strong>A <code>session_start</code> with neither <code>project</code> nor <code>cwd</code> binds the global
+scope.</strong> The response's scope line warns, but every later unscoped durable
+write then lands global silently - nothing at write time flags it.</li>
+<li><strong>Skipping <code>session_start</code> is not a reliable way to fail closed.</strong> An
+unscoped durable write with no bound session falls back to the sole active
+ambient session. The chat's <code>seam mcp-proxy</code> names the process that launched
+it (the app), so that fallback skips sessions owned by other agents'
+processes - a Claude Code or Codex session on a current <code>seam</code> - and the
+write is refused as ambiguous. A session started by an older <code>seam</code> carries
+no process stamp and is still a candidate, though: then the chat's write
+lands in <strong>that session's project</strong>, stamped with its provenance.</li>
 </ul>
-<p>The discipline that avoids all three: have the chat pass a real <code>cwd</code> at
-<code>session_start</code>, or pass <code>project:</code> explicitly on every durable write. Use
-<code>project: global</code> only when global is the point. The full precedence chain is
-in <a href="../concepts/projects/">Projects &amp; scope</a>.</p>
+<p>The discipline that avoids both: have the chat pass a <code>project</code> (or a real
+<code>cwd</code>) at <code>session_start</code>, or pass <code>project:</code> explicitly on every durable
+write. Use <code>project: global</code> only when global is the point. The full precedence
+chain is in <a href="../concepts/projects/">Projects &amp; scope</a>.</p>
 <h2 id="uninstall">Uninstall</h2>
 <p><code>seamlessd uninstall</code> (default <code>--client all</code>) removes the chat-surface entry
 along with everything else; <code>--client claude-desktop</code> limits the client step

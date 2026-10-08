@@ -267,9 +267,13 @@ onboarding skill.</p>
 inherited by everything after it:</p>
 <ol>
 <li>An explicit <code>project</code> argument on the call.</li>
-<li>The <strong>bound session's</strong> project - set by <code>session_start</code>, held per connection.</li>
-<li>The <strong>ambient session's</strong> project, resolved from the agent's cwd via the
-<code>repo_project_map</code> setting.</li>
+<li>The <strong>bound session's</strong> project - the session <code>session_start</code> bound to this
+connection, else, for a Claude Code or Codex agent, its own ambient session,
+bound automatically through the agent process
+(<a href="../../concepts/sessions/#process-binding">how</a>).</li>
+<li>The <strong>sole ambient session's</strong> project, when every live ambient session
+sits in one project. A caller that names its agent process never inherits a
+session another agent's process owns.</li>
 </ol>
 <p>Writes <strong>fail closed</strong>: with no session and no explicit <code>project</code>, a durable
 write is rejected as ambiguous rather than silently landing in the global scope.
@@ -278,7 +282,11 @@ Pass <code>project: global</code> to mean global deliberately.</p>
 <ul>
 <li><strong>Body aliases.</strong> Tools taking a markdown body accept <code>body</code>, <code>content</code>, or
 <code>text</code> interchangeably - agents disagree about the name, and the disagreement
-is not worth an error.</li>
+is not worth an error. <code>session_update</code> and <code>session_end</code> likewise accept
+<code>summary</code> for <code>findings</code>.</li>
+<li><strong>Session references.</strong> <code>session=</code> takes a session name - the <code>cc/...</code> or
+<code>cx/...</code> on a briefing's <code>Seam session</code> line, or a <code>sess/*</code> name - or a
+session ULID.</li>
 <li><strong>IDs are ULIDs</strong>, never UUIDs. They sort lexically by creation time.</li>
 <li><strong>Errors</strong> come back as tool errors with a <code>&lt;tool&gt;: &lt;reason&gt;</code> message, not as
 transport failures.</li>

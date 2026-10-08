@@ -38,7 +38,7 @@ Every worker then runs the same loop, and needs no knowledge of the others:
 <figure class="doc-figure" data-tone="ok" aria-labelledby="worker-loop-caption">
   <span class="figure-kicker">Worker loop</span>
   <div class="doc-flow cols-4">
-    <div class="flow-node"><span class="flow-step">session_start</span><strong>Establish identity</strong><small>Every claim is attributable to a live session.</small></div>
+    <div class="flow-node"><span class="flow-step">session</span><strong>Establish identity</strong><small>The hook's session, or <code>session_start</code>: every claim names a live session.</small></div>
     <div class="flow-node"><span class="flow-step">tasks_ready</span><strong>Read actionable work</strong><small>Dependencies are already resolved.</small></div>
     <div class="flow-node emphasis"><span class="flow-step">tasks_claim</span><strong>Race atomically</strong><small>Win and work, or lose and refresh the ready list.</small></div>
     <div class="flow-node success"><span class="flow-step">finish</span><strong>Close and hand off</strong><small>Update the task; <code>session_end</code> releases any claim still held.</small></div>
@@ -48,7 +48,10 @@ Every worker then runs the same loop, and needs no knowledge of the others:
 
 `tasks_claim` fails with *no active session to claim as* if the connection has no
 session. That is not incidental strictness: the claim records **who** holds the
-task, and a claim by nobody could never be released, reclaimed, or attributed.
+task, and a claim by nobody could never be released, reclaimed, or attributed. A
+Claude Code or Codex worker needs no setup for this: its tool calls are
+[bound to its own session](/concepts/sessions/#process-binding), so its claims
+name it even with several workers in one repo.
 
 ### What the loser of a race sees
 
@@ -225,5 +228,7 @@ refuses it as ambiguous rather than inheriting from whichever ambient session wa
 most recent. That refusal is the feature: the alternative is one agent's memory
 silently landing in another agent's project.
 
-Bind the session ([Integrate your agent](/guides/integrate-your-agent/)), or pass
-`project` explicitly. See [Projects & scope](/concepts/projects/).
+Claude Code and Codex agents are bound to their own sessions automatically, so
+this bites hookless clients and agents on an older `seam`. Bind the session
+([Integrate your agent](/guides/integrate-your-agent/)), or pass `project`
+explicitly. See [Projects & scope](/concepts/projects/).

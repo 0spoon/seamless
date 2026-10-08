@@ -294,6 +294,12 @@ violation is visible in the import block.</p>
 <td>-</td>
 </tr>
 <tr>
+<td><code>agentproc</code></td>
+<td>foundation</td>
+<td>Names the agent process (<code>claude</code> or <code>codex</code>) that launched a <code>seam</code> process - its nearest non-shell ancestor, as pid plus start time. The SessionStart hook stamps it on the ambient session and the MCP transports send it, which binds a connection to its agent's session.</td>
+<td>-</td>
+</tr>
+<tr>
 <td><code>store</code></td>
 <td>foundation</td>
 <td>SQLite: connection setup, migrations, FTS5, embeddings, and every query. Sessions, tasks (including the dependency-aware ready-queue and lease-based claims), trials, proposals, settings, and the retrieval stats live here.</td>
@@ -368,14 +374,14 @@ violation is visible in the import block.</p>
 <tr>
 <td><code>mcp</code></td>
 <td>surface</td>
-<td>The tool surface over streamable HTTP, plus per-connection session bindings and scope resolution.</td>
-<td><code>capture</code>, <code>core</code>, <code>events</code>, <code>files</code>, <code>gardener</code>, <code>lifecycle</code>, <code>llm</code>, <code>plans</code>, <code>retrieve</code>, <code>store</code>, <code>validate</code></td>
+<td>The tool surface over streamable HTTP, plus session bindings (per connection, and by agent process) and scope resolution.</td>
+<td><code>agentproc</code>, <code>capture</code>, <code>core</code>, <code>events</code>, <code>files</code>, <code>gardener</code>, <code>lifecycle</code>, <code>llm</code>, <code>plans</code>, <code>retrieve</code>, <code>store</code>, <code>validate</code></td>
 </tr>
 <tr>
 <td><code>hooks</code></td>
 <td>surface</td>
 <td>Shared Claude Code/Codex hook endpoints and adapters, ambient sessions, bounded injection, findings harvest, and Claude-specific plan capture.</td>
-<td><code>config</code>, <code>core</code>, <code>events</code>, <code>files</code>, <code>plans</code>, <code>retrieve</code>, <code>store</code>, <code>validate</code></td>
+<td><code>agentproc</code>, <code>config</code>, <code>core</code>, <code>events</code>, <code>files</code>, <code>plans</code>, <code>retrieve</code>, <code>store</code>, <code>validate</code></td>
 </tr>
 <tr>
 <td><code>console</code></td>
@@ -428,7 +434,7 @@ as success to an agent, which would then leave two contradictory memories live.<
     <div class="flow-node"><span class="flow-step">Claude → hook · 1–3</span><strong>Authenticate, bound, map</strong><small><code>seam hook session-start</code> forwards stdin; only auth and request shape can return non-2xx; work is capped at two seconds; cwd grows the project map.</small></div>
     <div class="flow-node"><span class="flow-step">Retrieve · 4–8</span><strong>Resolve effective scope</strong><small>Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents take constraints plus spawn-prompt-matched RELEVANT lines.</small></div>
     <div class="flow-node emphasis"><span class="flow-step">Pack · 9–11</span><strong>Trim only eligible context</strong><small>Apply recency after partitioning, add findings/tasks/family/plan signals, then pack to budget and hard cap.</small></div>
-    <div class="flow-node success"><span class="flow-step">Hook response · 12–15</span><strong>Bind, inject, record</strong><small>Create or resume the ambient session, append its line, record the exact text sent, and return <code>additionalContext</code>.</small></div>
+    <div class="flow-node success"><span class="flow-step">Hook response · 12–15</span><strong>Bind, inject, record</strong><small>Create or resume the ambient session, stamp the agent process on it, append its line, record the exact text sent, and return <code>additionalContext</code>.</small></div>
   </div>
   <figcaption id="sessionstart-trace-caption">The hook fails open after authentication: a retrieval problem may remove context, but it cannot stop the agent's turn.</figcaption>
 </figure>

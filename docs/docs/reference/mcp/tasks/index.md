@@ -104,7 +104,7 @@ Atomically claim a task for the current session, moving it to in_progress with a
 |---|---|---|---|
 | `id` | string | **yes** | task id to claim |
 | `lease_seconds` | number | no | lease duration in seconds before the claim lapses and the task becomes reclaimable (default 900) |
-| `session` | string | no | the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses. |
+| `session` | string | no | the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, another session name, or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code and Codex agents -- then a sole active ambient. Pass it when a call reports the agent as ambiguous: the bare call then fails rather than guesses. |
 | `session_id` | string | no | the acting agent's session ULID; takes precedence over session and the bound session |
 
 ## tasks_release {#tasks_release}
@@ -114,5 +114,5 @@ Release a task the current session holds, reopening it (status back to open, cla
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | **yes** | task id to release |
-| `session` | string | no | the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses. |
+| `session` | string | no | the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, another session name, or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code and Codex agents -- then a sole active ambient. Pass it when a call reports the agent as ambiguous: the bare call then fails rather than guesses. |
 | `session_id` | string | no | the acting agent's session ULID; takes precedence over session and the bound session |

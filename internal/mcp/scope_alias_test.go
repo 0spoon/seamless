@@ -223,7 +223,7 @@ func TestSessionEndAcceptsLongFindings(t *testing.T) {
 	url, db := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	sessID, _ := start["session_id"].(string)
 	require.NotEmpty(t, sessID)
 

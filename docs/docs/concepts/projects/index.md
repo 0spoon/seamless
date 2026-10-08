@@ -30,18 +30,28 @@ scope (`project: global`). A slug Seamless has never seen is **not** an error: t
 write registers it, and the new project appears in `project_list` and the console
 like any other. Naming a project into existence is an ordinary thing to do.
 
-**2. The bound session.** `session_start` binds the connection: every later call
-on it inherits that project. This is why an agent that opens a session can then
-write memory with no `project` anywhere in sight.
+**2. The bound session.** A connection bound to a session passes that session's
+project to every later call on it. A Claude Code or Codex agent is bound
+automatically: its SessionStart hook opens an ambient session in the project its
+cwd maps to (via the `repo_project_map` setting), and the agent process the two
+share joins its tool calls to that session
+([how](https://thereisnospoon.org/docs/concepts/sessions/#process-binding)). Any client can bind with
+`session_start` instead, which takes precedence. This is the rung that makes
+mapped repos feel like magic: an agent that never calls a single session tool
+still writes to the right project, because its cwd said which one - even while
+other agents work in other repos.
 
-**3. The ambient session.** No explicit binding? Seamless looks for the ambient
-session the SessionStart hook opened for this working directory, resolved via the
-`repo_project_map` setting. This is the rung that makes mapped repos feel like
-magic: an agent that never calls a single session tool still writes to the right
-project, because its cwd said which one.
+**3. The sole ambient session.** No binding at all - a hookless client that
+skipped `session_start`, `seam` run by hand, an agent whose `seam` predates the
+automatic binding? Seamless falls back to the live ambient sessions: if they all
+sit in one project, the call inherits it. A caller that names its process -
+every current `seam` transport does - skips sessions stamped with a different
+one, so an agent whose own session has ended never inherits someone else's; when
+other agents' sessions are all that is live, its call is refused rather than
+answered from the global scope.
 
-If that lookup is **ambiguous** - more than one candidate session - the call is
-rejected rather than guessed.
+If that lookup is **ambiguous** - live sessions in more than one project - the
+call is rejected rather than guessed.
 
 **4. Nothing.** With no session and no explicit project, a durable write is
 **rejected as ambiguous**.
@@ -71,11 +81,12 @@ answer (search what you can see), while a write does not.
 
 ## Mapping a repo
 
-Rung 3 reads the `repo_project_map`, but you rarely write an entry into it. The
-map grows itself: on session start in an unmapped cwd, Seamless finds the
-enclosing git repository, derives a slug from the repo root's directory name,
-registers the project, and records `repoRoot -> slug`. No recompile, no setup
-step. A cwd outside any git repo registers nothing and stays global.
+The ambient sessions behind rungs 2 and 3 are placed by the `repo_project_map`,
+but you rarely write an entry into it. The map grows itself: on session start in
+an unmapped cwd, Seamless finds the enclosing git repository, derives a slug from
+the repo root's directory name, registers the project, and records
+`repoRoot -> slug`. No recompile, no setup step. A cwd outside any git repo
+registers nothing and stays global.
 
 The map also heals itself when a repo moves. A session starting from the new
 location derives the same slug, and when every mapped path that owns that slug
@@ -95,8 +106,8 @@ the `arctop-ios` project, or a renamed repo that should keep its old project:
 seamlessd map-repo --path ~/code/ios --project arctop-ios
 ```
 
-Either way, agents in that repo inherit its scope through rung 3 without any tool
-call at all.
+Either way, agents in that repo inherit its scope from the session their hook
+opens, without any tool call at all.
 
 ## Families: parents and siblings
 
@@ -125,9 +136,12 @@ The symptom is almost always "the agent wrote it somewhere I can't find it" or
 
 - **Rejected as ambiguous** - no session bound, and nothing to infer scope from.
   Run `session_start` with your `cwd` (inside a git repo that also maps the repo
-  automatically), or pass `project=<slug>`. `map-repo` is not the fix here - it
-  only overrides an already-derived slug, and is never a setup step.
+  automatically) or `project=<slug>`, or pass `project=<slug>` on the call.
+  `map-repo` is not the fix here - it only overrides an already-derived slug, and
+  is never a setup step. From Claude Code or Codex, check that the agent's `seam`
+  is current - see [Troubleshooting](https://thereisnospoon.org/docs/guides/troubleshooting/).
 - **Landed in the wrong project** - the cwd mapped somewhere unexpected, or an
   explicit `project` overrode what you meant. Rung 1 beats everything.
-- **A tool insists a task is claimed by your own session** - the connection
-  binding was lost. Re-run `session_start` with the same name to rebind.
+- **A tool insists a task is claimed by your own session** - the connection lost
+  its `session_start` binding. Re-run `session_start` with the same name to
+  rebind.

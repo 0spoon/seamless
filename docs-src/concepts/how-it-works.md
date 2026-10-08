@@ -45,7 +45,9 @@ from that.
   of Seamless are programs, not people.
 - **Hooks** are how sessions become ambient. Claude Code calls them at session
   start, on each prompt, and at session end, so an agent gets briefed and
-  harvested without ever choosing to.
+  harvested without ever choosing to - and its MCP tool calls are
+  [bound to the session the hook opened](/concepts/sessions/#process-binding),
+  with no `session_start`.
 - **You** get a read-mostly console. It is an observability surface, not the way
   the system is driven.
 

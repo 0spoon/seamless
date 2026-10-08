@@ -22,9 +22,10 @@ const defaultClaimLease = 15 * time.Minute
 // errAmbiguousActor cannot get anywhere else: its own identity is the cc/<id> or
 // cx/<id> its briefing prints, and passing it is how a concurrent agent names the claim as its
 // own instead of having one guessed for it.
-const actorSessionArgDesc = "the acting agent's session: the cc/<id> or cx/<id> on your briefing's 'Seam session' line, or a session name. " +
-	"Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run " +
-	"session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses."
+const actorSessionArgDesc = "the acting agent's session: the cc/<id> or cx/<id> on your briefing's 'Seam session' line, " +
+	"another session name, or a session ULID. Defaults to this connection's session -- bound automatically for Claude " +
+	"Code and Codex agents -- then a sole active ambient. Pass it when a call reports the agent as ambiguous: the bare " +
+	"call then fails rather than guesses."
 
 // actorSessionIDArgDesc documents the `session_id` argument -- the ULID power form
 // of actorSessionArgDesc, taking precedence over the name and the binding.

@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/agentproc"
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/hooks"
 	"github.com/0spoon/seamless/internal/mcp"
@@ -44,6 +45,31 @@ func TestHookIdentityParams_MatchTheServerCanonicalSet(t *testing.T) {
 // importing the daemon's package, so the two must be compared somewhere.
 func TestHostHeader_MatchesTheServerConstant(t *testing.T) {
 	require.Equal(t, mcp.HostHeader, hostHeader)
+}
+
+// And for the agent process header, which binds a connection to its agent's
+// ambient session: a mismatch would silently leave every connection unbound.
+func TestAgentProcessHeader_MatchesTheServerConstant(t *testing.T) {
+	require.Equal(t, mcp.AgentProcessHeader, agentProcessHeader)
+}
+
+// session-start names the agent that ran it -- even outside a repository, since
+// that is still the agent's session -- and no other hook does: the daemon only
+// stamps the process where it creates the session.
+func TestRunHook_SessionStartNamesTheAgentProcess(t *testing.T) {
+	want, ok := agentproc.Anchor()
+	if !ok {
+		t.Skip("no agent process resolvable on this platform")
+	}
+	e, got := captureHookServer(t, `{"session_id":"abc","cwd":`+quote(t.TempDir())+`}`)
+	require.NoError(t, runHook(context.Background(), e, &hookOpts{}, []string{"session-start"}))
+	require.NotNil(t, *got)
+	require.Equal(t, want, (*got).URL.Query().Get("agent_process"))
+
+	e, got = captureHookServer(t, `{"session_id":"abc","cwd":`+quote(t.TempDir())+`,"user_prompt":"hi"}`)
+	require.NoError(t, runHook(context.Background(), e, &hookOpts{}, []string{"user-prompt-submit"}))
+	require.NotNil(t, *got)
+	require.False(t, (*got).URL.Query().Has("agent_process"), "only session-start creates the session it binds")
 }
 
 // session-start carries the full identity, resolved on this machine.
@@ -125,6 +151,11 @@ func TestRunMCPHeaders_IncludesTheHostHeader(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out.Bytes(), &headers))
 	require.Equal(t, "Bearer k", headers["Authorization"])
 	require.Equal(t, config.Hostname(), headers[hostHeader])
+	// The connection Claude Code opens with these headers must name the agent,
+	// or it never binds to the session that agent's hook created.
+	if want, ok := agentproc.Anchor(); ok {
+		require.Equal(t, want, headers[agentProcessHeader])
+	}
 }
 
 // quote renders a path as a JSON string literal, so a Windows-shaped or

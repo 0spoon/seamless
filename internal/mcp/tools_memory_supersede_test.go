@@ -17,7 +17,7 @@ func TestMemoryWrite_SupersedeFailureIsToolError(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	callJSON(t, ctx, cli, "memory_write", map[string]any{
 		"name": "old-truth", "kind": "gotcha",
@@ -69,7 +69,7 @@ func TestMemoryWrite_SupersedeRetryIdempotent(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	callJSON(t, ctx, cli, "memory_write", map[string]any{
 		"name": "old-truth", "kind": "gotcha",

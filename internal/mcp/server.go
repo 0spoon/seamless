@@ -21,6 +21,7 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	"github.com/0spoon/seamless/internal/agentguide"
+	"github.com/0spoon/seamless/internal/agentproc"
 	"github.com/0spoon/seamless/internal/capture"
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
@@ -70,7 +71,8 @@ const (
 
 // errNoSession is returned when a session-scoped tool is called with neither a
 // bound session nor an explicit one.
-var errNoSession = errors.New("no active session: call session_start first, or pass a session name")
+var errNoSession = errors.New("no active session: this connection is not bound to one -- pass " +
+	"session=<the cc/... or cx/... on your briefing's 'Seam session' line>, or bind it with session_start")
 
 // errNoScope is returned by resolveWriteScope for a durable create with no
 // explicit project, no bound session, and no ambient session at all to inherit
@@ -78,7 +80,8 @@ var errNoSession = errors.New("no active session: call session_start first, or p
 // choose.
 var errNoScope = errors.New(
 	"ambiguous scope: no bound or ambient session to infer the project from; " +
-		"name the scope with project=<slug> or project=global")
+		"name the scope with project=<slug> or project=global, or bind this connection once " +
+		"with session_start project=<slug>")
 
 // errAmbiguousScope is returned when a durable create has no explicit project and
 // no bound session, and active ambient sessions span multiple projects
@@ -93,11 +96,25 @@ var errNoScope = errors.New(
 var errAmbiguousSession = errors.New(
 	"ambiguous session: no bound session, and multiple active ambient sessions " +
 		"could be the target; name yours with session=<the cc/... or cx/... on your briefing's 'Seam session' line> " +
-		"or session_id=<ULID>")
+		"or session_id=<ULID>, or bind this connection once with session_start name=<that same name>")
 
 var errAmbiguousScope = errors.New(
 	"ambiguous scope: no bound session, and active ambient sessions span multiple " +
-		"projects (concurrent agents); name the scope with project=<slug> or project=global")
+		"projects (concurrent agents); name the scope with project=<slug> or project=global, " +
+		"or bind this connection once with session_start (name=<the cc/... or cx/... on your " +
+		"briefing's 'Seam session' line>, or project=<slug>)")
+
+// errUnownedScope is errAmbiguousScope's twin for a caller that named its agent
+// process but owns no live session: the active ambient sessions are other
+// agents', which the fallback never infers into (store.AmbientScope), and
+// answering from the global scope instead would silently narrow a call meant for
+// a project -- the outcome errAmbiguousScope exists to refuse. The usual causes
+// are an agent that already ended its own session and `seam` run by hand in a
+// terminal, so the remedy names both ways out.
+var errUnownedScope = errors.New(
+	"ambiguous scope: this connection is not bound to a session, and the active ones belong to other " +
+		"agents; name the scope with project=<slug> or project=global, or bind this connection once with " +
+		"session_start (project=<slug>, or name=<the cc/... or cx/... on your briefing's 'Seam session' line>)")
 
 // errAmbiguousActor is returned by resolveActor when an identity-sensitive task
 // operation (a claim, a release, or a mutation of a task under a live claim) has
@@ -110,7 +127,8 @@ var errAmbiguousScope = errors.New(
 var errAmbiguousActor = errors.New(
 	"ambiguous agent: no bound session and multiple agents are active, so the acting " +
 		"session cannot be inferred; name yourself with session=<the cc/... or cx/... on your briefing's " +
-		"'Seam session' line> or session_id=<ULID>")
+		"'Seam session' line> or session_id=<ULID>, or bind this connection once with session_start " +
+		"name=<that same name>")
 
 // writeScopeHelp is the tail resolveWriteScope appends to either scope error. It
 // carries the two facts an agent stuck at this decision cannot get anywhere else,
@@ -343,6 +361,12 @@ func (s *Server) Handler() http.Handler {
 		if host := strings.ToLower(strings.TrimSpace(r.Header.Get(HostHeader))); host != "" {
 			ctx = context.WithValue(ctx, hostKey{}, host)
 		}
+		// The agent process that launched this client, which binds the
+		// connection to that agent's ambient session (see agent_binding.go). Only
+		// a well-formed identity is kept: anything else could only fail to match.
+		if proc := strings.TrimSpace(r.Header.Get(AgentProcessHeader)); agentproc.Valid(proc) {
+			ctx = context.WithValue(ctx, agentProcessKey{}, proc)
+		}
 		transport.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -470,15 +494,48 @@ func (s *Server) setBinding(ctx context.Context, sessionID, project string) {
 	s.maybeSweepBindings(ctx)
 }
 
-// getBinding returns the connection's session binding. A session-less entry --
-// created by setBindingLab on a connection that never ran session_start -- is
-// not one: reporting it as bound would hand resolveWriteScope/resolveReadScope
-// an empty project (the global scope) and shadow the ambient fallback, silently
-// globalizing unscoped writes after a bare lab_open. Such entries are visible
-// only through rawBinding.
+// getBinding returns the connection's session binding: the session an explicit
+// session_start bound, else the ambient session the calling agent process owns
+// (processSession). The explicit binding wins because it is the agent's own
+// choice -- a named session, or another project -- made on top of the session
+// its hook started.
+//
+// A session-less entry -- created by setBindingLab on a connection that never
+// ran session_start -- is not a binding: reporting it as bound would hand
+// resolveWriteScope/resolveReadScope an empty project (the global scope) and
+// shadow the ambient fallback, silently globalizing unscoped writes after a bare
+// lab_open. Such entries are visible only through rawBinding.
 func (s *Server) getBinding(ctx context.Context) (binding, bool) {
-	b, ok := s.rawBinding(ctx)
-	return b, ok && b.sessionID != ""
+	if b, ok := s.rawBinding(ctx); ok && b.sessionID != "" {
+		return b, true
+	}
+	if sess, ok := s.processSession(ctx); ok {
+		return binding{sessionID: sess.ID, project: sess.ProjectSlug}, true
+	}
+	return binding{}, false
+}
+
+// clearBinding drops the connection's explicit session binding, keeping any lab
+// affinity. session_start calls it when it hands the connection back to the
+// agent's own process-bound session, so that a session chosen earlier does not
+// keep shadowing it.
+func (s *Server) clearBinding(ctx context.Context) {
+	id := s.mcpSessionID(ctx)
+	if id == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, ok := s.bindings[id]
+	if !ok {
+		return
+	}
+	if b.lab == "" {
+		delete(s.bindings, id)
+		return
+	}
+	b.sessionID, b.project = "", ""
+	s.bindings[id] = b
 }
 
 // rawBinding returns the connection's bindings entry whether or not it carries
@@ -610,7 +667,7 @@ func (s *Server) resolveReadScope(ctx context.Context, explicit string) (string,
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project, nil
 	}
-	sess, ok, ambiguous, fenced := s.ambientFallback(ctx)
+	sess, ok, ambiguity, fenced := s.ambientFallback(ctx)
 	if ok {
 		return sess.ProjectSlug, nil
 	}
@@ -619,8 +676,8 @@ func (s *Server) resolveReadScope(ctx context.Context, explicit string) (string,
 	if fenced != nil {
 		return "", fenced
 	}
-	if ambiguous {
-		return "", s.scopeErr(ctx, errAmbiguousScope, "")
+	if ambiguity != nil {
+		return "", s.scopeErr(ctx, ambiguity, "")
 	}
 	return "", nil
 }
@@ -720,7 +777,7 @@ func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project, nil
 	}
-	sess, ok, ambiguous, fenced := s.ambientFallback(ctx)
+	sess, ok, ambiguity, fenced := s.ambientFallback(ctx)
 	if ok {
 		return sess.ProjectSlug, nil
 	}
@@ -730,8 +787,8 @@ func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string
 	if fenced != nil {
 		return "", fenced
 	}
-	if ambiguous {
-		return "", s.scopeErr(ctx, errAmbiguousScope, writeScopeHelp)
+	if ambiguity != nil {
+		return "", s.scopeErr(ctx, ambiguity, writeScopeHelp)
 	}
 	return "", s.scopeErr(ctx, errNoScope, writeScopeHelp)
 }
@@ -835,13 +892,13 @@ func (s *Server) resolveActor(ctx context.Context, req mcp.CallToolRequest) (str
 		}
 		return sess.ID, true, nil
 	}
-	if name := argString(req, "session"); name != "" {
-		sess, ok, err := store.SessionByName(ctx, s.cfg.DB, name)
+	if ref := argString(req, "session"); ref != "" {
+		sess, ok, err := sessionByRef(ctx, s.cfg.DB, ref)
 		if err != nil {
 			return "", false, err
 		}
 		if !ok {
-			return "", false, fmt.Errorf("session %q not found", name)
+			return "", false, errSessionRefNotFound(ref)
 		}
 		return sess.ID, true, nil
 	}
@@ -864,8 +921,12 @@ func (s *Server) resolveActor(ctx context.Context, req mcp.CallToolRequest) (str
 // when active ambient sessions are confined to a single project: it then returns
 // that project's most recently updated cc/* or cx/* session. When they span multiple
 // projects -- concurrent agents in different repos, the cross-agent-bleed case --
-// it returns ambiguous=true and ok=false so durable creates force an explicit
-// project= rather than guessing. It is only consulted when there is no binding.
+// it returns ambiguity=errAmbiguousScope and ok=false so the caller must name a
+// project rather than have one guessed. A caller that named its agent process is
+// never inferred into another agent's session (store.AmbientScope); when other
+// agents' sessions are all there is, it gets ambiguity=errUnownedScope rather
+// than a silent answer from the global scope. It is only consulted when there is
+// no binding.
 //
 // It also never resolves INTO an isolated project: fenced non-nil is the refusal
 // to guess a caller into one. Everything above is inference from circumstantial
@@ -874,16 +935,20 @@ func (s *Server) resolveActor(ctx context.Context, req mcp.CallToolRequest) (str
 // whose whole point is that outsiders cannot reach it. Being right most of the
 // time is enough for provenance and wrong once is enough for a leak, so the
 // isolated case takes an explicit binding instead.
-func (s *Server) ambientFallback(ctx context.Context) (sess core.Session, ok bool, ambiguous bool, fenced error) {
-	projects, scope, err := s.ambientProjectsNearestFirst(ctx)
+func (s *Server) ambientFallback(ctx context.Context) (sess core.Session, ok bool, ambiguity error, fenced error) {
+	projects, scope, othersOnly, err := s.ambientProjectsNearestFirst(ctx)
 	if err != nil {
 		s.logger.Warn("mcp: ambient fallback projects", "error", err)
-		return core.Session{}, false, false, nil
+		return core.Session{}, false, nil, nil
 	}
-	if len(projects) != 1 {
-		// Zero (nothing to inherit) or several (ambiguous) both decline; only the
-		// multi-project case is a true ambiguity the caller must resolve.
-		return core.Session{}, false, len(projects) > 1, nil
+	switch {
+	case len(projects) > 1:
+		return core.Session{}, false, errAmbiguousScope, nil
+	case len(projects) == 0 && othersOnly:
+		return core.Session{}, false, errUnownedScope, nil
+	case len(projects) == 0:
+		// Nothing to inherit at all: not an ambiguity, just no inference.
+		return core.Session{}, false, nil, nil
 	}
 	// "Would a session bound elsewhere be allowed to read this project?" is the
 	// same question as "may an unbound connection be resolved into it?", so the
@@ -893,17 +958,17 @@ func (s *Server) ambientFallback(ctx context.Context) (sess core.Session, ok boo
 		// Decline rather than grant: a fence that fails open on a database error
 		// is not a fence.
 		s.logger.Warn("mcp: ambient fallback isolation", "error", err)
-		return core.Session{}, false, false, nil
+		return core.Session{}, false, nil, nil
 	}
 	if !visible {
-		return core.Session{}, false, false, s.ambientFenceErr(ctx, projects[0])
+		return core.Session{}, false, nil, s.ambientFenceErr(ctx, projects[0])
 	}
 	sess, ok, err = store.LatestActiveAmbientSessionForProject(ctx, s.cfg.DB, scope, projects[0], ambientFallbackWindow)
 	if err != nil {
 		s.logger.Warn("mcp: ambient fallback lookup", "error", err)
-		return core.Session{}, false, false, nil
+		return core.Session{}, false, nil, nil
 	}
-	return sess, ok, false, nil
+	return sess, ok, nil, nil
 }
 
 // ambientProjectsNearestFirst asks the CALLER's own machine first and widens to
@@ -911,16 +976,37 @@ func (s *Server) ambientFallback(ctx context.Context) (sess core.Session, ok boo
 // keeps two devices working in identically-named directories from reading as one
 // ambiguous pair; widening afterwards is what keeps a single-machine install --
 // and a client that sends no host at all -- behaving exactly as before. The
-// returned scope is the host filter the follow-up session lookups must reuse, so
-// a widened search does not re-narrow halfway through.
-func (s *Server) ambientProjectsNearestFirst(ctx context.Context) (projects []string, scope string, err error) {
-	host := s.callerHost(ctx)
-	projects, err = store.ActiveAmbientProjects(ctx, s.cfg.DB, host, ambientFallbackWindow)
-	if err != nil || len(projects) > 0 || host == "" {
-		return projects, host, err
+// returned scope is the filter the follow-up session lookups must reuse, so a
+// widened search does not re-narrow halfway through.
+//
+// The scope also carries the caller's agent process, when it named one, so the
+// inference never lands on another agent's session (store.AmbientScope): this
+// path runs only after the process binding found nothing, which for an
+// identified caller means its own session ended or is ambiguous -- and the sole
+// remaining ambient is then someone else's.
+//
+// othersOnly reports that the caller filter is the reason nothing was found:
+// other agents' sessions are active, so a fallback to the global scope would
+// silently narrow a call the caller meant for some project. The callers turn it
+// into a refusal instead.
+func (s *Server) ambientProjectsNearestFirst(ctx context.Context) (projects []string, scope store.AmbientScope, othersOnly bool, err error) {
+	scope = store.AmbientScope{Host: s.callerHost(ctx), Caller: callerAgentProcess(ctx)}
+	projects, err = store.ActiveAmbientProjects(ctx, s.cfg.DB, scope, ambientFallbackWindow)
+	if err != nil || len(projects) > 0 {
+		return projects, scope, false, err
 	}
-	projects, err = store.ActiveAmbientProjects(ctx, s.cfg.DB, "", ambientFallbackWindow)
-	return projects, "", err
+	if scope.Host != "" {
+		scope.Host = ""
+		projects, err = store.ActiveAmbientProjects(ctx, s.cfg.DB, scope, ambientFallbackWindow)
+		if err != nil || len(projects) > 0 {
+			return projects, scope, false, err
+		}
+	}
+	if scope.Caller == "" {
+		return nil, scope, false, nil
+	}
+	others, err := store.ActiveAmbientProjects(ctx, s.cfg.DB, store.AmbientScope{}, ambientFallbackWindow)
+	return nil, scope, len(others) > 0, err
 }
 
 // record appends an event best-effort; a logging failure never fails a tool.

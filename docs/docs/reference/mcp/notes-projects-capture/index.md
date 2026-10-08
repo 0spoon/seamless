@@ -65,8 +65,9 @@ inherits the design and the reasoning behind it, not just the step list. See
 
 `project_list` and `project_create` manage the scopes everything else inherits.
 Most agents never call either: a git repo maps itself on the first session and
-resolves its project from the agent's working directory, and `session_start`
-binds it.
+resolves its project from the agent's working directory, and the agent's session
+carries it - bound automatically under Claude Code or Codex, or by
+`session_start`.
 
 The `global` project slug is the deliberate cross-project scope. It is a token
 you pass on purpose, never a default you fall into - see the fail-closed rule in

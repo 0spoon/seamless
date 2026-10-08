@@ -45,9 +45,13 @@ Almost no call passes `project`. Scope is resolved once, in this order, and
 inherited by everything after it:
 
 1. An explicit `project` argument on the call.
-2. The **bound session's** project - set by `session_start`, held per connection.
-3. The **ambient session's** project, resolved from the agent's cwd via the
-   `repo_project_map` setting.
+2. The **bound session's** project - the session `session_start` bound to this
+   connection, else, for a Claude Code or Codex agent, its own ambient session,
+   bound automatically through the agent process
+   ([how](https://thereisnospoon.org/docs/concepts/sessions/#process-binding)).
+3. The **sole ambient session's** project, when every live ambient session
+   sits in one project. A caller that names its agent process never inherits a
+   session another agent's process owns.
 
 Writes **fail closed**: with no session and no explicit `project`, a durable
 write is rejected as ambiguous rather than silently landing in the global scope.
@@ -57,7 +61,11 @@ Pass `project: global` to mean global deliberately.
 
 - **Body aliases.** Tools taking a markdown body accept `body`, `content`, or
   `text` interchangeably - agents disagree about the name, and the disagreement
-  is not worth an error.
+  is not worth an error. `session_update` and `session_end` likewise accept
+  `summary` for `findings`.
+- **Session references.** `session=` takes a session name - the `cc/...` or
+  `cx/...` on a briefing's `Seam session` line, or a `sess/*` name - or a
+  session ULID.
 - **IDs are ULIDs**, never UUIDs. They sort lexically by creation time.
 - **Errors** come back as tool errors with a `<tool>: <reason>` message, not as
   transport failures.

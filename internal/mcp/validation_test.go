@@ -22,7 +22,7 @@ func TestProjectArgRejectsUnsafeSlugs(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// notes_update loads the note before validating fields, so it needs a real id.
 	seeded := callJSON(t, ctx, cli, "notes_create", map[string]any{"title": "seed", "body": "b"})
@@ -67,7 +67,7 @@ func TestTasksClaimRejectsOverflowLease(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	task := callJSON(t, ctx, cli, "tasks_add", map[string]any{"title": "claim me"})
 	id, _ := task["id"].(string)
@@ -91,7 +91,7 @@ func TestTasksUpdateRejectsBlankTitle(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	task := callJSON(t, ctx, cli, "tasks_add", map[string]any{"title": "keep my title"})
 	id, _ := task["id"].(string)
@@ -113,7 +113,7 @@ func TestNotesUpdateProjectMove(t *testing.T) {
 	ctx := context.Background()
 	url, db := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// A clean move: demo -> global inbox.
 	moved := callJSON(t, ctx, cli, "notes_create", map[string]any{"title": "Move Me", "body": "content survives"})
@@ -174,7 +174,7 @@ func TestSessionStartResumeReactivates(t *testing.T) {
 
 	cli := dialClient(t, ctx, url, testKey)
 	start := callJSON(t, ctx, cli, "session_start", map[string]any{
-		"name": "agent-resume", "cwd": "/work/demo", "source": "startup",
+		"name": "agent-resume", "cwd": "/work/demo",
 	})
 	id, _ := start["session_id"].(string)
 	callJSON(t, ctx, cli, "session_end", map[string]any{"findings": "first stint done"})
@@ -186,7 +186,7 @@ func TestSessionStartResumeReactivates(t *testing.T) {
 
 	cli2 := dialClient(t, ctx, url, testKey)
 	start2 := callJSON(t, ctx, cli2, "session_start", map[string]any{
-		"name": "agent-resume", "cwd": "/work/demo", "source": "resume",
+		"name": "agent-resume", "cwd": "/work/demo",
 	})
 	require.Equal(t, id, start2["session_id"], "the named resume targets the same session")
 	require.Equal(t, true, start2["resumed"])

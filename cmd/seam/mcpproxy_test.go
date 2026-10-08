@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -214,4 +215,31 @@ func TestMCPProxy_ParsesConfigAndTakesNoPositionals(t *testing.T) {
 	require.ErrorContains(t, err, "takes no positional arguments")
 
 	require.Equal(t, 2, mcpProxyCmd.usageExit())
+}
+
+// The bridge names the agent that spawned it on every request -- the identity
+// that binds the connection to that agent's ambient session -- and sends no
+// header at all when it could not resolve one, rather than an empty value.
+func TestBridge_ForwardsTheAgentProcess(t *testing.T) {
+	var mu sync.Mutex
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.Header.Get(agentProcessHeader)+"|"+strconv.FormatBool(len(r.Header.Values(agentProcessHeader)) > 0))
+		mu.Unlock()
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	note := `{"jsonrpc":"2.0","method":"notifications/initialized"}` + "\n"
+	b := newBridge(srv.URL+"/api/mcp", "testkey", nil)
+	b.agentProcess = "4242.17"
+	require.NoError(t, b.run(context.Background(), strings.NewReader(note), io.Discard))
+
+	anon := newBridge(srv.URL+"/api/mcp", "testkey", nil)
+	require.NoError(t, anon.run(context.Background(), strings.NewReader(note), io.Discard))
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, []string{"4242.17|true", "|false"}, seen)
 }

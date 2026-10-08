@@ -30,7 +30,7 @@ func TestArgsRejectUnknownParam(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// A near-miss names the parameter the caller meant. This is the canonical
 	// case: "despends_on" used to be dropped in silence, and the task came back
@@ -57,7 +57,7 @@ func TestArgsRejectWrongType(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// A number title is not silently rendered as "42". Before this, it became ""
 	// and the handler answered "title is required" -- a lie about which of the two
@@ -92,7 +92,7 @@ func TestToolArgsCoerceLegacyForms(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// The seam CLI shape: every optional param sent, blank (cmd/seam/task.go:88).
 	// Blank must read as absent, or every CLI-created task would carry an empty
@@ -177,7 +177,7 @@ func TestArgsRejectUncoercible(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	for _, tc := range []struct {
 		name string
@@ -223,7 +223,7 @@ func TestArgsEnforceEnums(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	task := callJSON(t, ctx, cli, "tasks_add", map[string]any{"title": "enum subject"})
 	taskID, _ := task["id"].(string)
@@ -261,11 +261,17 @@ func TestArgsEnforceEnums(t *testing.T) {
 			"valid values are merge, archive, digest, consolidate, reproject, split, abandon_plan",
 		},
 		{
-			// briefing.go branches on "compact"/"resume", so a near-miss silently
-			// produced the wrong briefing shape and stored garbage.
+			// source is retired (see retiredParams): a value it never accepted is
+			// still refused rather than silently dropped -- "claude-code" here was
+			// the commonest way agents got it wrong.
 			"a near-miss session source is rejected",
 			"session_start", map[string]any{"cwd": "/work/demo", "source": "compacted"},
-			"valid values are startup, resume, clear, compact, explicit",
+			`invalid source "compacted": session_start no longer takes source -- omit it`,
+		},
+		{
+			"a client name is not a session source",
+			"session_start", map[string]any{"cwd": "/work/demo", "source": "claude-code"},
+			"session_start no longer takes source",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -281,8 +287,9 @@ func TestArgsEnforceEnums(t *testing.T) {
 	isErr, txt := callErr(t, ctx, cli, "gardener_proposals", map[string]any{"kind": "abandon_plan"})
 	require.False(t, isErr, "abandon_plan must stay queryable: %s", txt)
 
-	// Every canonical source still starts a session (the enum enforces, it does
-	// not narrow), and an absent source still defaults.
+	// A client written against the old schema still starts a session with every
+	// value source used to accept -- the parameter is retired, not broken -- and
+	// an absent source is the normal case now.
 	for _, src := range append(append([]string{}, core.SessionSources...), "") {
 		args := map[string]any{"cwd": "/work/demo"}
 		if src != "" {
@@ -301,7 +308,7 @@ func TestToolArgsAliasGroup(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// An alias satisfies a required parameter: the required check must run on the
 	// canonical name AFTER the collapse, or memory_write{content:...} -- ~11% of
@@ -350,7 +357,7 @@ func TestArgsMissingRequired(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// recall's query stopped being schema-required when the kind-browse mode
 	// landed; the handler still rejects a call with neither query nor kind.
@@ -378,7 +385,7 @@ func TestArgsResultLimitsAreStrictIntegersAndBounded(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// limit:0 is PRESENT. There is no reading of "zero" under which "here are ten"
 	// is the right answer, so the boundary refuses rather than clamping.
@@ -431,7 +438,7 @@ func TestValidationRejectionIsLogged(t *testing.T) {
 	ctx := context.Background()
 	url, db := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	isErr, _ := callErr(t, ctx, cli, "tasks_add", map[string]any{"title": "t", "despends_on": "x"})
 	require.True(t, isErr)

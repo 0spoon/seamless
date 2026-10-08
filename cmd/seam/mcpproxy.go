@@ -35,6 +35,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/0spoon/seamless/internal/agentproc"
 	"github.com/0spoon/seamless/internal/config"
 )
 
@@ -93,7 +94,15 @@ func runMCPProxy(ctx context.Context, e *env, o *mcpProxyOpts, _ []string) error
 	if err != nil {
 		return err
 	}
-	return newBridge(cfg.ServerURL()+"/api/mcp", cfg.MCP.APIKey, client).run(ctx, e.stdin, e.stdout)
+	b := newBridge(cfg.ServerURL()+"/api/mcp", cfg.MCP.APIKey, client)
+	// The client that spawned this bridge is the agent whose SessionStart hook
+	// created its ambient session; naming it on every request is what binds the
+	// connection to that session. Resolved once: the parent does not change for
+	// the life of a stdio server.
+	if proc, ok := agentproc.Anchor(); ok {
+		b.agentProcess = proc
+	}
+	return b.run(ctx, e.stdin, e.stdout)
 }
 
 // bridge forwards stdio MCP frames to a streamable-HTTP endpoint and back. It is
@@ -101,10 +110,11 @@ func runMCPProxy(ctx context.Context, e *env, o *mcpProxyOpts, _ []string) error
 // relayed before the next is read, which preserves request/response ordering
 // without any per-request bookkeeping.
 type bridge struct {
-	endpoint  string
-	apiKey    string
-	client    *http.Client
-	sessionID string // Mcp-Session-Id from initialize, replayed on later POSTs
+	endpoint     string
+	apiKey       string
+	client       *http.Client
+	sessionID    string // Mcp-Session-Id from initialize, replayed on later POSTs
+	agentProcess string // agentproc identity of the client that spawned the bridge; "" = unknown
 }
 
 // newBridge takes its HTTP client rather than building one: the TLS trust the
@@ -162,6 +172,9 @@ func (b *bridge) forward(ctx context.Context, frame []byte, w io.Writer) error {
 	// without this every remote agent would be attributed to the daemon's host.
 	if host := config.Hostname(); host != "" {
 		req.Header.Set(hostHeader, host)
+	}
+	if b.agentProcess != "" {
+		req.Header.Set(agentProcessHeader, b.agentProcess)
 	}
 	if b.sessionID != "" {
 		req.Header.Set(headerSessionID, b.sessionID)

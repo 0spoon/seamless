@@ -105,8 +105,8 @@ Seamless commands, and accept them - until then, no briefing appears
 ::: when client=claude-desktop
 
 Restart the Claude app once - it reads its config only at startup. A chat has
-no hooks and no working directory, so tell it the repo's absolute path and
-have it run `session_start` with that as `cwd`. See
+no hooks and no working directory, so have it run `session_start` with
+`project=<slug>` - or with the repo's absolute path as `cwd`. See
 [Claude app chat setup](/claude-app/).
 
 :::

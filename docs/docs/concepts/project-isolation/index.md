@@ -130,7 +130,10 @@ nothing.
 - **Refusals state the rule and the remedy** and never echo the content they are
   withholding - an error that quoted the memory it was protecting would leak the
   very thing the fence exists to keep in. They do not hide that the project
-  *exists*, because every scope error already lists the machine's projects.
+  *exists*, because every scope error already lists the machine's projects. An
+  outside agent refused at the fence is told to bind to the project with
+  `session_start project=<slug>` if its task really is that project, and to
+  leave it alone otherwise.
 
 ## Honest limits
 
@@ -142,10 +145,16 @@ actually happens, and it is now closed.
 
 **What this is not.** It is **not** a defense against a local agent reading
 `~/.seamless/memory/<project>/*.md` directly. Every MCP caller shares one static
-bearer key, and the fence keys off the **self-reported session binding**. An
-agent that does not bind a session is judged as the global scope - which fails
-closed against reading an isolated project, but also means the fence cannot
-recognize it as belonging to one.
+bearer key, and the fence keys off the **self-reported session binding** - an
+explicit `session_start`, or the agent-process identity a Claude Code or Codex
+agent's `seam` transport sends, which is just as self-reported
+([how it binds](https://thereisnospoon.org/docs/concepts/sessions/#process-binding)). That automatic binding is
+what lets a confidential project's own agents read it without a `session_start`,
+and what keeps a confidential or sealed project's agents from writing outside
+it. A connection bound to nothing - a hookless client that skipped
+`session_start`, or an older `seam` that sends no identity - is judged as the
+global scope, which fails closed against reading an isolated project but also
+means the fence cannot recognize it as belonging to one.
 
 **What would make it stronger.** Per-project bearer keys: a confidential project
 gets its own key, the repo's hooks use it, and the shared key cannot touch it.

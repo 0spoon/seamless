@@ -28,7 +28,9 @@ and fetch the briefing, `recall` before guessing, durable writes for what should
 outlive the conversation, `session_end` to leave findings. The MCP handshake's
 server instructions give the model that baseline workflow, but nothing forces
 it - if a conversation never calls `session_start`, Seamless never hears about
-it.
+it. Nor is a chat bound to a session the way a Claude Code agent is: that
+[automatic binding](https://thereisnospoon.org/docs/concepts/sessions/#process-binding) joins an agent's tool
+calls to the session its SessionStart hook opened, and a chat has no such hook.
 
 ## Register the bridge
 
@@ -101,30 +103,32 @@ This is also the repair path whenever the automatic edit refuses to run.
 ## Scope discipline in a chat
 
 A chat conversation has no working directory, and cwd is how every other
-surface resolves scope. Three consequences worth knowing before the first
-durable write - the failure modes are quiet, and two of them are **not**
-rejections:
+surface resolves scope. Three things worth knowing before the first durable
+write - the two failure modes are quiet, and neither is reliably a rejection:
 
-- **`session_start` has no `project` parameter.** The only way a chat session
-  binds to a project is passing `cwd` - so when the conversation is about a
-  repo, tell Claude the repo's absolute path and have it pass that as `cwd`.
-  That one argument buys the full project briefing and correctly scoped
-  unscoped calls for the rest of the session.
-- **A cwd-less `session_start` binds the session to the global scope.** The
-  response's scope line warns, but every later unscoped durable write then
-  lands global silently - nothing at write time flags it.
-- **Skipping `session_start` does not make writes fail closed.** An unscoped
-  durable write with no bound session falls back to the sole active ambient
-  session - and on a machine where you also run Claude Code or Codex, that is
-  usually your *other* agent's session, so the chat's write lands in **that
-  session's project**, stamped with its provenance. The
-  "no session, no `project`, rejected" rule only holds when zero ambient
-  sessions are live.
+- **Bind with `project`.** When the conversation is about a project, have
+  Claude call `session_start project=<slug>` - or pass the repo's absolute path
+  as `cwd`, which resolves through the repo map. Either buys the full project
+  briefing and correctly scoped unscoped calls on that connection. An unknown
+  slug creates the project, and the result's `warning` says so. The binding
+  lives in the daemon's memory, so after a reconnect (a daemon or app restart)
+  call `session_start` again.
+- **A `session_start` with neither `project` nor `cwd` binds the global
+  scope.** The response's scope line warns, but every later unscoped durable
+  write then lands global silently - nothing at write time flags it.
+- **Skipping `session_start` is not a reliable way to fail closed.** An
+  unscoped durable write with no bound session falls back to the sole active
+  ambient session. The chat's `seam mcp-proxy` names the process that launched
+  it (the app), so that fallback skips sessions owned by other agents'
+  processes - a Claude Code or Codex session on a current `seam` - and the
+  write is refused as ambiguous. A session started by an older `seam` carries
+  no process stamp and is still a candidate, though: then the chat's write
+  lands in **that session's project**, stamped with its provenance.
 
-The discipline that avoids all three: have the chat pass a real `cwd` at
-`session_start`, or pass `project:` explicitly on every durable write. Use
-`project: global` only when global is the point. The full precedence chain is
-in [Projects & scope](https://thereisnospoon.org/docs/concepts/projects/).
+The discipline that avoids both: have the chat pass a `project` (or a real
+`cwd`) at `session_start`, or pass `project:` explicitly on every durable
+write. Use `project: global` only when global is the point. The full precedence
+chain is in [Projects & scope](https://thereisnospoon.org/docs/concepts/projects/).
 
 ## Uninstall
 

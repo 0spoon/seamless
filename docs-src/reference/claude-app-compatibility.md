@@ -66,6 +66,10 @@ project briefing and correctly scoped every later unscoped call.
   surface installed; chat-surface setup with nothing else present is untested.
 - **UserPromptSubmit's permanence** on the code surface, per above.
 - **A live app code session inside a managed worktree**, per above.
+- **The chat surface since the agent-process binding.**
+  `session_start project=<slug>`, and a sessionless-write fallback that skips
+  sessions other agents' processes own, both postdate the capture above;
+  neither has been observed in a live app conversation.
 
 ## Re-verifying after an app update
 

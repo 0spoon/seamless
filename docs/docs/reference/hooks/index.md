@@ -41,7 +41,7 @@ install order:
 
 | Event | Matcher | Transport | Timeout | Endpoint | Effect |
 |---|---|---|---|---|---|
-| `SessionStart` | `startup\|resume\|clear\|compact` | command (`seam hook session-start`) | 10s | `/api/hooks/session-start` | Registers the agent's cwd in the repo→project map, assembles the `<seam-briefing>`, and creates or resumes an opaque `cc/<prefix>-<digest>` ambient handle keyed by the full external ID. |
+| `SessionStart` | `startup\|resume\|clear\|compact` | command (`seam hook session-start`) | 10s | `/api/hooks/session-start` | Registers the agent's cwd in the repo→project map, assembles the `<seam-briefing>`, and creates or resumes an opaque `cc/<prefix>-<digest>` ambient handle keyed by the full external ID, stamped with the [agent process](#what-rides-on-the-query-string) that ran the hook. |
 | `UserPromptSubmit` | none | http | 5s | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. A miss is logged as a `hook.prompt` event. |
 | `SessionEnd` | none | command (`seam hook session-end`) | 10s | `/api/hooks/session-end` | Harvests findings and completes the agent's sessions. Bare ack - Claude Code's schema has no `hookSpecificOutput` for `SessionEnd`. |
 | `PostToolUse` | `Write\|Edit\|MultiEdit\|ExitPlanMode` | command (`seam hook post-tool-use`) | 10s | `/api/hooks/post-tool-use` | Heartbeats the ambient session. Captures plan-file iterations (`Write`/`Edit`/`MultiEdit` under the plans dir) and plan approvals (`ExitPlanMode`). |
@@ -103,7 +103,7 @@ lifecycle.
 
 | Event | Transport | Endpoint | Effect |
 |---|---|---|---|
-| `SessionStart` | command (`seam hook session-start --client codex`) | `/api/hooks/session-start` | Registers the cwd's project, assembles the `<seam-briefing>`, and creates or resumes an opaque `cx/<prefix>-<digest>` ambient handle keyed by the full external ID. |
+| `SessionStart` | command (`seam hook session-start --client codex`) | `/api/hooks/session-start` | Registers the cwd's project, assembles the `<seam-briefing>`, and creates or resumes an opaque `cx/<prefix>-<digest>` ambient handle keyed by the full external ID, stamped with the [agent process](#what-rides-on-the-query-string) that ran the hook. |
 | `UserPromptSubmit` | command (`seam hook user-prompt-submit --client codex`) | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. |
 | `Stop` | command (`seam hook stop --client codex`) | `/api/hooks/stop` | Heartbeats and harvests findings from the turn's final assistant message. No injection - Codex's `Stop` has no `hookSpecificOutput`. Fires at every turn end. |
 | `SubagentStart` | command (`seam hook subagent-start --client codex`) | `/api/hooks/subagent-start` | Injects the child briefing (constraints, spawn-prompt-matched `RELEVANT:` memories, recall footer) under the Codex output cap and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session. |
@@ -173,7 +173,7 @@ with no Codex CLI, initialized home, or Seamless Codex configuration is one quie
 A hook body is the agent client's schema, not Seamless's, so everything
 Seamless needs *about* the call travels beside it as query parameters on the
 same `/api/hooks/*` endpoints. `?client=` is one of them; the agent's machine
-identity is the rest.
+identity and its agent process are the rest.
 
 | Param | On | Value |
 |---|---|---|
@@ -182,6 +182,7 @@ identity is the rest.
 | `repo_root` | `session-start` only | the enclosing repository root |
 | `main_root` | `session-start` only | the main checkout, when `repo_root` is a linked worktree |
 | `origin` | `session-start` only | the `origin` remote URL, when there is one |
+| `agent_process` | `session-start` only | the agent process that ran the hook - its nearest ancestor that is not a shell, as `<pid>.<start time>` |
 
 `seam hook` resolves the identity locally - it is the only process that can -
 and every value is best-effort: an unreadable hostname, an unparseable body, or
@@ -193,6 +194,15 @@ hook that places a working directory in a project.
 **An absent `host` means the local machine.** That is what keeps an older
 `seam` binary - which only ever talked to a daemon on its own machine - working
 byte-for-byte.
+
+**`agent_process` is the one param about the agent, not the machine.** It
+names the `claude` or `codex` process, and the daemon stamps it on the ambient
+session. The MCP transports that same process launches send it back in an
+`X-Seamless-Agent-Process` header, which binds the agent's tool calls to the
+session with no `session_start` - see
+[How tool calls find their session](https://thereisnospoon.org/docs/concepts/sessions/#process-binding). A
+malformed value is dropped; an absent one (an older `seam`) leaves the session
+reachable only through the older fallbacks.
 
 Claude Code's `UserPromptSubmit` is the one http hook, so no `seam` process
 computes an identity for it; the daemon attributes it through the ambient
@@ -206,6 +216,25 @@ home layout produce the same transcript and plan-file paths, so a missing-file
 test would sometimes find a real file - the wrong one. See
 [Share one daemon across a LAN](https://thereisnospoon.org/docs/guides/network-install/#what-a-remote-device-does-not-get)
 for the full list of what that covers.
+
+### The ambient session line {#the-ambient-session-line}
+
+Whether the hook named the agent process decides the line SessionStart appends
+to the briefing. Named:
+
+```text
+Seam session: cc/<id> (ambient) -- this agent's Seamless tool calls bind to it automatically; no session_start needed
+```
+
+Not named - an older `seam`, or one that could not identify the agent process -
+the agent's connection is not bound to the session, so the line gives the one
+call that binds it:
+
+```text
+Seam session: cc/<id> (ambient) -- if a tool reports an ambiguous scope, session, or agent, bind once with session_start name=cc/<id>
+```
+
+A Codex session's line carries its `cx/...` handle.
 
 ## Why Claude Code uses two transports
 

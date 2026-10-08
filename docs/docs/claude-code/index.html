@@ -277,12 +277,17 @@ which reads exactly like &quot;the MCP server is broken&quot; rather than &quot;
 registration is scoped wrong&quot;.</p>
 <p>Use the absolute installed <code>seam</code> and config paths. The helper reads
 <code>mcp.api_key</code> at connection time; do not replace it with a literal <code>--header</code>,
-which exposes the daemon's sole credential in process argv and client config.</p>
+which exposes the daemon's sole credential in process argv and client config -
+and drops the agent-process header the helper also prints, which is what binds
+each agent's tool calls to its own session.</p>
 <h2 id="map-your-repos">Map your repos</h2>
 <p>Usually you do not have to. The first session inside a git repo maps itself: the
 SessionStart hook resolves the agent's cwd to its git root, derives a project
 slug from that directory's name, and records the mapping. Agents then inherit
-project scope from their cwd - no <code>project</code> argument on any call.</p>
+project scope from their cwd - no <code>project</code> argument on any call, and no
+<code>session_start</code>: each agent's tool calls are
+<a href="../concepts/sessions/#process-binding">bound to the session its hook opened</a>,
+even with agents working in several repos at once.</p>
 <p>Map by hand to override the derived slug - an <code>ios</code> directory that should be the
 <code>arctop-ios</code> project:</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/ios --project arctop-ios

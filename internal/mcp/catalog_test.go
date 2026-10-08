@@ -176,7 +176,6 @@ func TestArgsEnumsDeriveFromCanonicalSets(t *testing.T) {
 		{"gardener_proposals.kind", gardenerProposalsTool, "kind", store.ProposalKinds},
 		{"gardener_apply.action", gardenerApplyTool, "action", gardener.Decisions},
 		{"recall.scope", recallTool, "scope", retrieve.RecallScopes},
-		{"session_start.source", sessionStartTool, "source", core.SessionSources},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			prop, err := propSchema(tc.tool().InputSchema, tc.param)

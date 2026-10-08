@@ -64,16 +64,24 @@ func TestHarvestFindingsCapsLength(t *testing.T) {
 }
 
 func TestInjectAmbientLine(t *testing.T) {
-	// Into an existing briefing: line goes just before the closing tag, and
-	// coaches passing session=<name> on the identity-sensitive tools.
+	// Into an existing briefing: the line goes just before the closing tag. A hook
+	// that named the agent process gets the binding for free, and the line says
+	// so rather than sending the agent into session_start.
 	brief := "<seam-briefing>\nSeam project: demo\n</seam-briefing>"
-	got := injectAmbientLine(brief, "cc/abc12345")
+	got := injectAmbientLine(brief, "cc/abc12345", true)
 	require.Contains(t, got, "Seam session: cc/abc12345 (ambient)")
-	require.Contains(t, got, "pass session=cc/abc12345 on tasks_claim")
-	require.True(t, strings.HasSuffix(got, "when several agents are active\n</seam-briefing>"))
+	require.Contains(t, got, "bind to it automatically")
+	require.NotContains(t, got, "session_start name=", "a bound agent is not told to bind")
+	require.True(t, strings.HasSuffix(got, "no session_start needed\n</seam-briefing>"))
+
+	// An older client named no process: the connection stays unbound, so the line
+	// carries the one call that binds it -- resuming this session by name.
+	got = injectAmbientLine(brief, "cc/abc12345", false)
+	require.Contains(t, got, "Seam session: cc/abc12345 (ambient)")
+	require.True(t, strings.HasSuffix(got, "bind once with session_start name=cc/abc12345\n</seam-briefing>"))
 
 	// No briefing: a minimal wrapper is produced.
-	got = injectAmbientLine("", "cc/abc12345")
+	got = injectAmbientLine("", "cc/abc12345", true)
 	require.True(t, strings.HasPrefix(got, "<seam-briefing>\nSeam session: cc/abc12345 (ambient)"))
 	require.True(t, strings.HasSuffix(got, "\n</seam-briefing>"))
 }

@@ -190,8 +190,8 @@ Seamless commands, and accept them - until then, no briefing appears
 **Claude app chat:**
 
 Restart the Claude app once - it reads its config only at startup. A chat has
-no hooks and no working directory, so tell it the repo's absolute path and
-have it run `session_start` with that as `cwd`. See
+no hooks and no working directory, so have it run `session_start` with
+`project=<slug>` - or with the repo's absolute path as `cwd`. See
 [Claude app chat setup](/claude-app/).
 
 
@@ -306,14 +306,19 @@ registration is scoped wrong".
 
 Use the absolute installed `seam` and config paths. The helper reads
 `mcp.api_key` at connection time; do not replace it with a literal `--header`,
-which exposes the daemon's sole credential in process argv and client config.
+which exposes the daemon's sole credential in process argv and client config -
+and drops the agent-process header the helper also prints, which is what binds
+each agent's tool calls to its own session.
 
 ## Map your repos
 
 Usually you do not have to. The first session inside a git repo maps itself: the
 SessionStart hook resolves the agent's cwd to its git root, derives a project
 slug from that directory's name, and records the mapping. Agents then inherit
-project scope from their cwd - no `project` argument on any call.
+project scope from their cwd - no `project` argument on any call, and no
+`session_start`: each agent's tool calls are
+[bound to the session its hook opened](/concepts/sessions/#process-binding),
+even with agents working in several repos at once.
 
 Map by hand to override the derived slug - an `ios` directory that should be the
 `arctop-ios` project:
@@ -453,7 +458,9 @@ and fetch the briefing, `recall` before guessing, durable writes for what should
 outlive the conversation, `session_end` to leave findings. The MCP handshake's
 server instructions give the model that baseline workflow, but nothing forces
 it - if a conversation never calls `session_start`, Seamless never hears about
-it.
+it. Nor is a chat bound to a session the way a Claude Code agent is: that
+[automatic binding](/concepts/sessions/#process-binding) joins an agent's tool
+calls to the session its SessionStart hook opened, and a chat has no such hook.
 
 ## Register the bridge
 
@@ -526,30 +533,32 @@ This is also the repair path whenever the automatic edit refuses to run.
 ## Scope discipline in a chat
 
 A chat conversation has no working directory, and cwd is how every other
-surface resolves scope. Three consequences worth knowing before the first
-durable write - the failure modes are quiet, and two of them are **not**
-rejections:
+surface resolves scope. Three things worth knowing before the first durable
+write - the two failure modes are quiet, and neither is reliably a rejection:
 
-- **`session_start` has no `project` parameter.** The only way a chat session
-  binds to a project is passing `cwd` - so when the conversation is about a
-  repo, tell Claude the repo's absolute path and have it pass that as `cwd`.
-  That one argument buys the full project briefing and correctly scoped
-  unscoped calls for the rest of the session.
-- **A cwd-less `session_start` binds the session to the global scope.** The
-  response's scope line warns, but every later unscoped durable write then
-  lands global silently - nothing at write time flags it.
-- **Skipping `session_start` does not make writes fail closed.** An unscoped
-  durable write with no bound session falls back to the sole active ambient
-  session - and on a machine where you also run Claude Code or Codex, that is
-  usually your *other* agent's session, so the chat's write lands in **that
-  session's project**, stamped with its provenance. The
-  "no session, no `project`, rejected" rule only holds when zero ambient
-  sessions are live.
+- **Bind with `project`.** When the conversation is about a project, have
+  Claude call `session_start project=<slug>` - or pass the repo's absolute path
+  as `cwd`, which resolves through the repo map. Either buys the full project
+  briefing and correctly scoped unscoped calls on that connection. An unknown
+  slug creates the project, and the result's `warning` says so. The binding
+  lives in the daemon's memory, so after a reconnect (a daemon or app restart)
+  call `session_start` again.
+- **A `session_start` with neither `project` nor `cwd` binds the global
+  scope.** The response's scope line warns, but every later unscoped durable
+  write then lands global silently - nothing at write time flags it.
+- **Skipping `session_start` is not a reliable way to fail closed.** An
+  unscoped durable write with no bound session falls back to the sole active
+  ambient session. The chat's `seam mcp-proxy` names the process that launched
+  it (the app), so that fallback skips sessions owned by other agents'
+  processes - a Claude Code or Codex session on a current `seam` - and the
+  write is refused as ambiguous. A session started by an older `seam` carries
+  no process stamp and is still a candidate, though: then the chat's write
+  lands in **that session's project**, stamped with its provenance.
 
-The discipline that avoids all three: have the chat pass a real `cwd` at
-`session_start`, or pass `project:` explicitly on every durable write. Use
-`project: global` only when global is the point. The full precedence chain is
-in [Projects & scope](/concepts/projects/).
+The discipline that avoids both: have the chat pass a `project` (or a real
+`cwd`) at `session_start`, or pass `project:` explicitly on every durable
+write. Use `project: global` only when global is the point. The full precedence
+chain is in [Projects & scope](/concepts/projects/).
 
 ## Uninstall
 
@@ -747,7 +756,10 @@ URL directly **or** launch a local MCP server over stdio. Seamless chooses the
 second form by default: Codex launches `seam mcp-proxy`, which forwards each
 JSON-RPC frame to the daemon's `/api/mcp` endpoint with the bearer key from your
 config and preserves `Mcp-Session-Id` across calls so session binding keeps
-working.
+working. The bridge also names the Codex process that launched it on every
+request, which binds the agent's tool calls to the `cx/...` session its
+SessionStart hook opened - no `session_start` needed
+([how](/concepts/sessions/#process-binding)).
 
 The bridge is transport-thin - no tool knowledge, no caching - and it is what the
 installer registers. It exists so the key stays in `~/.config/seamless/seamless.yaml`
@@ -783,7 +795,11 @@ bridge exists to avoid. `codex mcp add seamless --url http://127.0.0.1:8081/api/
 --bearer-token-env-var SEAMLESS_MCP_API_KEY` is a third route, but it reads the
 key from an environment variable that Codex's own process must have set when it
 launches - fragile to arrange reliably, which is the other reason the bridge is
-the default.
+the default. A direct entry also sends no agent-process header, so the agent's
+tool calls are not bound to its session automatically: with agents active in
+several repos, it binds with `session_start name=cx/...` - the handle on its
+briefing's `Seam session` line - when a call reports an ambiguous scope,
+session, or agent.
 
 
 The name `seamless` is the installer's desired-state boundary. If you keep a
@@ -1864,7 +1880,9 @@ One daemon, three interfaces. Agents and hooks write through the same process; h
   of Seamless are programs, not people.
 - **Hooks** are how sessions become ambient. Claude Code calls them at session
   start, on each prompt, and at session end, so an agent gets briefed and
-  harvested without ever choosing to.
+  harvested without ever choosing to - and its MCP tool calls are
+  [bound to the session the hook opened](/concepts/sessions/#process-binding),
+  with no `session_start`.
 - **You** get a read-mostly console. It is an observability surface, not the way
   the system is driven.
 
@@ -2120,7 +2138,8 @@ constraints.
 |---|---|---|
 | Opened by | The SessionStart hook, automatically | `session_start` |
 | Named | `cc/<prefix>-<digest>` (Claude Code) or `cx/<prefix>-<digest>` (Codex) | Whatever you pass, or generated |
-| Gets | The short injected briefing | The full briefing, returned by the call |
+| Gets | The briefing, injected at session start | The same briefing, returned by the call |
+| Binds tool calls | Automatically, through the [agent process](#process-binding) | On the connection that called it |
 
 The ambient handle keeps the first eight external-ID characters readable and
 adds 64 stable SHA-256 bits. Seamless resolves lifecycle activity by the full
@@ -2129,19 +2148,98 @@ share scope, findings, or provenance. Pre-upgrade handles keep their old names
 when resumed. The handle is a display label, not an API: treat `cc/...` and
 `cx/...` as opaque and never parse or construct them.
 
-They are not two competing sessions. `session_start` **adopts** the sole ambient
-session for the same working directory rather than opening a second one - that
+They are not two competing sessions. Without a `name`, `session_start`
+**adopts** an agent's existing session rather than opening a second one - that
 adoption rule exists because the alternative was double-counting every agent.
-
-Call `session_start` when the work is non-trivial: it returns the full briefing
-(the injected one is deliberately shorter), and it binds the connection so
-everything afterward inherits the project scope.
+From Claude Code or Codex it adopts only the agent's **own** session, which
+stays exact even with several agents in one repo (a different `project` is
+[the one exception](#when-to-call-session-start)). A client that names no agent
+process adopts the sole active ambient session sharing its working directory. A
+caller that names its process but owns no live session is never handed another
+agent's.
 
 That distinction also appears in knowledge provenance. A write attributed by an
 ambient hook stores the session's `cc/...` or `cx/...` **name** in
 `source_session`; a write made through a bound MCP connection stores the
 session's ULID. Readers resolve both forms. Do not infer client, scope, or
 liveness from the spelling of `source_session`.
+
+## How tool calls find their session {#process-binding}
+
+The SessionStart hook and the agent's MCP connection reach the daemon on two
+channels that share nothing on the wire: the hook carries the client's session
+id, the connection only an opaque transport id. What they share is the process
+that launched both - the `claude` or `codex` process - and that is the join:
+
+1. `seam hook session-start` names the agent process - the nearest ancestor
+   that is not a shell, as `<pid>.<start time>` - in its `agent_process` query
+   parameter, and the daemon stamps it on the ambient session.
+2. The MCP transports the same agent launches - the `seam mcp-proxy` stdio
+   bridge, `seam mcp-headers` (Claude Code's `headersHelper`), and the `seam`
+   CLI's own dial - send that identity in an `X-Seamless-Agent-Process` header
+   on every request.
+3. The daemon binds each call to the single active ambient session on the
+   caller's machine stamped with it.
+
+So a Claude Code or Codex agent never needs `session_start`. Unscoped `recall`,
+`memory_write`, `notes_create`, and `tasks_*` calls resolve to the agent's own
+project even while agents are active in several repos, and `session_update`,
+`session_end`, and `tasks_claim` without `session=` act on the agent's own
+session. The binding lives in the session row and on every request, not in
+daemon memory, so it survives a daemon restart and an MCP reconnect - unlike the
+per-connection binding `session_start` makes.
+
+Its edges are deliberate:
+
+- **An explicit binding wins.** A `session_start` on the connection takes
+  precedence over the process binding.
+- **One process, one session.** If two live ambient sessions are stamped with
+  the same process - a host process running several sessions at once - nothing
+  is bound automatically, and resolution falls back to the earlier rules: an
+  explicit binding, then the sole-ambient-project inference in
+  [Projects & scope](/concepts/projects/).
+- **Never another agent's session.** A caller that names its process but owns
+  no live session - say, after ending its own - is not inferred into anyone
+  else's: that inference skips sessions stamped with a different process.
+  Unstamped sessions from older clients are still candidates. So a bare call
+  from an agent whose session has ended - a read as much as a write - is refused
+  as ambiguous scope instead of landing in another agent's project or quietly
+  falling back to the global scope, and a bare `session_end` cannot complete
+  another agent's session.
+- **It needs the current `seam`** on the agent's machine. An older `seam` sends
+  no identity, and everything behaves as before.
+- **The `seam` CLI is bound by the same rule.** A `seam recall` an agent runs
+  through its shell is attributed to that agent's session. `seam` run by hand
+  in a terminal is not bound: its nearest non-shell ancestor is the terminal or
+  tmux, which no hook names.
+- **No hook, nothing to bind to.** A hand-integrated client or the
+  [Claude app chat](/claude-app/) has no SessionStart hook and so no ambient
+  session. It still calls `session_start`, and calls it again after a
+  reconnect.
+
+Like the explicit binding, it is self-reported: it tells Seamless which session
+a call belongs to - for scope, and for
+[project isolation](/concepts/project-isolation/#honest-limits) - but it is not
+an authentication boundary.
+
+### When to call `session_start` {#when-to-call-session-start}
+
+- **From a client without hooks**, once per connection, with `cwd` (the
+  repository it is in decides the project) or `project` (names it; an unknown
+  slug creates the project, and the result's `warning` says so). Given both,
+  they must agree: a `cwd` in a repository mapped to a different project is an
+  error. With neither, the session is global.
+- **To move this connection to another project.** A `project` other than your
+  own session's starts a separate session there - linked to yours, so a
+  SessionEnd closes both - and binds the connection to it. An argument-less
+  `session_start` hands the connection back to your own session.
+- **To resume a named session.** `name` takes a `sess/*` name or the `cc/...` or
+  `cx/...` on the briefing's `Seam session` line; a new name starts a separate
+  named session.
+
+The result carries the briefing for the project actually bound and a `scope`
+note saying how that project was chosen. When the call only adopted your own
+session, the note says so: you did not need it.
 
 ## An actual briefing, annotated
 
@@ -2178,7 +2276,7 @@ Memories (seamless):
 - shared-worktree-concurrent-agents-verify: Agents share the main worktree ...
 - (+34 older -- recall query=<topic>, optionally kind=<kind>)
 Recall on demand with recall; read a memory with memory_read.
-Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
+Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient) -- this agent's Seamless tool calls bind to it automatically; no session_start needed
 </seam-briefing>
 Situation before library: the pinned head leads (tiered constraints, stages, plan rollups), what just happened follows (pending plans, conventions, recent findings, ready tasks), the memory index packs after it, and retrieval guidance plus session identity close the envelope.
 ```
@@ -2234,6 +2332,10 @@ Line by line:
 - **`(+34 older -- recall query=<topic>, optionally kind=<kind>)`** is the
   honest tail: the index was trimmed, and the briefing says so instead of
   pretending it is complete.
+- **`Seam session:`** closes the envelope with the agent's own session handle,
+  and says its tool calls are already bound to it ([how](#process-binding)). A
+  hook that could not name the agent process prints
+  [the line's other form](/reference/hooks/#the-ambient-session-line) instead.
 
 ## The budget, and what survives it
 
@@ -2290,7 +2392,12 @@ Sessions heartbeat. A session that ends cleanly cascades immediately; one that i
 abandoned is caught by an idle reaper after `gardener.session_idle_minutes` and
 marked `expired`. The TTL only applies when there was no end signal at all - a
 crashed agent's session does not sit "live" forever, and a slow one is not
-reaped out from under itself.
+reaped out from under itself. An agent that was only idle gets its session
+back: the next Seamless tool call from the same live agent process reactivates
+the expired ambient session (recorded as a `session.started` event marked
+`revived`) and binds to it again. A session ended on purpose - by `session_end`
+or a SessionEnd hook - stays ended, and that agent's later calls are unbound.
+Two expired sessions stamped with the same process revive neither.
 
 `session_end` is the explicit findings path. Claude Code's SessionEnd hook calls
 the same lifecycle. Codex 0.144.6 has no SessionEnd event, so each `Stop` hook
@@ -2632,18 +2739,28 @@ scope (`project: global`). A slug Seamless has never seen is **not** an error: t
 write registers it, and the new project appears in `project_list` and the console
 like any other. Naming a project into existence is an ordinary thing to do.
 
-**2. The bound session.** `session_start` binds the connection: every later call
-on it inherits that project. This is why an agent that opens a session can then
-write memory with no `project` anywhere in sight.
+**2. The bound session.** A connection bound to a session passes that session's
+project to every later call on it. A Claude Code or Codex agent is bound
+automatically: its SessionStart hook opens an ambient session in the project its
+cwd maps to (via the `repo_project_map` setting), and the agent process the two
+share joins its tool calls to that session
+([how](/concepts/sessions/#process-binding)). Any client can bind with
+`session_start` instead, which takes precedence. This is the rung that makes
+mapped repos feel like magic: an agent that never calls a single session tool
+still writes to the right project, because its cwd said which one - even while
+other agents work in other repos.
 
-**3. The ambient session.** No explicit binding? Seamless looks for the ambient
-session the SessionStart hook opened for this working directory, resolved via the
-`repo_project_map` setting. This is the rung that makes mapped repos feel like
-magic: an agent that never calls a single session tool still writes to the right
-project, because its cwd said which one.
+**3. The sole ambient session.** No binding at all - a hookless client that
+skipped `session_start`, `seam` run by hand, an agent whose `seam` predates the
+automatic binding? Seamless falls back to the live ambient sessions: if they all
+sit in one project, the call inherits it. A caller that names its process -
+every current `seam` transport does - skips sessions stamped with a different
+one, so an agent whose own session has ended never inherits someone else's; when
+other agents' sessions are all that is live, its call is refused rather than
+answered from the global scope.
 
-If that lookup is **ambiguous** - more than one candidate session - the call is
-rejected rather than guessed.
+If that lookup is **ambiguous** - live sessions in more than one project - the
+call is rejected rather than guessed.
 
 **4. Nothing.** With no session and no explicit project, a durable write is
 **rejected as ambiguous**.
@@ -2673,11 +2790,12 @@ answer (search what you can see), while a write does not.
 
 ## Mapping a repo
 
-Rung 3 reads the `repo_project_map`, but you rarely write an entry into it. The
-map grows itself: on session start in an unmapped cwd, Seamless finds the
-enclosing git repository, derives a slug from the repo root's directory name,
-registers the project, and records `repoRoot -> slug`. No recompile, no setup
-step. A cwd outside any git repo registers nothing and stays global.
+The ambient sessions behind rungs 2 and 3 are placed by the `repo_project_map`,
+but you rarely write an entry into it. The map grows itself: on session start in
+an unmapped cwd, Seamless finds the enclosing git repository, derives a slug from
+the repo root's directory name, registers the project, and records
+`repoRoot -> slug`. No recompile, no setup step. A cwd outside any git repo
+registers nothing and stays global.
 
 The map also heals itself when a repo moves. A session starting from the new
 location derives the same slug, and when every mapped path that owns that slug
@@ -2697,8 +2815,8 @@ the `arctop-ios` project, or a renamed repo that should keep its old project:
 seamlessd map-repo --path ~/code/ios --project arctop-ios
 ```
 
-Either way, agents in that repo inherit its scope through rung 3 without any tool
-call at all.
+Either way, agents in that repo inherit its scope from the session their hook
+opens, without any tool call at all.
 
 ## Families: parents and siblings
 
@@ -2727,12 +2845,15 @@ The symptom is almost always "the agent wrote it somewhere I can't find it" or
 
 - **Rejected as ambiguous** - no session bound, and nothing to infer scope from.
   Run `session_start` with your `cwd` (inside a git repo that also maps the repo
-  automatically), or pass `project=<slug>`. `map-repo` is not the fix here - it
-  only overrides an already-derived slug, and is never a setup step.
+  automatically) or `project=<slug>`, or pass `project=<slug>` on the call.
+  `map-repo` is not the fix here - it only overrides an already-derived slug, and
+  is never a setup step. From Claude Code or Codex, check that the agent's `seam`
+  is current - see [Troubleshooting](/guides/troubleshooting/).
 - **Landed in the wrong project** - the cwd mapped somewhere unexpected, or an
   explicit `project` overrode what you meant. Rung 1 beats everything.
-- **A tool insists a task is claimed by your own session** - the connection
-  binding was lost. Re-run `session_start` with the same name to rebind.
+- **A tool insists a task is claimed by your own session** - the connection lost
+  its `session_start` binding. Re-run `session_start` with the same name to
+  rebind.
 
 ---
 
@@ -2869,7 +2990,10 @@ nothing.
 - **Refusals state the rule and the remedy** and never echo the content they are
   withholding - an error that quoted the memory it was protecting would leak the
   very thing the fence exists to keep in. They do not hide that the project
-  *exists*, because every scope error already lists the machine's projects.
+  *exists*, because every scope error already lists the machine's projects. An
+  outside agent refused at the fence is told to bind to the project with
+  `session_start project=<slug>` if its task really is that project, and to
+  leave it alone otherwise.
 
 ## Honest limits
 
@@ -2881,10 +3005,16 @@ actually happens, and it is now closed.
 
 **What this is not.** It is **not** a defense against a local agent reading
 `~/.seamless/memory/<project>/*.md` directly. Every MCP caller shares one static
-bearer key, and the fence keys off the **self-reported session binding**. An
-agent that does not bind a session is judged as the global scope - which fails
-closed against reading an isolated project, but also means the fence cannot
-recognize it as belonging to one.
+bearer key, and the fence keys off the **self-reported session binding** - an
+explicit `session_start`, or the agent-process identity a Claude Code or Codex
+agent's `seam` transport sends, which is just as self-reported
+([how it binds](/concepts/sessions/#process-binding)). That automatic binding is
+what lets a confidential project's own agents read it without a `session_start`,
+and what keeps a confidential or sealed project's agents from writing outside
+it. A connection bound to nothing - a hookless client that skipped
+`session_start`, or an older `seam` that sends no identity - is judged as the
+global scope, which fails closed against reading an isolated project but also
+means the fence cannot recognize it as belonging to one.
 
 **What would make it stronger.** Per-project bearer keys: a confidential project
 gets its own key, the repo's hooks use it, and the shared key cannot touch it.
@@ -3350,8 +3480,9 @@ so the agent has to run that loop itself.
 
 [Claude Code](/claude-code/) and [Codex](/codex-cli/) get Seamless mostly for
 free: [hooks](/reference/hooks/) open a session, inject a briefing, and harvest
-findings without the agent deciding to. Any other client is wired up by hand.
-This page is that loop.
+findings without the agent deciding to, and the agent's tool calls are
+[bound to that session](/concepts/sessions/#process-binding) without a
+`session_start`. Any other client is wired up by hand. This page is that loop.
 
 ## The loop
 
@@ -3431,7 +3562,7 @@ curl -s -X POST http://127.0.0.1:8081/api/mcp \
   -H "Accept: application/json, text/event-stream" -H "Mcp-Session-Id: $SID" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call",
        "params":{"name":"session_start",
-                 "arguments":{"cwd":"/abs/path/to/repo","source":"explicit"}}}'
+                 "arguments":{"cwd":"/abs/path/to/repo"}}}'
 ```
 
 Every tool returns its payload as JSON **encoded into a text content block**, not
@@ -3470,7 +3601,8 @@ consequences you have to design around:
 
 - **The id encodes nothing about you** - no working directory, no client
   identity. It is an opaque UUID. The only way scope reaches the server is the
-  `cwd` you passed to `session_start`, or an explicit `project` argument.
+  `cwd` or `project` you passed to `session_start`, or an explicit `project`
+  argument on the call.
 - **It does not reliably survive a daemon restart.** Sometimes the client
   re-initializes and is minted a new id, orphaning the old binding; sometimes it
   sends the old id and the fresh process accepts it. Which one happens is a race.
@@ -3478,6 +3610,18 @@ consequences you have to design around:
 So: **re-run `session_start` on reconnect**, with the same `name` to resume the
 same session rather than opening a second one. Treat a sudden run of
 ambiguous-scope errors as a lost binding, not as a bug in your arguments.
+
+Claude Code and Codex agents are spared all of this: their connection names the
+agent process, and the daemon matches it to the agent's own session on every
+request, so a restart or reconnect loses nothing
+([how](/concepts/sessions/#process-binding)). That only covers the session their
+hook opened. A connection they move with `session_start` holds an explicit
+binding like yours, and when that binding is lost the calls drop back to the
+agent's own session.
+
+`session_start` no longer takes `source`, so send none. The legacy values (this
+guide once showed `"source":"explicit"`) are accepted and ignored; anything else
+is refused.
 
 One more `session_start` argument worth passing from a custom client: `model`,
 the model id powering your agent exactly as the provider names it
@@ -3496,13 +3640,15 @@ knowledge lands somewhere nobody looks. The full precedence chain is in
 |---|---|
 | `session_start` with a `cwd` inside a mapped repo | That repo's project |
 | `session_start` with a `cwd` inside an **unmapped git repo** | A project is registered automatically, named after the repository root directory |
-| `session_start` with a `cwd` that is not in a git repo | Nothing - the session is global |
+| `session_start` with `project=<slug>` | That project - registered if it is new, with a `warning` in the result saying so; `project=global` binds the global scope |
+| `session_start` with a `cwd` and a `project` that disagree | An error - pass one or the other |
+| `session_start` with no `project`, and a `cwd` outside any git repo (or none) | Nothing - the session is global |
 | No session, no `project` argument | The durable write is **rejected** |
 
-That third row is the one that surprises people. A session started outside a git
-repo has no project, and its writes go global - silently, because a bound session
-always resolves, even to the global scope. If your agent does not run in a repo,
-pass `project` explicitly on every durable write.
+The global row is the one that surprises people. A session started outside a git
+repo without a `project` is global, and its writes go global - silently, because
+a bound session always resolves, even to the global scope. If your agent does not
+run in a repo, pass `project` to `session_start`, or on every durable write.
 
 Writes **fail closed**. A `memory_write` with nothing to infer scope from is
 rejected as ambiguous rather than landing globally, because a global memory is
@@ -3510,10 +3656,10 @@ seen by every agent in every repo forever and that is not something the system
 should do when it is *unsure*. Two distinct errors say so:
 
 - *no bound or ambient session to infer the project from* - nothing to inherit.
-  Call `session_start`, or pass `project`.
+  Call `session_start` (with `cwd` or `project`), or pass `project`.
 - *active ambient sessions span multiple projects* - you are unbound and other
   agents are live in several repos, so inheriting would bleed your write into
-  someone else's project. Pass `project`.
+  someone else's project. Pass `project`, or bind once with `session_start`.
 
 Pass `project: global` when you mean global. It is a token you use on purpose,
 never a default you fall into.
@@ -3655,6 +3801,7 @@ surface](/reference/mcp/) works, and nothing happens by itself.
 |---|---|---|---|
 | Every MCP tool | yes | yes | yes |
 | Briefing at session start | hook-injected | hook-injected | agent calls `session_start` |
+| Tool calls bound to the session | [automatically](/concepts/sessions/#process-binding) | automatically | by `session_start`, per connection |
 | Prompt-matched recall injection | every prompt | every prompt | agent calls `recall` explicitly |
 | Findings harvested | at session end | at turn end | agent calls `session_end` |
 | Plan-mode capture | yes | no | no |
@@ -4094,7 +4241,7 @@ Every worker then runs the same loop, and needs no knowledge of the others:
 
 ```text
 Worker loop
-session_start Establish identity Every claim is attributable to a live session.
+session Establish identity The hook's session, or session_start : every claim names a live session.
 tasks_ready Read actionable work Dependencies are already resolved.
 tasks_claim Race atomically Win and work, or lose and refresh the ready list.
 finish Close and hand off Update the task; session_end releases any claim still held.
@@ -4103,7 +4250,10 @@ Workers coordinate through shared state, so the planner never has to remain aliv
 
 `tasks_claim` fails with *no active session to claim as* if the connection has no
 session. That is not incidental strictness: the claim records **who** holds the
-task, and a claim by nobody could never be released, reclaimed, or attributed.
+task, and a claim by nobody could never be released, reclaimed, or attributed. A
+Claude Code or Codex worker needs no setup for this: its tool calls are
+[bound to its own session](/concepts/sessions/#process-binding), so its claims
+name it even with several workers in one repo.
 
 ### What the loser of a race sees
 
@@ -4280,8 +4430,10 @@ refuses it as ambiguous rather than inheriting from whichever ambient session wa
 most recent. That refusal is the feature: the alternative is one agent's memory
 silently landing in another agent's project.
 
-Bind the session ([Integrate your agent](/guides/integrate-your-agent/)), or pass
-`project` explicitly. See [Projects & scope](/concepts/projects/).
+Claude Code and Codex agents are bound to their own sessions automatically, so
+this bites hookless clients and agents on an older `seam`. Bind the session
+([Integrate your agent](/guides/integrate-your-agent/)), or pass `project`
+explicitly. See [Projects & scope](/concepts/projects/).
 
 ---
 
@@ -5138,29 +5290,45 @@ An empty briefing for a project that genuinely has no constraints and no memorie
 is correct behavior, not a fault. The header counts what exists; if it says zero,
 the store is telling the truth.
 
-## A write is rejected as ambiguous scope
+## A call is rejected as ambiguous scope, session, or agent
 
 **What is happening.** This is the [fail-closed rule](/concepts/projects/) doing
-its job. A durable write with no resolvable scope is rejected rather than landing
-in the global scope, because a global memory is seen by every agent in every repo
-forever - and that must never be what happens when the system is *unsure*.
+its job. A call on a connection bound to no session has to infer its project or
+session from the agents that are live, and it refuses rather than guesses when
+that inference has no single answer. A durable write with no resolvable scope is
+rejected rather than landing in the global scope, because a global memory is seen
+by every agent in every repo forever - and that must never be what happens when
+the system is *unsure*.
 
-**Fix.** The message tells you which of two cases you are in:
+**From Claude Code or Codex, suspect the `seam` binary first.** Their tool calls
+are [bound to the agent's own session](/concepts/sessions/#process-binding)
+automatically, so they should rarely see these errors. A `seam` older than that
+binding sends no agent-process identity, which leaves the connection unbound -
+and the briefing's `Seam session` line then tells the agent to
+`bind once with session_start name=...` instead of saying no `session_start` is
+needed. [Update](/updating/) Seamless on the agent's machine and start a new
+session. An agent that has ended its own session is unbound too, by design: its
+next bare call - a read as much as a write - is refused rather than borrowing
+another agent's project or quietly falling back to the global scope.
+
+**Fix.** The message tells you which case you are in:
 
 | Message says | Cause | Fix |
 |---|---|---|
-| *no bound or ambient session to infer the project from* | No `session_start`, and no ambient session for this cwd | Call `session_start` with your `cwd`, or pass `project=<slug>` |
-| *active ambient sessions span multiple projects* | You are unbound and other agents are live in several repos, so inheriting would bleed your write into someone else's project | Pass `project=<slug>` explicitly |
+| *no bound or ambient session to infer the project from* | Nothing bound, and no ambient session this caller may inherit | Bind with `session_start` (`cwd`, or `project=<slug>`), or pass `project=<slug>` on the write |
+| *the active ones belong to other agents* | This connection names its agent process but owns no live session - an agent that ended its own session, or `seam` run by hand - and every live session is another agent's | Pass `project=<slug>` (`--project` on the CLI); an agent that ended its own session can resume it with `session_start name=` the `cc/...` or `cx/...` on its briefing's `Seam session` line |
+| *active ambient sessions span multiple projects* | You are unbound and other agents are live in several repos, so inheriting would bleed your write into someone else's project | Pass `project=<slug>`, or bind once with `session_start` (`name=` the `cc/...` or `cx/...` on your briefing's `Seam session` line, or `project=<slug>`) |
+| *ambiguous session* or *ambiguous agent* | `session_update`, `session_end`, or a task claim or release named no session while several agents are live | Pass `session=` with the `cc/...` or `cx/...` on your briefing's `Seam session` line, or bind once with `session_start name=<that name>` |
 
-In both cases `project=<slug>` may name a project that does not exist yet - the
-write creates it. Do not answer this error with `project=global` because a new
+In the scope cases, `project=<slug>` may name a project that does not exist yet -
+the write creates it. Do not answer this error with `project=global` because a new
 slug felt riskier: an invented project is cheap and local, while global puts the
 item in every project's briefing forever. The error text lists the slugs that do
 exist, so you can match one instead of coining a near-duplicate.
 
-If a call that worked all morning starts failing this way, suspect a **lost
-binding** - see the daemon-restart section below. `project: global` is always
-accepted; it is a token you pass on purpose.
+If a call that worked all morning starts failing this way on a connection bound
+with `session_start`, suspect a **lost binding** - see the daemon-restart section
+below. `project: global` is always accepted; it is a token you pass on purpose.
 
 ## Recall returns junk, or misses what you just wrote
 
@@ -5218,15 +5386,17 @@ What *does* re-queue it is the session reaper: it expires sessions idle past
 
 ## `tasks_update` says the task is already claimed - by my own session
 
-**What is happening.** The connection binding was lost. The task is genuinely held
-by your session id; your *connection* no longer knows that, so the holder check
-sees a stranger.
+**What is happening.** The connection lost its `session_start` binding. The task
+is genuinely held by your session id; your *connection* no longer knows that, so
+the holder check sees a stranger.
 
 **Fix.** Re-run `session_start` with the **same name** to rebind. It resumes the
 session rather than opening a second one.
 
 The binding is keyed by the transport's `Mcp-Session-Id`, held in the daemon's
-memory. Any daemon restart drops it - see below.
+memory. Any daemon restart drops it - see below. A Claude Code or Codex agent's
+automatic binding is not held there - it is matched from the agent process on
+every request - so this bites only a connection bound with `session_start`.
 
 ## A `seam` flag did nothing
 
@@ -5331,9 +5501,10 @@ older code.
   port is the right way to test in isolation, but that pattern matches the real
   service's command line too and kills it. Under launchd it comes back in about a
   second with a new pid and no data loss - but **every agent's MCP connection
-  drops and their session bindings are lost mid-task**, which resurfaces as the
-  ambiguous-scope and self-claimed-task symptoms above. Kill the throwaway by its
-  own pid, or by its port.
+  drops, and bindings made with `session_start` are lost mid-task**, which
+  resurfaces as the ambiguous-scope and self-claimed-task symptoms above (a
+  Claude Code or Codex agent's automatic binding survives). Kill the throwaway by
+  its own pid, or by its port.
 - **Tools missing in some repos?** That is not a daemon problem. `claude mcp add`
   defaults to `local` scope, tying the registration to the directory you ran it
   from. Register with `--scope user`.
@@ -5454,9 +5625,13 @@ Almost no call passes `project`. Scope is resolved once, in this order, and
 inherited by everything after it:
 
 1. An explicit `project` argument on the call.
-2. The **bound session's** project - set by `session_start`, held per connection.
-3. The **ambient session's** project, resolved from the agent's cwd via the
-   `repo_project_map` setting.
+2. The **bound session's** project - the session `session_start` bound to this
+   connection, else, for a Claude Code or Codex agent, its own ambient session,
+   bound automatically through the agent process
+   ([how](/concepts/sessions/#process-binding)).
+3. The **sole ambient session's** project, when every live ambient session
+   sits in one project. A caller that names its agent process never inherits a
+   session another agent's process owns.
 
 Writes **fail closed**: with no session and no explicit `project`, a durable
 write is rejected as ambiguous rather than silently landing in the global scope.
@@ -5466,7 +5641,11 @@ Pass `project: global` to mean global deliberately.
 
 - **Body aliases.** Tools taking a markdown body accept `body`, `content`, or
   `text` interchangeably - agents disagree about the name, and the disagreement
-  is not worth an error.
+  is not worth an error. `session_update` and `session_end` likewise accept
+  `summary` for `findings`.
+- **Session references.** `session=` takes a session name - the `cc/...` or
+  `cx/...` on a briefing's `Seam session` line, or a `sess/*` name - or a
+  session ULID.
 - **IDs are ULIDs**, never UUIDs. They sort lexically by creation time.
 - **Errors** come back as tool errors with a `<tool>: <reason>` message, not as
   transport failures.
@@ -5503,20 +5682,43 @@ URL: https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/
 
 
 These nine tools are the agent loop. In a repo mapped to a project, most of them
-need no `project` argument at all: `session_start` binds the connection, and
-everything after it inherits that scope.
+need no `project` argument at all: the connection is bound to a session -
+automatically for a Claude Code or Codex agent, by `session_start` for any other
+client - and everything inherits that session's scope.
 
 ## The shape of a session
 
 `session_start` returns the project briefing and binds the session to the
-connection. `session_end` persists findings for the next agent's briefing. Both
-are optional in the sense that Claude Code's hooks already open an *ambient*
-session per agent - calling `session_start` explicitly adopts it and gets you the
-full briefing rather than the short injected one.
+connection. `session_end` persists findings for the next agent's briefing.
+
+A Claude Code or Codex agent does not need `session_start`: its hooks open an
+*ambient* session and bind the agent's tool calls to it
+([how](/concepts/sessions/#process-binding)). Called from such an agent without
+arguments, `session_start` hands back that same session, and its `scope` note
+says the call was not needed; with a different `project` it starts a separate
+session there. Every other client calls it once per connection, with `cwd` or
+`project` - see [when to call it](/concepts/sessions/#when-to-call-session-start).
+Whichever way it binds, the briefing it returns is for the project actually
+bound.
+
+`session_start` no longer takes `source`. The legacy values (`startup`,
+`resume`, `clear`, `compact`, `explicit`) are accepted and ignored, so older
+clients keep working; any other value is refused with
+`session_start no longer takes source -- omit it`. The server derives what the
+briefing needs from what the call did: resuming a named session adds the
+resumed-session hint to re-ground with `recall`.
+
+`session=` on `session_update` and `session_end` - and on the
+[task tools](/reference/mcp/tasks/) - takes a session name (the `cc/...` or
+`cx/...` on the briefing's `Seam session` line, or a `sess/*` name) or a session
+ULID; one that matches nothing is an error saying what the argument takes. Both
+tools also accept `summary` as an alias of `findings`.
 
 If `tasks_update` ever fails claiming a task is held by *your own* session id,
-the connection binding was lost. Re-run `session_start` with the same name to
-rebind.
+the connection lost an explicit `session_start` binding - those live in daemon
+memory, so a restart or reconnect drops them. Re-run `session_start` with the
+same name to rebind. A Claude Code or Codex agent's automatic binding is not lost
+this way.
 
 ## Edit, update, append, supersede, or delete?
 
@@ -5611,7 +5813,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 
 | Call | Success result | Failure that matters |
 |---|---|---|
-| `session_start` | `session_id`, `name`, resolved `project`, explanatory `scope`, and `briefing`; resumed/adopted sessions also say `resumed: true` | Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly |
+| `session_start` | `session_id`, `name`, resolved `project`, explanatory `scope`, and `briefing`; resumed/adopted sessions also say `resumed: true`, and a `warning` flags a named `project` that was created or a remote `cwd` that could not be placed | Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly, as does a `project` that contradicts the repository `cwd` is in |
 | `memory_write` | Stable `id`, canonical `name`, resolved `project`, `updated`, optional `similar`, and optional `superseded` | An occupied tombstone path is an error; if the new memory lands but supersession fails, the tool errors while naming the kept replacement and the still-active target |
 | `memory_edit` | `id`, `name`, `project`, the new `content_hash`, a unified `diff`, and a `stage_hint` when a `kind=stage` body still has no parseable `Status` | An `old_string` that matches zero or several places is an error naming the count, and **nothing** is written - the edits apply all-or-nothing. A stale `expect_hash` is refused rather than overwriting |
 | `recall` | `hits`, possibly empty | Remote embedder failures degrade to lexical-only; local request/config construction errors surface |
@@ -5619,18 +5821,18 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 
 ## session_start {#session_start}
 
-Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again.
+Bind this connection to a work session and return its project briefing. Claude Code and Codex agents running the Seamless hooks are bound to their own session automatically (the 'Seam session' line in the briefing) and do not need this. Call it to bind a client without hooks, to move this connection to another project, or to resume a named session. Later calls inherit the session's project, so they need no project argument.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `cwd` | string | no | Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug) |
+| `cwd` | string | no | Absolute working directory. The git repository it is in decides the project, and a repository maps itself to a project on its first session -- no setup step (`seamlessd map-repo` only overrides the derived slug) |
 | `host` | string | no | Machine this agent runs on (hostname). Defaults to the X-Seamless-Host header, then to the daemon's own host; pass it only when dialling a daemon on another machine |
 | `main_worktree_root` | string | no | Absolute root of the repository's MAIN checkout when repo_root is a linked worktree; defaults to repo_root |
 | `model` | string | no | Model id powering this agent, exactly as the provider names it (e.g. claude-fable-5, gpt-5.5). Stamped onto memories/notes this session writes; hooks keep it current for Claude Code/Codex sessions, so pass it mainly from other clients |
-| `name` | string | no | Optional stable session name; reusing a name resumes that session |
+| `name` | string | no | Resume the session with this name: a sess/* name from an earlier call, or the cc/... or cx/... on your briefing's 'Seam session' line. A new name starts a separate session under that name; omit it to use your own session, or a fresh one |
+| `project` | string | no | Project slug to bind. Defaults to the project of the git repository cwd is in, then to your own session's project. If cwd is in a repository too, the two must agree. project=global binds the global scope; an unknown slug creates that project. |
 | `repo_origin` | string | no | The repository's origin remote URL, which is how the same repo checked out on two machines is recognized as one project |
 | `repo_root` | string | no | Absolute git repository root enclosing cwd, resolved on YOUR machine. Required when host is not the daemon's: the daemon cannot read your filesystem to find it |
-| `source` | string | no | what began this session (default explicit). One of: `startup`, `resume`, `clear`, `compact`, `explicit`. |
 
 ## session_update {#session_update}
 
@@ -5639,7 +5841,7 @@ Record interim progress on the current session (working findings so far). Uses t
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `findings` | string | **yes** | Working findings / progress note so far |
-| `session` | string | no | Session name to operate on: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses |
+| `session` | string | no | Session to operate on: a name (the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a sess/* name) or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code and Codex agents -- so pass it only to act on another session, or when a call reports the session as ambiguous |
 | `session_id` | string | no | Session ULID to operate on; takes precedence over session and the bound session |
 
 ## session_end {#session_end}
@@ -5650,7 +5852,7 @@ Complete the current session, persisting its findings for future briefings. Uses
 |---|---|---|---|
 | `findings` | string | **yes** | Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected. |
 | `mishaps` | array | no | Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. When a mishap violated a stored memory, name that memory by its exact slug in the entry (e.g. "violated chroma-boot-race by ...") -- the report is then linked to it. Recorded for recurrence review, not blame -- report them even when fully recovered. |
-| `session` | string | no | Session name to operate on: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses |
+| `session` | string | no | Session to operate on: a name (the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a sess/* name) or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code and Codex agents -- so pass it only to act on another session, or when a call reports the session as ambiguous |
 | `session_id` | string | no | Session ULID to operate on; takes precedence over session and the bound session |
 
 ## memory_write {#memory_write}
@@ -5792,8 +5994,9 @@ inherits the design and the reasoning behind it, not just the step list. See
 
 `project_list` and `project_create` manage the scopes everything else inherits.
 Most agents never call either: a git repo maps itself on the first session and
-resolves its project from the agent's working directory, and `session_start`
-binds it.
+resolves its project from the agent's working directory, and the agent's session
+carries it - bound automatically under Claude Code or Codex, or by
+`session_start`.
 
 The `global` project slug is the deliberate cross-project scope. It is a token
 you pass on purpose, never a default you fall into - see the fail-closed rule in
@@ -6018,7 +6221,7 @@ Atomically claim a task for the current session, moving it to in_progress with a
 |---|---|---|---|
 | `id` | string | **yes** | task id to claim |
 | `lease_seconds` | number | no | lease duration in seconds before the claim lapses and the task becomes reclaimable (default 900) |
-| `session` | string | no | the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses. |
+| `session` | string | no | the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, another session name, or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code and Codex agents -- then a sole active ambient. Pass it when a call reports the agent as ambiguous: the bare call then fails rather than guesses. |
 | `session_id` | string | no | the acting agent's session ULID; takes precedence over session and the bound session |
 
 ## tasks_release {#tasks_release}
@@ -6028,7 +6231,7 @@ Release a task the current session holds, reopening it (status back to open, cla
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | **yes** | task id to release |
-| `session` | string | no | the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses. |
+| `session` | string | no | the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, another session name, or a session ULID. Defaults to this connection's session -- bound automatically for Claude Code and Codex agents -- then a sole active ambient. Pass it when a call reports the agent as ambiguous: the bare call then fails rather than guesses. |
 | `session_id` | string | no | the acting agent's session ULID; takes precedence over session and the bound session |
 
 ---
@@ -6263,6 +6466,25 @@ reports `flag provided but not defined: -projct`. A positional that starts with
 all. Commands that take only flags and no positionals (`ready`, `task list`,
 `task add`, `plan list`, `status`, `usage`, `doctor`) are unaffected either way.
 
+## Which session a command acts in {#which-session}
+
+Every MCP request `seam` makes names the machine it runs on and the agent process
+that launched it - its nearest ancestor that is not a shell - the same identity
+[the MCP bridge](#mcp-bridge-and-auth-helper) sends for an agent. That decides
+where a command without `--project` lands:
+
+- **Run by a Claude Code or Codex agent through its shell**, a command is bound
+  to that agent's own session, like the agent's MCP calls: `seam recall` and
+  `seam remember` resolve to its project.
+- **Run by hand in a terminal**, the nearest non-shell ancestor is the terminal
+  or tmux, which no hook names, so the command is unbound - and its fallback
+  skips sessions other agents' processes own. Pass `--project` to reach a
+  project from a terminal: without it, a read or a write is refused as
+  ambiguous while any agent is live, rather than quietly answered from the
+  global scope, and only with no agent live does a read see the global scope.
+
+See [How tool calls find their session](/concepts/sessions/#process-binding).
+
 ## Agent loop
 
 The four commands an agent - or you, standing in for one - uses to start a
@@ -6274,13 +6496,15 @@ session, write knowledge, and search it back.
 seam prime [--cwd DIR] [--name NAME]
 ```
 
-Calls `session_start` with `source=explicit` and prints the briefing to stdout;
-the session id and resolved project go to stderr, so the briefing pipes cleanly.
-`--cwd` defaults to the current directory and is what resolves the project via
-the repo mapping. Reusing a `--name` resumes that session rather than opening a
-new one. When there is no briefing content yet, it says so on stderr.
+Calls `session_start` and prints the briefing to stdout; the session id and
+resolved project go to stderr, so the briefing pipes cleanly. `--cwd` defaults
+to the current directory and is what resolves the project via the repo mapping.
+Reusing a `--name` resumes that session rather than opening a new one. When
+there is no briefing content yet, it says so on stderr.
 
-This is the explicit form of what the SessionStart hook does automatically.
+This is the explicit form of what the SessionStart hook does automatically. Run
+by a Claude Code or Codex agent in its own repository, it adopts that agent's
+session rather than opening another.
 
 ### seam remember {#seam_remember}
 
@@ -6325,7 +6549,8 @@ seam capture [--project P] URL
 
 Calls `capture_url` to fetch a page through the SSRF-safe fetcher and store it
 as a note. An empty `--project` does not mean global: the scope resolves to the
-session's project - the bound session's, or a single unambiguous ambient one.
+session's project - the bound session's, or a single unambiguous ambient one
+([which](#which-session)).
 The server refuses to guess rather than pick a default, so a capture with
 nothing to infer from, or one made while ambient sessions span several projects,
 is an error naming the fix. Pass `--project global` to file the note globally
@@ -6628,13 +6853,17 @@ seam mcp-headers [--config PATH]
 These are client-launched helpers, not interactive commands.
 
 - `mcp-proxy` speaks MCP over stdio to its parent and forwards frames to
-  Seamless's Streamable HTTP `/api/mcp`, preserving `Mcp-Session-Id`. The Codex
+  Seamless's Streamable HTTP `/api/mcp`, preserving `Mcp-Session-Id` and naming
+  the process that launched it in an `X-Seamless-Agent-Process` header - which
+  binds an agent's calls to the session its hook opened. The Codex
   installer registers it as Seamless's default policy so the bearer key remains
   in the 0600 Seamless config. Current Codex also supports direct Streamable
   HTTP; the bridge is a key-handling choice, not a Codex transport requirement.
-- `mcp-headers` prints the current Authorization header as a JSON object for
-  Claude Code's `headersHelper`. That keeps the key out of `claude mcp add`
-  argv and stored client configuration.
+- `mcp-headers` prints the request headers as a JSON object for Claude Code's
+  `headersHelper`: the Authorization header, plus this machine's hostname and
+  the agent process that launched it (`X-Seamless-Host`,
+  `X-Seamless-Agent-Process`). That keeps the key out of `claude mcp add` argv
+  and stored client configuration, and binds the agent's calls to its session.
 
 `--config` selects the exact `seamless.yaml` both helpers read. Installers bake
 an absolute path into the client registration so it works from every repository.
@@ -7749,7 +7978,7 @@ install order:
 
 | Event | Matcher | Transport | Timeout | Endpoint | Effect |
 |---|---|---|---|---|---|
-| `SessionStart` | `startup\|resume\|clear\|compact` | command (`seam hook session-start`) | 10s | `/api/hooks/session-start` | Registers the agent's cwd in the repo→project map, assembles the `<seam-briefing>`, and creates or resumes an opaque `cc/<prefix>-<digest>` ambient handle keyed by the full external ID. |
+| `SessionStart` | `startup\|resume\|clear\|compact` | command (`seam hook session-start`) | 10s | `/api/hooks/session-start` | Registers the agent's cwd in the repo→project map, assembles the `<seam-briefing>`, and creates or resumes an opaque `cc/<prefix>-<digest>` ambient handle keyed by the full external ID, stamped with the [agent process](#what-rides-on-the-query-string) that ran the hook. |
 | `UserPromptSubmit` | none | http | 5s | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. A miss is logged as a `hook.prompt` event. |
 | `SessionEnd` | none | command (`seam hook session-end`) | 10s | `/api/hooks/session-end` | Harvests findings and completes the agent's sessions. Bare ack - Claude Code's schema has no `hookSpecificOutput` for `SessionEnd`. |
 | `PostToolUse` | `Write\|Edit\|MultiEdit\|ExitPlanMode` | command (`seam hook post-tool-use`) | 10s | `/api/hooks/post-tool-use` | Heartbeats the ambient session. Captures plan-file iterations (`Write`/`Edit`/`MultiEdit` under the plans dir) and plan approvals (`ExitPlanMode`). |
@@ -7811,7 +8040,7 @@ lifecycle.
 
 | Event | Transport | Endpoint | Effect |
 |---|---|---|---|
-| `SessionStart` | command (`seam hook session-start --client codex`) | `/api/hooks/session-start` | Registers the cwd's project, assembles the `<seam-briefing>`, and creates or resumes an opaque `cx/<prefix>-<digest>` ambient handle keyed by the full external ID. |
+| `SessionStart` | command (`seam hook session-start --client codex`) | `/api/hooks/session-start` | Registers the cwd's project, assembles the `<seam-briefing>`, and creates or resumes an opaque `cx/<prefix>-<digest>` ambient handle keyed by the full external ID, stamped with the [agent process](#what-rides-on-the-query-string) that ran the hook. |
 | `UserPromptSubmit` | command (`seam hook user-prompt-submit --client codex`) | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. |
 | `Stop` | command (`seam hook stop --client codex`) | `/api/hooks/stop` | Heartbeats and harvests findings from the turn's final assistant message. No injection - Codex's `Stop` has no `hookSpecificOutput`. Fires at every turn end. |
 | `SubagentStart` | command (`seam hook subagent-start --client codex`) | `/api/hooks/subagent-start` | Injects the child briefing (constraints, spawn-prompt-matched `RELEVANT:` memories, recall footer) under the Codex output cap and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session. |
@@ -7881,7 +8110,7 @@ with no Codex CLI, initialized home, or Seamless Codex configuration is one quie
 A hook body is the agent client's schema, not Seamless's, so everything
 Seamless needs *about* the call travels beside it as query parameters on the
 same `/api/hooks/*` endpoints. `?client=` is one of them; the agent's machine
-identity is the rest.
+identity and its agent process are the rest.
 
 | Param | On | Value |
 |---|---|---|
@@ -7890,6 +8119,7 @@ identity is the rest.
 | `repo_root` | `session-start` only | the enclosing repository root |
 | `main_root` | `session-start` only | the main checkout, when `repo_root` is a linked worktree |
 | `origin` | `session-start` only | the `origin` remote URL, when there is one |
+| `agent_process` | `session-start` only | the agent process that ran the hook - its nearest ancestor that is not a shell, as `<pid>.<start time>` |
 
 `seam hook` resolves the identity locally - it is the only process that can -
 and every value is best-effort: an unreadable hostname, an unparseable body, or
@@ -7901,6 +8131,15 @@ hook that places a working directory in a project.
 **An absent `host` means the local machine.** That is what keeps an older
 `seam` binary - which only ever talked to a daemon on its own machine - working
 byte-for-byte.
+
+**`agent_process` is the one param about the agent, not the machine.** It
+names the `claude` or `codex` process, and the daemon stamps it on the ambient
+session. The MCP transports that same process launches send it back in an
+`X-Seamless-Agent-Process` header, which binds the agent's tool calls to the
+session with no `session_start` - see
+[How tool calls find their session](/concepts/sessions/#process-binding). A
+malformed value is dropped; an absent one (an older `seam`) leaves the session
+reachable only through the older fallbacks.
 
 Claude Code's `UserPromptSubmit` is the one http hook, so no `seam` process
 computes an identity for it; the daemon attributes it through the ambient
@@ -7914,6 +8153,25 @@ home layout produce the same transcript and plan-file paths, so a missing-file
 test would sometimes find a real file - the wrong one. See
 [Share one daemon across a LAN](/guides/network-install/#what-a-remote-device-does-not-get)
 for the full list of what that covers.
+
+### The ambient session line {#the-ambient-session-line}
+
+Whether the hook named the agent process decides the line SessionStart appends
+to the briefing. Named:
+
+```text
+Seam session: cc/<id> (ambient) -- this agent's Seamless tool calls bind to it automatically; no session_start needed
+```
+
+Not named - an older `seam`, or one that could not identify the agent process -
+the agent's connection is not bound to the session, so the line gives the one
+call that binds it:
+
+```text
+Seam session: cc/<id> (ambient) -- if a tool reports an ambiguous scope, session, or agent, bind once with session_start name=cc/<id>
+```
+
+A Codex session's line carries its `cx/...` handle.
 
 ## Why Claude Code uses two transports
 
@@ -8302,6 +8560,10 @@ project briefing and correctly scoped every later unscoped call.
   surface installed; chat-surface setup with nothing else present is untested.
 - **UserPromptSubmit's permanence** on the code surface, per above.
 - **A live app code session inside a managed worktree**, per above.
+- **The chat surface since the agent-process binding.**
+  `session_start project=<slug>`, and a sessionless-write fallback that skips
+  sessions other agents' processes own, both postdate the capture above;
+  neither has been observed in a live app conversation.
 
 ## Re-verifying after an app update
 
@@ -9615,7 +9877,9 @@ same as memories.
 **DB-of-record state that exists nowhere else.** These have no file behind them,
 so losing `seam.db` loses them:
 
-- `sessions` - ambient and explicit sessions, findings, cwd, status.
+- `sessions` - ambient and explicit sessions, findings, cwd, status, and the
+  agent process that owns an ambient session (what binds the agent's tool calls
+  to it).
 - `tasks` and `task_deps` - the ready-queue, plan slugs, claims, and leases.
 - `trials` - research lab records with queryable JSON metrics.
 - `events` - the append-only log behind telemetry, the console feed, and
@@ -9714,6 +9978,12 @@ things.
 
 ## A–Z
 
+**Agent process** - the `claude` or `codex` process that runs an agent's hooks
+and launches its MCP transports. The SessionStart hook stamps its identity on
+the ambient session, and the agent's MCP requests name it, which binds the
+agent's tool calls to that session with no `session_start`. See [Sessions &
+briefings](/concepts/sessions/#process-binding).
+
 **Ambient session** - a Seamless session opened automatically by a Claude Code
 or Codex SessionStart hook, without the agent asking, displayed with an opaque
 `cc/...` or `cx/...` handle. Lifecycle identity uses the full external session
@@ -9724,8 +9994,9 @@ relevant: it leaves the indexes and stays readable. Proposed by the gardener's
 staleness pass, never done to a `constraint` or a pinned `stage`.
 
 **Binding** - the association between an MCP connection and a Seamless session,
-set by `session_start`; everything on that connection inherits the bound
-session's project.
+set by `session_start` or, for a Claude Code or Codex agent, automatically
+through its *agent process*; an explicit `session_start` wins. Everything on
+that connection inherits the bound session's project.
 
 **Briefing** - the `<seam-briefing>` context block Seamless injects into an
 agent at session start - constraints, pinned stages, plan rollups, the memory
@@ -9749,9 +10020,10 @@ See [Write memories that get recalled](/guides/write-good-memories/).
 **Digest** - a note summarizing a Seamless project's recent activity, proposed
 by the gardener.
 
-**Explicit session** - a Seamless session opened by calling `session_start`; it
-adopts the ambient session for the same working directory rather than opening a
-second one.
+**Explicit session** - a Seamless session opened by calling `session_start`.
+Without a `name`, the call adopts the calling agent's existing ambient session
+rather than opening a second one; a Claude Code or Codex agent that names a
+different project gets a separate session there instead.
 
 **Family** - a set of Seamless projects related by parent/child, so a child's
 briefing can carry the parent's memories and a sibling's recent findings.
@@ -9856,8 +10128,10 @@ first two are ambient; only the third is a decision. See
 [Recall](/concepts/recall/).
 
 **Ambient vs. explicit session.** *Ambient* is opened by the hook, per agent,
-automatically. *Explicit* is `session_start`, which **adopts** the ambient one
-rather than creating a rival.
+automatically, and the agent's tool calls are bound to it without asking.
+*Explicit* is `session_start`, which **adopts** the agent's own ambient session
+rather than creating a rival - so a Claude Code or Codex agent needs it only to
+move to another project or resume a named session.
 
 **Archive vs. supersede vs. delete.** *Archive*: no longer relevant, marked
 invalid, still readable. *Supersede*: replaced by something specific, marked
@@ -9944,6 +10218,7 @@ violation is visible in the import block.
 | `core` | foundation | Domain types and enums - `Project`, `Memory`, `Session`, `Task`, `Trial`, `Event`, `NewID()`. Pure data, no I/O. | - |
 | `config` | foundation | One YAML file plus `SEAMLESS_*` env overrides; env wins over file, file over defaults. | - |
 | `validate` | foundation | `Path`, `Name`, `Title` - the guards that stand between agent text and the filesystem. | - |
+| `agentproc` | foundation | Names the agent process (`claude` or `codex`) that launched a `seam` process - its nearest non-shell ancestor, as pid plus start time. The SessionStart hook stamps it on the ambient session and the MCP transports send it, which binds a connection to its agent's session. | - |
 | `store` | foundation | SQLite: connection setup, migrations, FTS5, embeddings, and every query. Sessions, tasks (including the dependency-aware ready-queue and lease-based claims), trials, proposals, settings, and the retrieval stats live here. | `core`, `config` |
 | `events` | foundation | The append-only event log - the single write path for the record of what happened - plus SSE fan-out to subscribers. | `core` |
 | `llm` | foundation | Chat and embeddings across OpenAI (default), Ollama, and Anthropic, with the remote/local error taxonomy. | `config` |
@@ -9956,8 +10231,8 @@ violation is visible in the import block.
 | `capture` | domain | SSRF-safe URL fetch: private-IP rejection, a pinned dialer, a port allowlist, redirect validation, a size cap. | - |
 | `archive` | domain | Instance archives: `VACUUM INTO` snapshot + corpus + manifest out, guarded tar extraction and restore-or-merge back in. Never imports `config` - an archive is described by its manifest and the data dir it is handed, not by whichever process is holding it. | `core`, `files`, `llm`, `store`, `validate` |
 | `importer` | domain | One-way migration from the v1 store. Reads v1, writes v2, never modifies v1. | `core`, `files`, `store` |
-| `mcp` | surface | The tool surface over streamable HTTP, plus per-connection session bindings and scope resolution. | `capture`, `core`, `events`, `files`, `gardener`, `lifecycle`, `llm`, `plans`, `retrieve`, `store`, `validate` |
-| `hooks` | surface | Shared Claude Code/Codex hook endpoints and adapters, ambient sessions, bounded injection, findings harvest, and Claude-specific plan capture. | `config`, `core`, `events`, `files`, `plans`, `retrieve`, `store`, `validate` |
+| `mcp` | surface | The tool surface over streamable HTTP, plus session bindings (per connection, and by agent process) and scope resolution. | `agentproc`, `capture`, `core`, `events`, `files`, `gardener`, `lifecycle`, `llm`, `plans`, `retrieve`, `store`, `validate` |
+| `hooks` | surface | Shared Claude Code/Codex hook endpoints and adapters, ambient sessions, bounded injection, findings harvest, and Claude-specific plan capture. | `agentproc`, `config`, `core`, `events`, `files`, `plans`, `retrieve`, `store`, `validate` |
 | `console` | surface | The server-rendered observability UI and its SSE feed. | `config`, `core`, `events`, `files`, `gardener`, `lifecycle`, `markdown`, `plans`, `retrieve`, `store` |
 
 The import columns are the real ones, and they are the quickest way to check a
@@ -10009,7 +10284,7 @@ SessionStart trace
 Claude → hook · 1–3 Authenticate, bound, map seam hook session-start forwards stdin; only auth and request shape can return non-2xx; work is capped at two seconds; cwd grows the project map.
 Retrieve · 4–8 Resolve effective scope Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents take constraints plus spawn-prompt-matched RELEVANT lines.
 Pack · 9–11 Trim only eligible context Apply recency after partitioning, add findings/tasks/family/plan signals, then pack to budget and hard cap.
-Hook response · 12–15 Bind, inject, record Create or resume the ambient session, append its line, record the exact text sent, and return additionalContext .
+Hook response · 12–15 Bind, inject, record Create or resume the ambient session, stamp the agent process on it, append its line, record the exact text sent, and return additionalContext .
 The hook fails open after authentication: a retrieval problem may remove context, but it cannot stop the agent's turn.
 ```
 
@@ -10498,7 +10773,8 @@ on precisely the edit it exists to refuse.
 
 ## Session binding and scope
 
-Enforced in `internal/mcp`. Concepts: [Projects & scope](/concepts/projects/).
+Enforced in `internal/mcp`. Concepts: [Projects & scope](/concepts/projects/),
+[How tool calls find their session](/concepts/sessions/#process-binding).
 
 ### Never read `project` from tool args directly
 
@@ -10557,10 +10833,46 @@ guess. Inheriting the machine-latest ambient in that situation is exactly how a
 write bleeds into a concurrent agent's project - and the agent that wrote it will
 never see the mistake, because from its side the call succeeded.
 
-### Only `session_start` binds a connection
+### A connection binds two ways, and `getBinding` reads both
 
-Bindings are keyed by the MCP client session id. They evict on `session_end` and
-via an opportunistic sweep.
+An explicit `session_start` binding - held in memory, keyed by the MCP client
+session id, evicted on `session_end` and by an opportunistic sweep - wins over
+the **process binding**: the single active ambient session stamped with the
+agent process the request names in `X-Seamless-Agent-Process`
+(`agent_binding.go`). The process binding is identification, not inference. It
+lives in the session row and on every request, survives restarts and
+reconnects, and counts as a binding for the isolation fence.
+
+### One process, two live sessions: bind neither
+
+Two active sessions stamped with one process are a host running several
+sessions at once, so the call stays unbound. Never pick between them by recency
+or cwd - that is the cross-agent bleed in a new place.
+
+### An identified caller is never inferred into another agent's session
+
+`store.AmbientScope.Caller` filters every ambient-fallback lookup: a caller that
+named its process never resolves into a session stamped with a different one.
+Once such a caller's own session has ended, the sole live ambient is by
+construction another agent's - inheriting it would bleed a write into that
+agent's project, and a bare `session_end` would complete that agent's work.
+
+### Revive what the reaper expired, never what was completed
+
+The process binding reactivates a session the idle reaper **expired**, because
+a call from the same live process is proof of life. A session **completed** on
+purpose - by `session_end` or the client's SessionEnd - stays ended.
+
+### `session_start` adopts only the caller's own session
+
+When the request names a process. The sole-same-cwd adoption heuristic is for
+callers that name none; for one that does, a sole same-cwd ambient that is not
+its own belongs to another agent.
+
+### Agent process identities are opaque
+
+Validate with `agentproc.Valid` at every boundary (the header, the hook query)
+and compare for equality. Never parse one for its pid or start time.
 
 ### A lost binding does NOT error
 

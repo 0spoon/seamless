@@ -1,6 +1,6 @@
 ---
 title: Sessions & briefings
-description: How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing's packing order, and what never gets dropped.
+description: How an agent gets your knowledge injected before it does anything - ambient sessions, how its tool calls bind to them, the briefing's packing order, and what never gets dropped.
 ---
 
 A Seamless **session** is one agent's stretch of work. A **briefing** is what
@@ -21,7 +21,8 @@ constraints.
 |---|---|---|
 | Opened by | The SessionStart hook, automatically | `session_start` |
 | Named | `cc/<prefix>-<digest>` (Claude Code) or `cx/<prefix>-<digest>` (Codex) | Whatever you pass, or generated |
-| Gets | The short injected briefing | The full briefing, returned by the call |
+| Gets | The briefing, injected at session start | The same briefing, returned by the call |
+| Binds tool calls | Automatically, through the [agent process](#process-binding) | On the connection that called it |
 
 The ambient handle keeps the first eight external-ID characters readable and
 adds 64 stable SHA-256 bits. Seamless resolves lifecycle activity by the full
@@ -30,19 +31,98 @@ share scope, findings, or provenance. Pre-upgrade handles keep their old names
 when resumed. The handle is a display label, not an API: treat `cc/...` and
 `cx/...` as opaque and never parse or construct them.
 
-They are not two competing sessions. `session_start` **adopts** the sole ambient
-session for the same working directory rather than opening a second one - that
+They are not two competing sessions. Without a `name`, `session_start`
+**adopts** an agent's existing session rather than opening a second one - that
 adoption rule exists because the alternative was double-counting every agent.
-
-Call `session_start` when the work is non-trivial: it returns the full briefing
-(the injected one is deliberately shorter), and it binds the connection so
-everything afterward inherits the project scope.
+From Claude Code or Codex it adopts only the agent's **own** session, which
+stays exact even with several agents in one repo (a different `project` is
+[the one exception](#when-to-call-session-start)). A client that names no agent
+process adopts the sole active ambient session sharing its working directory. A
+caller that names its process but owns no live session is never handed another
+agent's.
 
 That distinction also appears in knowledge provenance. A write attributed by an
 ambient hook stores the session's `cc/...` or `cx/...` **name** in
 `source_session`; a write made through a bound MCP connection stores the
 session's ULID. Readers resolve both forms. Do not infer client, scope, or
 liveness from the spelling of `source_session`.
+
+## How tool calls find their session {#process-binding}
+
+The SessionStart hook and the agent's MCP connection reach the daemon on two
+channels that share nothing on the wire: the hook carries the client's session
+id, the connection only an opaque transport id. What they share is the process
+that launched both - the `claude` or `codex` process - and that is the join:
+
+1. `seam hook session-start` names the agent process - the nearest ancestor
+   that is not a shell, as `<pid>.<start time>` - in its `agent_process` query
+   parameter, and the daemon stamps it on the ambient session.
+2. The MCP transports the same agent launches - the `seam mcp-proxy` stdio
+   bridge, `seam mcp-headers` (Claude Code's `headersHelper`), and the `seam`
+   CLI's own dial - send that identity in an `X-Seamless-Agent-Process` header
+   on every request.
+3. The daemon binds each call to the single active ambient session on the
+   caller's machine stamped with it.
+
+So a Claude Code or Codex agent never needs `session_start`. Unscoped `recall`,
+`memory_write`, `notes_create`, and `tasks_*` calls resolve to the agent's own
+project even while agents are active in several repos, and `session_update`,
+`session_end`, and `tasks_claim` without `session=` act on the agent's own
+session. The binding lives in the session row and on every request, not in
+daemon memory, so it survives a daemon restart and an MCP reconnect - unlike the
+per-connection binding `session_start` makes.
+
+Its edges are deliberate:
+
+- **An explicit binding wins.** A `session_start` on the connection takes
+  precedence over the process binding.
+- **One process, one session.** If two live ambient sessions are stamped with
+  the same process - a host process running several sessions at once - nothing
+  is bound automatically, and resolution falls back to the earlier rules: an
+  explicit binding, then the sole-ambient-project inference in
+  [Projects & scope](/concepts/projects/).
+- **Never another agent's session.** A caller that names its process but owns
+  no live session - say, after ending its own - is not inferred into anyone
+  else's: that inference skips sessions stamped with a different process.
+  Unstamped sessions from older clients are still candidates. So a bare call
+  from an agent whose session has ended - a read as much as a write - is refused
+  as ambiguous scope instead of landing in another agent's project or quietly
+  falling back to the global scope, and a bare `session_end` cannot complete
+  another agent's session.
+- **It needs the current `seam`** on the agent's machine. An older `seam` sends
+  no identity, and everything behaves as before.
+- **The `seam` CLI is bound by the same rule.** A `seam recall` an agent runs
+  through its shell is attributed to that agent's session. `seam` run by hand
+  in a terminal is not bound: its nearest non-shell ancestor is the terminal or
+  tmux, which no hook names.
+- **No hook, nothing to bind to.** A hand-integrated client or the
+  [Claude app chat](/claude-app/) has no SessionStart hook and so no ambient
+  session. It still calls `session_start`, and calls it again after a
+  reconnect.
+
+Like the explicit binding, it is self-reported: it tells Seamless which session
+a call belongs to - for scope, and for
+[project isolation](/concepts/project-isolation/#honest-limits) - but it is not
+an authentication boundary.
+
+### When to call `session_start` {#when-to-call-session-start}
+
+- **From a client without hooks**, once per connection, with `cwd` (the
+  repository it is in decides the project) or `project` (names it; an unknown
+  slug creates the project, and the result's `warning` says so). Given both,
+  they must agree: a `cwd` in a repository mapped to a different project is an
+  error. With neither, the session is global.
+- **To move this connection to another project.** A `project` other than your
+  own session's starts a separate session there - linked to yours, so a
+  SessionEnd closes both - and binds the connection to it. An argument-less
+  `session_start` hands the connection back to your own session.
+- **To resume a named session.** `name` takes a `sess/*` name or the `cc/...` or
+  `cx/...` on the briefing's `Seam session` line; a new name starts a separate
+  named session.
+
+The result carries the briefing for the project actually bound and a `scope`
+note saying how that project was chosen. When the call only adopted your own
+session, the note says so: you did not need it.
 
 ## An actual briefing, annotated
 
@@ -51,7 +131,7 @@ This is a real briefing, in the order the assembler packs it:
 <figure class="doc-figure" aria-labelledby="annotated-briefing-caption">
   <div class="sample-panel">
     <div class="sample-panel-head"><span>Actual packing order</span><span>budgeted</span></div>
-    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 62 memories (24 constraints, 9 conventions, 1 stage), 3 recent findings.<br><br><span class="sample-strong">Constraints (binding for every session):</span><br>- errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br>- llm-degradation-remote-vs-local: llm errors split remote ...<br><span class="sample-muted">... 2 more bullets ...</span><br>- +20 more, equally binding -- memory_read name=&lt;name&gt; before working near one: fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ...<br><br><span class="sample-strong">Stages (world-state gates):</span><br>- deep-audit-f15-f18-landed -- status unknown (no Status: header)<br>(details: memory_read name=&lt;stage&gt;)<br><br><span class="sample-strong">Plans:</span><br>- marketing -- 2/3 done, 1 claimable, 0 in flight<br>- seamless-documentation-site -- awaiting approval: Seamless documentation site (presented, 2m)<br>(steps: tasks_ready plan=&lt;slug&gt;; claim: tasks_claim id=&lt;task id&gt;; attach work via the plan:&lt;slug&gt; tag)<br><br><span class="sample-strong">Conventions (project-local choices):</span><br>- wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...<br><span class="sample-muted">... 3 more bullets ...</span><br>(9 total, 4 shown -- recall kind=convention for the rest)<br><br><span class="sample-strong">Recent findings:</span><br>- cc/1fa4b02d (1h): Landed the installer check; the release gate now fails on ...<br><br><span class="sample-strong">Ready tasks (2):</span><br>- Fix tool.call misattribution<br>- Polish the docs nav<br>(full queue with ids: tasks_ready; claim: tasks_claim id=&lt;id&gt;)<br><br><span class="sample-strong">Memories (seamless):</span><br>- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...<br>- shared-worktree-concurrent-agents-verify: Agents share the main worktree ...<br>- (+34 older -- recall query=&lt;topic&gt;, optionally kind=&lt;kind&gt;)<br>Recall on demand with recall; read a memory with memory_read.<br>Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)<br><span class="sample-muted">&lt;/seam-briefing&gt;</span></div>
+    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 62 memories (24 constraints, 9 conventions, 1 stage), 3 recent findings.<br><br><span class="sample-strong">Constraints (binding for every session):</span><br>- errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br>- llm-degradation-remote-vs-local: llm errors split remote ...<br><span class="sample-muted">... 2 more bullets ...</span><br>- +20 more, equally binding -- memory_read name=&lt;name&gt; before working near one: fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ...<br><br><span class="sample-strong">Stages (world-state gates):</span><br>- deep-audit-f15-f18-landed -- status unknown (no Status: header)<br>(details: memory_read name=&lt;stage&gt;)<br><br><span class="sample-strong">Plans:</span><br>- marketing -- 2/3 done, 1 claimable, 0 in flight<br>- seamless-documentation-site -- awaiting approval: Seamless documentation site (presented, 2m)<br>(steps: tasks_ready plan=&lt;slug&gt;; claim: tasks_claim id=&lt;task id&gt;; attach work via the plan:&lt;slug&gt; tag)<br><br><span class="sample-strong">Conventions (project-local choices):</span><br>- wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...<br><span class="sample-muted">... 3 more bullets ...</span><br>(9 total, 4 shown -- recall kind=convention for the rest)<br><br><span class="sample-strong">Recent findings:</span><br>- cc/1fa4b02d (1h): Landed the installer check; the release gate now fails on ...<br><br><span class="sample-strong">Ready tasks (2):</span><br>- Fix tool.call misattribution<br>- Polish the docs nav<br>(full queue with ids: tasks_ready; claim: tasks_claim id=&lt;id&gt;)<br><br><span class="sample-strong">Memories (seamless):</span><br>- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...<br>- shared-worktree-concurrent-agents-verify: Agents share the main worktree ...<br>- (+34 older -- recall query=&lt;topic&gt;, optionally kind=&lt;kind&gt;)<br>Recall on demand with recall; read a memory with memory_read.<br>Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient) -- this agent's Seamless tool calls bind to it automatically; no session_start needed<br><span class="sample-muted">&lt;/seam-briefing&gt;</span></div>
   </div>
   <figcaption id="annotated-briefing-caption">Situation before library: the pinned head leads (tiered constraints, stages, plan rollups), what just happened follows (pending plans, conventions, recent findings, ready tasks), the memory index packs after it, and retrieval guidance plus session identity close the envelope.</figcaption>
 </figure>
@@ -107,6 +187,10 @@ Line by line:
 - **`(+34 older -- recall query=<topic>, optionally kind=<kind>)`** is the
   honest tail: the index was trimmed, and the briefing says so instead of
   pretending it is complete.
+- **`Seam session:`** closes the envelope with the agent's own session handle,
+  and says its tool calls are already bound to it ([how](#process-binding)). A
+  hook that could not name the agent process prints
+  [the line's other form](/reference/hooks/#the-ambient-session-line) instead.
 
 ## The budget, and what survives it
 
@@ -163,7 +247,12 @@ Sessions heartbeat. A session that ends cleanly cascades immediately; one that i
 abandoned is caught by an idle reaper after `gardener.session_idle_minutes` and
 marked `expired`. The TTL only applies when there was no end signal at all - a
 crashed agent's session does not sit "live" forever, and a slow one is not
-reaped out from under itself.
+reaped out from under itself. An agent that was only idle gets its session
+back: the next Seamless tool call from the same live agent process reactivates
+the expired ambient session (recorded as a `session.started` event marked
+`revived`) and binds to it again. A session ended on purpose - by `session_end`
+or a SessionEnd hook - stays ended, and that agent's later calls are unbound.
+Two expired sessions stamped with the same process revive neither.
 
 `session_end` is the explicit findings path. Claude Code's SessionEnd hook calls
 the same lifecycle. Codex 0.144.6 has no SessionEnd event, so each `Stop` hook

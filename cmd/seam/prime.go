@@ -38,14 +38,18 @@ func runPrime(ctx context.Context, e *env, o *primeOpts, _ []string) error {
 	}
 	defer func() { _ = cli.Close() }()
 
-	args := map[string]any{"cwd": cwd, "name": *o.name, "source": "explicit"}
+	args := map[string]any{"cwd": cwd, "name": *o.name}
 	// The same identity `seam hook` sends, for the same reason: when the daemon
 	// is on another machine it cannot resolve this cwd's repository itself, and
 	// the session would land in the global scope. Resolved here, where the repo
 	// actually is. dial() also sends the host header; passing it explicitly is
 	// what survives a transport that drops headers.
 	for k, v := range identityParams("session-start", primeIdentityPayload(cwd)) {
-		args[primeArgNames[k]] = v
+		// agent_process is not a session_start argument: dial already sends it as
+		// a header, which is where the daemon reads it on every call.
+		if name, ok := primeArgNames[k]; ok {
+			args[name] = v
+		}
 	}
 	out, err := callTool(ctx, cli, "session_start", args)
 	if err != nil {

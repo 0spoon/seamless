@@ -326,8 +326,8 @@ Seamless commands, and accept them - until then, no briefing appears
 <div class="ctx-variant" data-ctx-client="claude-desktop">
 <p class="ctx-label"><span class="ctx-chip">Claude app chat</span></p>
 <p>Restart the Claude app once - it reads its config only at startup. A chat has
-no hooks and no working directory, so tell it the repo's absolute path and
-have it run <code>session_start</code> with that as <code>cwd</code>. See
+no hooks and no working directory, so have it run <code>session_start</code> with
+<code>project=&lt;slug&gt;</code> - or with the repo's absolute path as <code>cwd</code>. See
 <a href="../claude-app/">Claude app chat setup</a>.</p>
 </div>
 <p>The first session inside a git repo also registers it: the SessionStart hook

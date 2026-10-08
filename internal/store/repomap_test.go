@@ -346,18 +346,18 @@ func TestActiveAmbientProjects_HostFilterIsOptional(t *testing.T) {
 	mk("cc/a", "alpha", "app")
 	mk("cc/b", "beta", "other")
 
-	projects, err := ActiveAmbientProjects(ctx, db, "alpha", time.Hour)
+	projects, err := ActiveAmbientProjects(ctx, db, AmbientScope{Host: "alpha"}, time.Hour)
 	require.NoError(t, err)
 	require.Equal(t, []string{"app"}, projects)
 
-	projects, err = ActiveAmbientProjects(ctx, db, "", time.Hour)
+	projects, err = ActiveAmbientProjects(ctx, db, AmbientScope{}, time.Hour)
 	require.NoError(t, err)
 	require.Len(t, projects, 2, `"" is no filter at all`)
 
-	sessions, err := ActiveAmbientSessionsForProject(ctx, db, "beta", "other", time.Hour)
+	sessions, err := ActiveAmbientSessionsForProject(ctx, db, AmbientScope{Host: "beta"}, "other", time.Hour)
 	require.NoError(t, err)
 	require.Len(t, sessions, 1)
-	sessions, err = ActiveAmbientSessionsForProject(ctx, db, "alpha", "other", time.Hour)
+	sessions, err = ActiveAmbientSessionsForProject(ctx, db, AmbientScope{Host: "alpha"}, "other", time.Hour)
 	require.NoError(t, err)
 	require.Empty(t, sessions)
 }

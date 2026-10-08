@@ -38,6 +38,25 @@ reports `flag provided but not defined: -projct`. A positional that starts with
 all. Commands that take only flags and no positionals (`ready`, `task list`,
 `task add`, `plan list`, `status`, `usage`, `doctor`) are unaffected either way.
 
+## Which session a command acts in {#which-session}
+
+Every MCP request `seam` makes names the machine it runs on and the agent process
+that launched it - its nearest ancestor that is not a shell - the same identity
+[the MCP bridge](#mcp-bridge-and-auth-helper) sends for an agent. That decides
+where a command without `--project` lands:
+
+- **Run by a Claude Code or Codex agent through its shell**, a command is bound
+  to that agent's own session, like the agent's MCP calls: `seam recall` and
+  `seam remember` resolve to its project.
+- **Run by hand in a terminal**, the nearest non-shell ancestor is the terminal
+  or tmux, which no hook names, so the command is unbound - and its fallback
+  skips sessions other agents' processes own. Pass `--project` to reach a
+  project from a terminal: without it, a read or a write is refused as
+  ambiguous while any agent is live, rather than quietly answered from the
+  global scope, and only with no agent live does a read see the global scope.
+
+See [How tool calls find their session](/concepts/sessions/#process-binding).
+
 ## Agent loop
 
 The four commands an agent - or you, standing in for one - uses to start a
@@ -49,13 +68,15 @@ session, write knowledge, and search it back.
 seam prime [--cwd DIR] [--name NAME]
 ```
 
-Calls `session_start` with `source=explicit` and prints the briefing to stdout;
-the session id and resolved project go to stderr, so the briefing pipes cleanly.
-`--cwd` defaults to the current directory and is what resolves the project via
-the repo mapping. Reusing a `--name` resumes that session rather than opening a
-new one. When there is no briefing content yet, it says so on stderr.
+Calls `session_start` and prints the briefing to stdout; the session id and
+resolved project go to stderr, so the briefing pipes cleanly. `--cwd` defaults
+to the current directory and is what resolves the project via the repo mapping.
+Reusing a `--name` resumes that session rather than opening a new one. When
+there is no briefing content yet, it says so on stderr.
 
-This is the explicit form of what the SessionStart hook does automatically.
+This is the explicit form of what the SessionStart hook does automatically. Run
+by a Claude Code or Codex agent in its own repository, it adopts that agent's
+session rather than opening another.
 
 ### seam remember {#seam_remember}
 
@@ -100,7 +121,8 @@ seam capture [--project P] URL
 
 Calls `capture_url` to fetch a page through the SSRF-safe fetcher and store it
 as a note. An empty `--project` does not mean global: the scope resolves to the
-session's project - the bound session's, or a single unambiguous ambient one.
+session's project - the bound session's, or a single unambiguous ambient one
+([which](#which-session)).
 The server refuses to guess rather than pick a default, so a capture with
 nothing to infer from, or one made while ambient sessions span several projects,
 is an error naming the fix. Pass `--project global` to file the note globally
@@ -403,13 +425,17 @@ seam mcp-headers [--config PATH]
 These are client-launched helpers, not interactive commands.
 
 - `mcp-proxy` speaks MCP over stdio to its parent and forwards frames to
-  Seamless's Streamable HTTP `/api/mcp`, preserving `Mcp-Session-Id`. The Codex
+  Seamless's Streamable HTTP `/api/mcp`, preserving `Mcp-Session-Id` and naming
+  the process that launched it in an `X-Seamless-Agent-Process` header - which
+  binds an agent's calls to the session its hook opened. The Codex
   installer registers it as Seamless's default policy so the bearer key remains
   in the 0600 Seamless config. Current Codex also supports direct Streamable
   HTTP; the bridge is a key-handling choice, not a Codex transport requirement.
-- `mcp-headers` prints the current Authorization header as a JSON object for
-  Claude Code's `headersHelper`. That keeps the key out of `claude mcp add`
-  argv and stored client configuration.
+- `mcp-headers` prints the request headers as a JSON object for Claude Code's
+  `headersHelper`: the Authorization header, plus this machine's hostname and
+  the agent process that launched it (`X-Seamless-Host`,
+  `X-Seamless-Agent-Process`). That keeps the key out of `claude mcp add` argv
+  and stored client configuration, and binds the agent's calls to its session.
 
 `--config` selects the exact `seamless.yaml` both helpers read. Installers bake
 an absolute path into the client registration so it works from every repository.

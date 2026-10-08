@@ -65,7 +65,7 @@ func (s *Server) fenceRead(ctx context.Context, target string) error {
 		return err
 	}
 	if state.FencesOutbound() {
-		return fmt.Errorf("project %s is %s: reads require a session bound to it", target, state)
+		return fmt.Errorf("project %s is %s: reads require a session bound to it%s", target, state, bindRemedy(target))
 	}
 	return fmt.Errorf("this session is bound to %s project %s: reads outside it are disabled",
 		core.IsolationSealed, caller)
@@ -106,8 +106,19 @@ func (s *Server) fenceWrite(ctx context.Context, target string) error {
 		return fmt.Errorf("this session is bound to %s project %s: writes outside it are disabled",
 			state, caller)
 	}
-	return fmt.Errorf("project %s is %s: writes into it require a session bound to it",
-		target, core.IsolationSealed)
+	return fmt.Errorf("project %s is %s: writes into it require a session bound to it%s",
+		target, core.IsolationSealed, bindRemedy(target))
+}
+
+// bindRemedy completes a fence refusal with the way through it and the reason
+// not to take it lightly. The fence exists so that an agent working on one
+// project does not wander into another's isolated knowledge; an agent whose task
+// IS that project rebinds explicitly, which is a deliberate act the call log
+// records. Before this, the refusal said only "a session bound to it", and agents
+// guessed at session_start(project=...) -- which did not exist -- or gave up.
+func bindRemedy(project string) string {
+	return " -- if your task is about " + project + ", bind this connection to it with session_start project=" +
+		project + "; otherwise leave it alone"
 }
 
 // fenceProposal refuses a gardener_apply that would resolve a proposal across an
@@ -243,7 +254,7 @@ func (s *Server) ambientFenceErr(ctx context.Context, project string) error {
 	} else {
 		word = string(state)
 	}
-	return fmt.Errorf("project %s is %s: start a session bound to it", project, word)
+	return fmt.Errorf("project %s is %s: start a session bound to it%s", project, word, bindRemedy(project))
 }
 
 // trialsForCaller runs a trial query under the isolation fence. Trials were the

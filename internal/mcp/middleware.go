@@ -63,6 +63,10 @@ func (s *Server) validateMiddleware(next mcpserver.ToolHandlerFunc) mcpserver.To
 		if !ok {
 			return errResult(req.Params.Name, errNonObjectArgs)
 		}
+		raw, err := dropRetired(req.Params.Name, raw)
+		if err != nil {
+			return errResult(req.Params.Name, err)
+		}
 		normalized, err := normalizeArgs(schema, raw)
 		if err != nil {
 			return errResult(req.Params.Name, err)
@@ -106,6 +110,12 @@ func (s *Server) logMiddleware(next mcpserver.ToolHandlerFunc) mcpserver.ToolHan
 		// next(): a context value set inside the handler could not propagate out,
 		// so the slot is planted here and mutated in place.
 		ctx = context.WithValue(ctx, attributionSlotKey{}, &attributionSlot{})
+		// The per-call memo for the process binding (agent_binding.go): planted
+		// here so the handler's scope/fence lookups and this middleware's own
+		// attribution read share one query. session_end, the one handler that
+		// ends a session mid-call, stashes its target, which attribution reads
+		// first -- so a memo naming the session it just ended is never consulted.
+		ctx = context.WithValue(ctx, processSessionSlotKey{}, &processSessionSlot{})
 		start := time.Now()
 		result, err := next(ctx, req)
 		durMS := time.Since(start).Milliseconds()

@@ -36,7 +36,7 @@ Every worker then runs the same loop, and needs no knowledge of the others:
 
 ```text
 Worker loop
-session_start Establish identity Every claim is attributable to a live session.
+session Establish identity The hook's session, or session_start : every claim names a live session.
 tasks_ready Read actionable work Dependencies are already resolved.
 tasks_claim Race atomically Win and work, or lose and refresh the ready list.
 finish Close and hand off Update the task; session_end releases any claim still held.
@@ -45,7 +45,10 @@ Workers coordinate through shared state, so the planner never has to remain aliv
 
 `tasks_claim` fails with *no active session to claim as* if the connection has no
 session. That is not incidental strictness: the claim records **who** holds the
-task, and a claim by nobody could never be released, reclaimed, or attributed.
+task, and a claim by nobody could never be released, reclaimed, or attributed. A
+Claude Code or Codex worker needs no setup for this: its tool calls are
+[bound to its own session](https://thereisnospoon.org/docs/concepts/sessions/#process-binding), so its claims
+name it even with several workers in one repo.
 
 ### What the loser of a race sees
 
@@ -222,5 +225,7 @@ refuses it as ambiguous rather than inheriting from whichever ambient session wa
 most recent. That refusal is the feature: the alternative is one agent's memory
 silently landing in another agent's project.
 
-Bind the session ([Integrate your agent](https://thereisnospoon.org/docs/guides/integrate-your-agent/)), or pass
-`project` explicitly. See [Projects & scope](https://thereisnospoon.org/docs/concepts/projects/).
+Claude Code and Codex agents are bound to their own sessions automatically, so
+this bites hookless clients and agents on an older `seam`. Bind the session
+([Integrate your agent](https://thereisnospoon.org/docs/guides/integrate-your-agent/)), or pass `project`
+explicitly. See [Projects & scope](https://thereisnospoon.org/docs/concepts/projects/).

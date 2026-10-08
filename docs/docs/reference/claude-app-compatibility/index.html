@@ -321,6 +321,10 @@ reporting the general case as unverifiable.</li>
 surface installed; chat-surface setup with nothing else present is untested.</li>
 <li><strong>UserPromptSubmit's permanence</strong> on the code surface, per above.</li>
 <li><strong>A live app code session inside a managed worktree</strong>, per above.</li>
+<li><strong>The chat surface since the agent-process binding.</strong>
+<code>session_start project=&lt;slug&gt;</code>, and a sessionless-write fallback that skips
+sessions other agents' processes own, both postdate the capture above;
+neither has been observed in a live app conversation.</li>
 </ul>
 <h2 id="re-verifying-after-an-app-update">Re-verifying after an app update</h2>
 <p>The chat surface's protocol path can be re-checked without the app: run the

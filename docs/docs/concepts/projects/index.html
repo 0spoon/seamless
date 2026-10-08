@@ -256,16 +256,26 @@ how you deliberately reach another project (<code>project: otherrepo</code>) or 
 scope (<code>project: global</code>). A slug Seamless has never seen is <strong>not</strong> an error: the
 write registers it, and the new project appears in <code>project_list</code> and the console
 like any other. Naming a project into existence is an ordinary thing to do.</p>
-<p><strong>2. The bound session.</strong> <code>session_start</code> binds the connection: every later call
-on it inherits that project. This is why an agent that opens a session can then
-write memory with no <code>project</code> anywhere in sight.</p>
-<p><strong>3. The ambient session.</strong> No explicit binding? Seamless looks for the ambient
-session the SessionStart hook opened for this working directory, resolved via the
-<code>repo_project_map</code> setting. This is the rung that makes mapped repos feel like
-magic: an agent that never calls a single session tool still writes to the right
-project, because its cwd said which one.</p>
-<p>If that lookup is <strong>ambiguous</strong> - more than one candidate session - the call is
-rejected rather than guessed.</p>
+<p><strong>2. The bound session.</strong> A connection bound to a session passes that session's
+project to every later call on it. A Claude Code or Codex agent is bound
+automatically: its SessionStart hook opens an ambient session in the project its
+cwd maps to (via the <code>repo_project_map</code> setting), and the agent process the two
+share joins its tool calls to that session
+(<a href="../../concepts/sessions/#process-binding">how</a>). Any client can bind with
+<code>session_start</code> instead, which takes precedence. This is the rung that makes
+mapped repos feel like magic: an agent that never calls a single session tool
+still writes to the right project, because its cwd said which one - even while
+other agents work in other repos.</p>
+<p><strong>3. The sole ambient session.</strong> No binding at all - a hookless client that
+skipped <code>session_start</code>, <code>seam</code> run by hand, an agent whose <code>seam</code> predates the
+automatic binding? Seamless falls back to the live ambient sessions: if they all
+sit in one project, the call inherits it. A caller that names its process -
+every current <code>seam</code> transport does - skips sessions stamped with a different
+one, so an agent whose own session has ended never inherits someone else's; when
+other agents' sessions are all that is live, its call is refused rather than
+answered from the global scope.</p>
+<p>If that lookup is <strong>ambiguous</strong> - live sessions in more than one project - the
+call is rejected rather than guessed.</p>
 <p><strong>4. Nothing.</strong> With no session and no explicit project, a durable write is
 <strong>rejected as ambiguous</strong>.</p>
 <h2 id="why-writes-fail-closed">Why writes fail closed</h2>
@@ -286,11 +296,12 @@ is forever and everywhere. When in doubt, invent the project.</p>
 <p>Reads are more relaxed than writes - a search with no scope has an obvious safe
 answer (search what you can see), while a write does not.</p>
 <h2 id="mapping-a-repo">Mapping a repo</h2>
-<p>Rung 3 reads the <code>repo_project_map</code>, but you rarely write an entry into it. The
-map grows itself: on session start in an unmapped cwd, Seamless finds the
-enclosing git repository, derives a slug from the repo root's directory name,
-registers the project, and records <code>repoRoot -&gt; slug</code>. No recompile, no setup
-step. A cwd outside any git repo registers nothing and stays global.</p>
+<p>The ambient sessions behind rungs 2 and 3 are placed by the <code>repo_project_map</code>,
+but you rarely write an entry into it. The map grows itself: on session start in
+an unmapped cwd, Seamless finds the enclosing git repository, derives a slug from
+the repo root's directory name, registers the project, and records
+<code>repoRoot -&gt; slug</code>. No recompile, no setup step. A cwd outside any git repo
+registers nothing and stays global.</p>
 <p>The map also heals itself when a repo moves. A session starting from the new
 location derives the same slug, and when every mapped path that owns that slug
 no longer exists on disk, Seamless treats it as the same repo at a new path:
@@ -305,8 +316,8 @@ derives a different slug - and that is what the override below is for.
 the <code>arctop-ios</code> project, or a renamed repo that should keep its old project:</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/ios --project arctop-ios
 </span></span></code></pre></div>
-<p>Either way, agents in that repo inherit its scope through rung 3 without any tool
-call at all.</p>
+<p>Either way, agents in that repo inherit its scope from the session their hook
+opens, without any tool call at all.</p>
 <h2 id="families-parents-and-siblings">Families: parents and siblings</h2>
 <p>Projects can have parents, which makes <strong>families</strong>. A family exists so that
 related projects can share what is genuinely shared without merging into one
@@ -330,12 +341,15 @@ pile of individual moves.</p>
 <ul>
 <li><strong>Rejected as ambiguous</strong> - no session bound, and nothing to infer scope from.
 Run <code>session_start</code> with your <code>cwd</code> (inside a git repo that also maps the repo
-automatically), or pass <code>project=&lt;slug&gt;</code>. <code>map-repo</code> is not the fix here - it
-only overrides an already-derived slug, and is never a setup step.</li>
+automatically) or <code>project=&lt;slug&gt;</code>, or pass <code>project=&lt;slug&gt;</code> on the call.
+<code>map-repo</code> is not the fix here - it only overrides an already-derived slug, and
+is never a setup step. From Claude Code or Codex, check that the agent's <code>seam</code>
+is current - see <a href="../../guides/troubleshooting/">Troubleshooting</a>.</li>
 <li><strong>Landed in the wrong project</strong> - the cwd mapped somewhere unexpected, or an
 explicit <code>project</code> overrode what you meant. Rung 1 beats everything.</li>
-<li><strong>A tool insists a task is claimed by your own session</strong> - the connection
-binding was lost. Re-run <code>session_start</code> with the same name to rebind.</li>
+<li><strong>A tool insists a task is claimed by your own session</strong> - the connection lost
+its <code>session_start</code> binding. Re-run <code>session_start</code> with the same name to
+rebind.</li>
 </ul>
 
 </article>

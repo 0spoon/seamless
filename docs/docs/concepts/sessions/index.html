@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sessions &amp; briefings - Seamless docs</title>
-<meta name="description" content="How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing&#39;s packing order, and what never gets dropped.">
+<meta name="description" content="How an agent gets your knowledge injected before it does anything - ambient sessions, how its tool calls bind to them, the briefing&#39;s packing order, and what never gets dropped.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/concepts/sessions/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/concepts/sessions/">
 <meta property="og:title" content="Sessions &amp; briefings - Seamless docs">
-<meta property="og:description" content="How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing&#39;s packing order, and what never gets dropped.">
+<meta property="og:description" content="How an agent gets your knowledge injected before it does anything - ambient sessions, how its tool calls bind to them, the briefing&#39;s packing order, and what never gets dropped.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Concepts","item":"https://thereisnospoon.org/docs/concepts/"},{"@type":"ListItem","position":3,"name":"Sessions \u0026 briefings","item":"https://thereisnospoon.org/docs/concepts/sessions/"}]},{"@type":"TechArticle","headline":"Sessions \u0026 briefings - Seamless docs","description":"How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing's packing order, and what never gets dropped.","url":"https://thereisnospoon.org/docs/concepts/sessions/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Concepts","item":"https://thereisnospoon.org/docs/concepts/"},{"@type":"ListItem","position":3,"name":"Sessions \u0026 briefings","item":"https://thereisnospoon.org/docs/concepts/sessions/"}]},{"@type":"TechArticle","headline":"Sessions \u0026 briefings - Seamless docs","description":"How an agent gets your knowledge injected before it does anything - ambient sessions, how its tool calls bind to them, the briefing's packing order, and what never gets dropped.","url":"https://thereisnospoon.org/docs/concepts/sessions/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -226,11 +226,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 </nav>
 
   <h1>Sessions &amp; briefings</h1>
-  <p class="lede">How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing&#39;s packing order, and what never gets dropped.</p>
+  <p class="lede">How an agent gets your knowledge injected before it does anything - ambient sessions, how its tool calls bind to them, the briefing&#39;s packing order, and what never gets dropped.</p>
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#ambient-vs-explicit-sessions">Ambient vs. explicit sessions</a></li><li class="lvl-2"><a href="#an-actual-briefing-annotated">An actual briefing, annotated</a></li><li class="lvl-2"><a href="#the-budget-and-what-survives-it">The budget, and what survives it</a></li><li class="lvl-2"><a href="#liveness">Liveness</a></li>
+      <li class="lvl-2"><a href="#ambient-vs-explicit-sessions">Ambient vs. explicit sessions</a></li><li class="lvl-2"><a href="#process-binding">How tool calls find their session</a></li><li class="lvl-3"><a href="#when-to-call-session-start">When to call session_start</a></li><li class="lvl-2"><a href="#an-actual-briefing-annotated">An actual briefing, annotated</a></li><li class="lvl-2"><a href="#the-budget-and-what-survives-it">The budget, and what survives it</a></li><li class="lvl-2"><a href="#liveness">Liveness</a></li>
     </ul>
   </details>
   <p>A Seamless <strong>session</strong> is one agent's stretch of work. A <strong>briefing</strong> is what
@@ -266,8 +266,13 @@ constraints.</p>
 </tr>
 <tr>
 <td>Gets</td>
-<td>The short injected briefing</td>
-<td>The full briefing, returned by the call</td>
+<td>The briefing, injected at session start</td>
+<td>The same briefing, returned by the call</td>
+</tr>
+<tr>
+<td>Binds tool calls</td>
+<td>Automatically, through the <a href="#process-binding">agent process</a></td>
+<td>On the connection that called it</td>
 </tr>
 </tbody>
 </table>
@@ -278,23 +283,99 @@ external ID plus client, so two UUIDv7 sessions sharing a timestamp prefix never
 share scope, findings, or provenance. Pre-upgrade handles keep their old names
 when resumed. The handle is a display label, not an API: treat <code>cc/...</code> and
 <code>cx/...</code> as opaque and never parse or construct them.</p>
-<p>They are not two competing sessions. <code>session_start</code> <strong>adopts</strong> the sole ambient
-session for the same working directory rather than opening a second one - that
-adoption rule exists because the alternative was double-counting every agent.</p>
-<p>Call <code>session_start</code> when the work is non-trivial: it returns the full briefing
-(the injected one is deliberately shorter), and it binds the connection so
-everything afterward inherits the project scope.</p>
+<p>They are not two competing sessions. Without a <code>name</code>, <code>session_start</code>
+<strong>adopts</strong> an agent's existing session rather than opening a second one - that
+adoption rule exists because the alternative was double-counting every agent.
+From Claude Code or Codex it adopts only the agent's <strong>own</strong> session, which
+stays exact even with several agents in one repo (a different <code>project</code> is
+<a href="#when-to-call-session-start">the one exception</a>). A client that names no agent
+process adopts the sole active ambient session sharing its working directory. A
+caller that names its process but owns no live session is never handed another
+agent's.</p>
 <p>That distinction also appears in knowledge provenance. A write attributed by an
 ambient hook stores the session's <code>cc/...</code> or <code>cx/...</code> <strong>name</strong> in
 <code>source_session</code>; a write made through a bound MCP connection stores the
 session's ULID. Readers resolve both forms. Do not infer client, scope, or
 liveness from the spelling of <code>source_session</code>.</p>
+<h2 id="process-binding">How tool calls find their session</h2>
+<p>The SessionStart hook and the agent's MCP connection reach the daemon on two
+channels that share nothing on the wire: the hook carries the client's session
+id, the connection only an opaque transport id. What they share is the process
+that launched both - the <code>claude</code> or <code>codex</code> process - and that is the join:</p>
+<ol>
+<li><code>seam hook session-start</code> names the agent process - the nearest ancestor
+that is not a shell, as <code>&lt;pid&gt;.&lt;start time&gt;</code> - in its <code>agent_process</code> query
+parameter, and the daemon stamps it on the ambient session.</li>
+<li>The MCP transports the same agent launches - the <code>seam mcp-proxy</code> stdio
+bridge, <code>seam mcp-headers</code> (Claude Code's <code>headersHelper</code>), and the <code>seam</code>
+CLI's own dial - send that identity in an <code>X-Seamless-Agent-Process</code> header
+on every request.</li>
+<li>The daemon binds each call to the single active ambient session on the
+caller's machine stamped with it.</li>
+</ol>
+<p>So a Claude Code or Codex agent never needs <code>session_start</code>. Unscoped <code>recall</code>,
+<code>memory_write</code>, <code>notes_create</code>, and <code>tasks_*</code> calls resolve to the agent's own
+project even while agents are active in several repos, and <code>session_update</code>,
+<code>session_end</code>, and <code>tasks_claim</code> without <code>session=</code> act on the agent's own
+session. The binding lives in the session row and on every request, not in
+daemon memory, so it survives a daemon restart and an MCP reconnect - unlike the
+per-connection binding <code>session_start</code> makes.</p>
+<p>Its edges are deliberate:</p>
+<ul>
+<li><strong>An explicit binding wins.</strong> A <code>session_start</code> on the connection takes
+precedence over the process binding.</li>
+<li><strong>One process, one session.</strong> If two live ambient sessions are stamped with
+the same process - a host process running several sessions at once - nothing
+is bound automatically, and resolution falls back to the earlier rules: an
+explicit binding, then the sole-ambient-project inference in
+<a href="../../concepts/projects/">Projects &amp; scope</a>.</li>
+<li><strong>Never another agent's session.</strong> A caller that names its process but owns
+no live session - say, after ending its own - is not inferred into anyone
+else's: that inference skips sessions stamped with a different process.
+Unstamped sessions from older clients are still candidates. So a bare call
+from an agent whose session has ended - a read as much as a write - is refused
+as ambiguous scope instead of landing in another agent's project or quietly
+falling back to the global scope, and a bare <code>session_end</code> cannot complete
+another agent's session.</li>
+<li><strong>It needs the current <code>seam</code></strong> on the agent's machine. An older <code>seam</code> sends
+no identity, and everything behaves as before.</li>
+<li><strong>The <code>seam</code> CLI is bound by the same rule.</strong> A <code>seam recall</code> an agent runs
+through its shell is attributed to that agent's session. <code>seam</code> run by hand
+in a terminal is not bound: its nearest non-shell ancestor is the terminal or
+tmux, which no hook names.</li>
+<li><strong>No hook, nothing to bind to.</strong> A hand-integrated client or the
+<a href="../../claude-app/">Claude app chat</a> has no SessionStart hook and so no ambient
+session. It still calls <code>session_start</code>, and calls it again after a
+reconnect.</li>
+</ul>
+<p>Like the explicit binding, it is self-reported: it tells Seamless which session
+a call belongs to - for scope, and for
+<a href="../../concepts/project-isolation/#honest-limits">project isolation</a> - but it is not
+an authentication boundary.</p>
+<h3 id="when-to-call-session-start">When to call <code>session_start</code></h3>
+<ul>
+<li><strong>From a client without hooks</strong>, once per connection, with <code>cwd</code> (the
+repository it is in decides the project) or <code>project</code> (names it; an unknown
+slug creates the project, and the result's <code>warning</code> says so). Given both,
+they must agree: a <code>cwd</code> in a repository mapped to a different project is an
+error. With neither, the session is global.</li>
+<li><strong>To move this connection to another project.</strong> A <code>project</code> other than your
+own session's starts a separate session there - linked to yours, so a
+SessionEnd closes both - and binds the connection to it. An argument-less
+<code>session_start</code> hands the connection back to your own session.</li>
+<li><strong>To resume a named session.</strong> <code>name</code> takes a <code>sess/*</code> name or the <code>cc/...</code> or
+<code>cx/...</code> on the briefing's <code>Seam session</code> line; a new name starts a separate
+named session.</li>
+</ul>
+<p>The result carries the briefing for the project actually bound and a <code>scope</code>
+note saying how that project was chosen. When the call only adopted your own
+session, the note says so: you did not need it.</p>
 <h2 id="an-actual-briefing-annotated">An actual briefing, annotated</h2>
 <p>This is a real briefing, in the order the assembler packs it:</p>
 <figure class="doc-figure" aria-labelledby="annotated-briefing-caption">
   <div class="sample-panel">
     <div class="sample-panel-head"><span>Actual packing order</span><span>budgeted</span></div>
-    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 62 memories (24 constraints, 9 conventions, 1 stage), 3 recent findings.<br><br><span class="sample-strong">Constraints (binding for every session):</span><br>- errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br>- llm-degradation-remote-vs-local: llm errors split remote ...<br><span class="sample-muted">... 2 more bullets ...</span><br>- +20 more, equally binding -- memory_read name=&lt;name&gt; before working near one: fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ...<br><br><span class="sample-strong">Stages (world-state gates):</span><br>- deep-audit-f15-f18-landed -- status unknown (no Status: header)<br>(details: memory_read name=&lt;stage&gt;)<br><br><span class="sample-strong">Plans:</span><br>- marketing -- 2/3 done, 1 claimable, 0 in flight<br>- seamless-documentation-site -- awaiting approval: Seamless documentation site (presented, 2m)<br>(steps: tasks_ready plan=&lt;slug&gt;; claim: tasks_claim id=&lt;task id&gt;; attach work via the plan:&lt;slug&gt; tag)<br><br><span class="sample-strong">Conventions (project-local choices):</span><br>- wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...<br><span class="sample-muted">... 3 more bullets ...</span><br>(9 total, 4 shown -- recall kind=convention for the rest)<br><br><span class="sample-strong">Recent findings:</span><br>- cc/1fa4b02d (1h): Landed the installer check; the release gate now fails on ...<br><br><span class="sample-strong">Ready tasks (2):</span><br>- Fix tool.call misattribution<br>- Polish the docs nav<br>(full queue with ids: tasks_ready; claim: tasks_claim id=&lt;id&gt;)<br><br><span class="sample-strong">Memories (seamless):</span><br>- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...<br>- shared-worktree-concurrent-agents-verify: Agents share the main worktree ...<br>- (+34 older -- recall query=&lt;topic&gt;, optionally kind=&lt;kind&gt;)<br>Recall on demand with recall; read a memory with memory_read.<br>Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)<br><span class="sample-muted">&lt;/seam-briefing&gt;</span></div>
+    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 62 memories (24 constraints, 9 conventions, 1 stage), 3 recent findings.<br><br><span class="sample-strong">Constraints (binding for every session):</span><br>- errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br>- llm-degradation-remote-vs-local: llm errors split remote ...<br><span class="sample-muted">... 2 more bullets ...</span><br>- +20 more, equally binding -- memory_read name=&lt;name&gt; before working near one: fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ...<br><br><span class="sample-strong">Stages (world-state gates):</span><br>- deep-audit-f15-f18-landed -- status unknown (no Status: header)<br>(details: memory_read name=&lt;stage&gt;)<br><br><span class="sample-strong">Plans:</span><br>- marketing -- 2/3 done, 1 claimable, 0 in flight<br>- seamless-documentation-site -- awaiting approval: Seamless documentation site (presented, 2m)<br>(steps: tasks_ready plan=&lt;slug&gt;; claim: tasks_claim id=&lt;task id&gt;; attach work via the plan:&lt;slug&gt; tag)<br><br><span class="sample-strong">Conventions (project-local choices):</span><br>- wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...<br><span class="sample-muted">... 3 more bullets ...</span><br>(9 total, 4 shown -- recall kind=convention for the rest)<br><br><span class="sample-strong">Recent findings:</span><br>- cc/1fa4b02d (1h): Landed the installer check; the release gate now fails on ...<br><br><span class="sample-strong">Ready tasks (2):</span><br>- Fix tool.call misattribution<br>- Polish the docs nav<br>(full queue with ids: tasks_ready; claim: tasks_claim id=&lt;id&gt;)<br><br><span class="sample-strong">Memories (seamless):</span><br>- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...<br>- shared-worktree-concurrent-agents-verify: Agents share the main worktree ...<br>- (+34 older -- recall query=&lt;topic&gt;, optionally kind=&lt;kind&gt;)<br>Recall on demand with recall; read a memory with memory_read.<br>Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient) -- this agent's Seamless tool calls bind to it automatically; no session_start needed<br><span class="sample-muted">&lt;/seam-briefing&gt;</span></div>
   </div>
   <figcaption id="annotated-briefing-caption">Situation before library: the pinned head leads (tiered constraints, stages, plan rollups), what just happened follows (pending plans, conventions, recent findings, ready tasks), the memory index packs after it, and retrieval guidance plus session identity close the envelope.</figcaption>
 </figure>
@@ -348,6 +429,10 @@ exempt from every trim and from the budget.</li>
 <li><strong><code>(+34 older -- recall query=&lt;topic&gt;, optionally kind=&lt;kind&gt;)</code></strong> is the
 honest tail: the index was trimmed, and the briefing says so instead of
 pretending it is complete.</li>
+<li><strong><code>Seam session:</code></strong> closes the envelope with the agent's own session handle,
+and says its tool calls are already bound to it (<a href="#process-binding">how</a>). A
+hook that could not name the agent process prints
+<a href="../../reference/hooks/#the-ambient-session-line">the line's other form</a> instead.</li>
 </ul>
 <h2 id="the-budget-and-what-survives-it">The budget, and what survives it</h2>
 <p>Sections are packed against <code>budgets.max_briefing_tokens</code> (default 1500), then
@@ -397,7 +482,12 @@ ambient handle. Claude Code does not use this additional cap.</p>
 abandoned is caught by an idle reaper after <code>gardener.session_idle_minutes</code> and
 marked <code>expired</code>. The TTL only applies when there was no end signal at all - a
 crashed agent's session does not sit &quot;live&quot; forever, and a slow one is not
-reaped out from under itself.</p>
+reaped out from under itself. An agent that was only idle gets its session
+back: the next Seamless tool call from the same live agent process reactivates
+the expired ambient session (recorded as a <code>session.started</code> event marked
+<code>revived</code>) and binds to it again. A session ended on purpose - by <code>session_end</code>
+or a SessionEnd hook - stays ended, and that agent's later calls are unbound.
+Two expired sessions stamped with the same process revive neither.</p>
 <p><code>session_end</code> is the explicit findings path. Claude Code's SessionEnd hook calls
 the same lifecycle. Codex 0.144.6 has no SessionEnd event, so each <code>Stop</code> hook
 updates provisional findings from <code>last_assistant_message</code> and the reaper later
@@ -429,7 +519,7 @@ client exposes no transcript simply records none.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#ambient-vs-explicit-sessions">Ambient vs. explicit sessions</a></li><li class="lvl-2"><a href="#an-actual-briefing-annotated">An actual briefing, annotated</a></li><li class="lvl-2"><a href="#the-budget-and-what-survives-it">The budget, and what survives it</a></li><li class="lvl-2"><a href="#liveness">Liveness</a></li>
+      <li class="lvl-2"><a href="#ambient-vs-explicit-sessions">Ambient vs. explicit sessions</a></li><li class="lvl-2"><a href="#process-binding">How tool calls find their session</a></li><li class="lvl-3"><a href="#when-to-call-session-start">When to call session_start</a></li><li class="lvl-2"><a href="#an-actual-briefing-annotated">An actual briefing, annotated</a></li><li class="lvl-2"><a href="#the-budget-and-what-survives-it">The budget, and what survives it</a></li><li class="lvl-2"><a href="#liveness">Liveness</a></li>
     </ul>
   </aside>
   

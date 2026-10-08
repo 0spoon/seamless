@@ -354,7 +354,10 @@ one.</li>
 <li><strong>Refusals state the rule and the remedy</strong> and never echo the content they are
 withholding - an error that quoted the memory it was protecting would leak the
 very thing the fence exists to keep in. They do not hide that the project
-<em>exists</em>, because every scope error already lists the machine's projects.</li>
+<em>exists</em>, because every scope error already lists the machine's projects. An
+outside agent refused at the fence is told to bind to the project with
+<code>session_start project=&lt;slug&gt;</code> if its task really is that project, and to
+leave it alone otherwise.</li>
 </ul>
 <h2 id="honest-limits">Honest limits</h2>
 <p>This matters more than the feature list, so it is stated plainly.</p>
@@ -363,10 +366,16 @@ tool reads and writes, the gardener. That is where accidental cross-contaminatio
 actually happens, and it is now closed.</p>
 <p><strong>What this is not.</strong> It is <strong>not</strong> a defense against a local agent reading
 <code>~/.seamless/memory/&lt;project&gt;/*.md</code> directly. Every MCP caller shares one static
-bearer key, and the fence keys off the <strong>self-reported session binding</strong>. An
-agent that does not bind a session is judged as the global scope - which fails
-closed against reading an isolated project, but also means the fence cannot
-recognize it as belonging to one.</p>
+bearer key, and the fence keys off the <strong>self-reported session binding</strong> - an
+explicit <code>session_start</code>, or the agent-process identity a Claude Code or Codex
+agent's <code>seam</code> transport sends, which is just as self-reported
+(<a href="../../concepts/sessions/#process-binding">how it binds</a>). That automatic binding is
+what lets a confidential project's own agents read it without a <code>session_start</code>,
+and what keeps a confidential or sealed project's agents from writing outside
+it. A connection bound to nothing - a hookless client that skipped
+<code>session_start</code>, or an older <code>seam</code> that sends no identity - is judged as the
+global scope, which fails closed against reading an isolated project but also
+means the fence cannot recognize it as belonging to one.</p>
 <p><strong>What would make it stronger.</strong> Per-project bearer keys: a confidential project
 gets its own key, the repo's hooks use it, and the shared key cannot touch it.
 That upgrades the fence from policy to an auth boundary at the daemon. It is not

@@ -149,6 +149,11 @@ func TestIdentityFromRequest(t *testing.T) {
 			hookIdentity{Host: "beta", RepoRoot: "/srv/app", MainRoot: "/srv/app", Origin: "git@h:a/b.git"}},
 		{"windows root", `host=beta&repo_root=C%3A%5Crepos%5Capp`,
 			hookIdentity{Host: "beta", RepoRoot: `C:\repos\app`}},
+		{"agent process", "agent_process=12706.1759850172000000",
+			hookIdentity{AgentProcess: "12706.1759850172000000"}},
+		// Anything that is not an identity is dropped rather than stored: it
+		// could only ever fail to match, and the hook must not fail over it.
+		{"malformed agent process", "agent_process=claude-code", hookIdentity{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodPost, "/api/hooks/session-start?"+tc.raw, nil)
@@ -160,7 +165,7 @@ func TestIdentityFromRequest(t *testing.T) {
 // The CLI's copy of the identity keys must be the daemon's, or the params are
 // appended under names nothing reads -- a silent no-op, because hooks fail open.
 func TestIdentityQueryParams_AreStable(t *testing.T) {
-	require.Equal(t, []string{"host", "repo_root", "main_root", "origin"}, IdentityQueryParams())
+	require.Equal(t, []string{"host", "repo_root", "main_root", "origin", "agent_process"}, IdentityQueryParams())
 }
 
 // A hook that sends no host is an older `seam`, which can only be talking to a
@@ -414,4 +419,41 @@ func TestSubagentStop_TranscriptCaptureIsHostGated(t *testing.T) {
 		"transcript_path": filepath.Join(t.TempDir(), "t.jsonl"),
 	})
 	require.Contains(t, e.skippedWhat(t), "subagent-transcript")
+}
+
+// SessionStart stamps the agent process on the ambient session, which is what
+// lets the agent's MCP connection -- naming the same process -- bind to it. The
+// stamp follows the session: a resume in another process moves it, and a resume
+// from a client that names no process clears it, so a dead process never keeps
+// a claim on a live session.
+func TestSessionStart_StampsAgentProcess(t *testing.T) {
+	ctx := context.Background()
+	e := newHostEnv(t, config.PlanCapture{})
+	owned := func(proc string) []core.Session {
+		t.Helper()
+		got, err := store.ActiveAmbientByAgentProcess(ctx, e.db, localHostName, proc)
+		require.NoError(t, err)
+		return got
+	}
+
+	out := e.postFrom(t, "session-start", map[string]string{"host": localHostName, "agent_process": "100.1"},
+		map[string]any{"session_id": "proc-1", "cwd": "/work/demo", "source": "startup"})
+	ac := additionalContext(t, out)
+	require.Contains(t, ac, "bind to it automatically", "a named process binds without session_start")
+	require.Len(t, owned("100.1"), 1)
+	require.Equal(t, e.session(t, "proc-1").ID, owned("100.1")[0].ID)
+
+	// Resumed in another process: the stamp moves with it.
+	e.postFrom(t, "session-start", map[string]string{"host": localHostName, "agent_process": "200.2"},
+		map[string]any{"session_id": "proc-1", "cwd": "/work/demo", "source": "resume"})
+	require.Empty(t, owned("100.1"))
+	require.Len(t, owned("200.2"), 1)
+
+	// Resumed by a client that names no process: the old claim is dropped, and
+	// the line falls back to the binding remedy.
+	out = e.postFrom(t, "session-start", map[string]string{"host": localHostName},
+		map[string]any{"session_id": "proc-1", "cwd": "/work/demo", "source": "resume"})
+	require.Empty(t, owned("200.2"))
+	require.Contains(t, additionalContext(t, out), "session_start name="+e.session(t, "proc-1").Name)
+	require.Empty(t, e.hookErrors(t))
 }

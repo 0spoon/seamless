@@ -37,7 +37,7 @@ func TestSessionEnd_RecordsSelfReportedMishaps(t *testing.T) {
 	url, db := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	sessID := start["session_id"].(string)
 
 	end := callJSON(t, ctx, cli, "session_end", map[string]any{
@@ -74,7 +74,7 @@ func TestSessionEnd_LinksMishapsToNamedMemories(t *testing.T) {
 	url, db := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
-	sessStart := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	sessStart := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	require.Equal(t, "demo", sessStart["project"])
 
 	write := func(name, project string) string {
@@ -152,7 +152,7 @@ func TestSessionEnd_NoMishapsRecordsNothing(t *testing.T) {
 	url, db := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	end := callJSON(t, ctx, cli, "session_end", map[string]any{"findings": "done"})
 	require.Equal(t, "completed", end["status"])
 	require.Equal(t, float64(0), end["mishaps_recorded"])

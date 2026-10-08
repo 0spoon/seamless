@@ -148,7 +148,9 @@ same as memories.
 **DB-of-record state that exists nowhere else.** These have no file behind them,
 so losing `seam.db` loses them:
 
-- `sessions` - ambient and explicit sessions, findings, cwd, status.
+- `sessions` - ambient and explicit sessions, findings, cwd, status, and the
+  agent process that owns an ambient session (what binds the agent's tool calls
+  to it).
 - `tasks` and `task_deps` - the ready-queue, plan slugs, claims, and leases.
 - `trials` - research lab records with queryable JSON metrics.
 - `events` - the append-only log behind telemetry, the console feed, and

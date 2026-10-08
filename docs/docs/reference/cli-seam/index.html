@@ -230,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#flags-and-positionals">Flags and positionals</a></li><li class="lvl-2"><a href="#agent-loop">Agent loop</a></li><li class="lvl-3"><a href="#seam_prime">seam prime</a></li><li class="lvl-3"><a href="#seam_remember">seam remember</a></li><li class="lvl-3"><a href="#seam_recall">seam recall</a></li><li class="lvl-3"><a href="#seam_capture">seam capture</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-3"><a href="#seam_ready">seam ready</a></li><li class="lvl-3"><a href="#seam_task_list">seam task list</a></li><li class="lvl-3"><a href="#seam_task_add">seam task add</a></li><li class="lvl-3"><a href="#seam_task_transition">seam task done|start|drop|reopen</a></li><li class="lvl-3"><a href="#seam_task_claim">seam task claim</a></li><li class="lvl-3"><a href="#seam_task_heartbeat">seam task heartbeat</a></li><li class="lvl-3"><a href="#seam_task_release">seam task release</a></li><li class="lvl-2"><a href="#captured-plans">Captured plans</a></li><li class="lvl-3"><a href="#seam_plan_list">seam plan list</a></li><li class="lvl-3"><a href="#seam_plan_show">seam plan show</a></li><li class="lvl-3"><a href="#seam_plan_check">seam plan check</a></li><li class="lvl-3"><a href="#seam_plan_approve">seam plan approve</a></li><li class="lvl-2"><a href="#observability">Observability</a></li><li class="lvl-3"><a href="#seam_status">seam status</a></li><li class="lvl-3"><a href="#seam_sessions">seam sessions</a></li><li class="lvl-3"><a href="#seam_fav">seam fav</a></li><li class="lvl-3"><a href="#seam_project_isolation">seam project isolation</a></li><li class="lvl-3"><a href="#seam_usage">seam usage</a></li><li class="lvl-3"><a href="#seam_doctor">seam doctor</a></li><li class="lvl-3"><a href="#seam_version">seam version</a></li><li class="lvl-2"><a href="#mcp-bridge-and-auth-helper">MCP bridge and auth helper</a></li><li class="lvl-2"><a href="#hooks">Hooks</a></li>
+      <li class="lvl-2"><a href="#flags-and-positionals">Flags and positionals</a></li><li class="lvl-2"><a href="#which-session">Which session a command acts in</a></li><li class="lvl-2"><a href="#agent-loop">Agent loop</a></li><li class="lvl-3"><a href="#seam_prime">seam prime</a></li><li class="lvl-3"><a href="#seam_remember">seam remember</a></li><li class="lvl-3"><a href="#seam_recall">seam recall</a></li><li class="lvl-3"><a href="#seam_capture">seam capture</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-3"><a href="#seam_ready">seam ready</a></li><li class="lvl-3"><a href="#seam_task_list">seam task list</a></li><li class="lvl-3"><a href="#seam_task_add">seam task add</a></li><li class="lvl-3"><a href="#seam_task_transition">seam task done|start|drop|reopen</a></li><li class="lvl-3"><a href="#seam_task_claim">seam task claim</a></li><li class="lvl-3"><a href="#seam_task_heartbeat">seam task heartbeat</a></li><li class="lvl-3"><a href="#seam_task_release">seam task release</a></li><li class="lvl-2"><a href="#captured-plans">Captured plans</a></li><li class="lvl-3"><a href="#seam_plan_list">seam plan list</a></li><li class="lvl-3"><a href="#seam_plan_show">seam plan show</a></li><li class="lvl-3"><a href="#seam_plan_check">seam plan check</a></li><li class="lvl-3"><a href="#seam_plan_approve">seam plan approve</a></li><li class="lvl-2"><a href="#observability">Observability</a></li><li class="lvl-3"><a href="#seam_status">seam status</a></li><li class="lvl-3"><a href="#seam_sessions">seam sessions</a></li><li class="lvl-3"><a href="#seam_fav">seam fav</a></li><li class="lvl-3"><a href="#seam_project_isolation">seam project isolation</a></li><li class="lvl-3"><a href="#seam_usage">seam usage</a></li><li class="lvl-3"><a href="#seam_doctor">seam doctor</a></li><li class="lvl-3"><a href="#seam_version">seam version</a></li><li class="lvl-2"><a href="#mcp-bridge-and-auth-helper">MCP bridge and auth helper</a></li><li class="lvl-2"><a href="#hooks">Hooks</a></li>
     </ul>
   </details>
   <p><code>seam</code> is the headless CLI. It does no work itself: it loads the same
@@ -258,18 +258,37 @@ reports <code>flag provided but not defined: -projct</code>. A positional that s
 <p><code>seam task done|start|drop|reopen</code> and <code>seam plan show|approve</code> parse no flags at
 all. Commands that take only flags and no positionals (<code>ready</code>, <code>task list</code>,
 <code>task add</code>, <code>plan list</code>, <code>status</code>, <code>usage</code>, <code>doctor</code>) are unaffected either way.</p>
+<h2 id="which-session">Which session a command acts in</h2>
+<p>Every MCP request <code>seam</code> makes names the machine it runs on and the agent process
+that launched it - its nearest ancestor that is not a shell - the same identity
+<a href="#mcp-bridge-and-auth-helper">the MCP bridge</a> sends for an agent. That decides
+where a command without <code>--project</code> lands:</p>
+<ul>
+<li><strong>Run by a Claude Code or Codex agent through its shell</strong>, a command is bound
+to that agent's own session, like the agent's MCP calls: <code>seam recall</code> and
+<code>seam remember</code> resolve to its project.</li>
+<li><strong>Run by hand in a terminal</strong>, the nearest non-shell ancestor is the terminal
+or tmux, which no hook names, so the command is unbound - and its fallback
+skips sessions other agents' processes own. Pass <code>--project</code> to reach a
+project from a terminal: without it, a read or a write is refused as
+ambiguous while any agent is live, rather than quietly answered from the
+global scope, and only with no agent live does a read see the global scope.</li>
+</ul>
+<p>See <a href="../../concepts/sessions/#process-binding">How tool calls find their session</a>.</p>
 <h2 id="agent-loop">Agent loop</h2>
 <p>The four commands an agent - or you, standing in for one - uses to start a
 session, write knowledge, and search it back.</p>
 <h3 id="seam_prime">seam prime</h3>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam prime <span class="o">[</span>--cwd DIR<span class="o">]</span> <span class="o">[</span>--name NAME<span class="o">]</span>
 </span></span></code></pre></div>
-<p>Calls <code>session_start</code> with <code>source=explicit</code> and prints the briefing to stdout;
-the session id and resolved project go to stderr, so the briefing pipes cleanly.
-<code>--cwd</code> defaults to the current directory and is what resolves the project via
-the repo mapping. Reusing a <code>--name</code> resumes that session rather than opening a
-new one. When there is no briefing content yet, it says so on stderr.</p>
-<p>This is the explicit form of what the SessionStart hook does automatically.</p>
+<p>Calls <code>session_start</code> and prints the briefing to stdout; the session id and
+resolved project go to stderr, so the briefing pipes cleanly. <code>--cwd</code> defaults
+to the current directory and is what resolves the project via the repo mapping.
+Reusing a <code>--name</code> resumes that session rather than opening a new one. When
+there is no briefing content yet, it says so on stderr.</p>
+<p>This is the explicit form of what the SessionStart hook does automatically. Run
+by a Claude Code or Codex agent in its own repository, it adopts that agent's
+session rather than opening another.</p>
 <h3 id="seam_remember">seam remember</h3>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam remember --name N --kind K --description D <span class="o">[</span>--body TEXT<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span>
 </span></span></code></pre></div>
@@ -300,7 +319,8 @@ for the literal text <code>foo --projct p</code>.</p>
 </span></span></code></pre></div>
 <p>Calls <code>capture_url</code> to fetch a page through the SSRF-safe fetcher and store it
 as a note. An empty <code>--project</code> does not mean global: the scope resolves to the
-session's project - the bound session's, or a single unambiguous ambient one.
+session's project - the bound session's, or a single unambiguous ambient one
+(<a href="#which-session">which</a>).
 The server refuses to guess rather than pick a default, so a capture with
 nothing to infer from, or one made while ambient sessions span several projects,
 is an error naming the fix. Pass <code>--project global</code> to file the note globally
@@ -511,13 +531,17 @@ running server.</p>
 <p>These are client-launched helpers, not interactive commands.</p>
 <ul>
 <li><code>mcp-proxy</code> speaks MCP over stdio to its parent and forwards frames to
-Seamless's Streamable HTTP <code>/api/mcp</code>, preserving <code>Mcp-Session-Id</code>. The Codex
+Seamless's Streamable HTTP <code>/api/mcp</code>, preserving <code>Mcp-Session-Id</code> and naming
+the process that launched it in an <code>X-Seamless-Agent-Process</code> header - which
+binds an agent's calls to the session its hook opened. The Codex
 installer registers it as Seamless's default policy so the bearer key remains
 in the 0600 Seamless config. Current Codex also supports direct Streamable
 HTTP; the bridge is a key-handling choice, not a Codex transport requirement.</li>
-<li><code>mcp-headers</code> prints the current Authorization header as a JSON object for
-Claude Code's <code>headersHelper</code>. That keeps the key out of <code>claude mcp add</code>
-argv and stored client configuration.</li>
+<li><code>mcp-headers</code> prints the request headers as a JSON object for Claude Code's
+<code>headersHelper</code>: the Authorization header, plus this machine's hostname and
+the agent process that launched it (<code>X-Seamless-Host</code>,
+<code>X-Seamless-Agent-Process</code>). That keeps the key out of <code>claude mcp add</code> argv
+and stored client configuration, and binds the agent's calls to its session.</li>
 </ul>
 <p><code>--config</code> selects the exact <code>seamless.yaml</code> both helpers read. Installers bake
 an absolute path into the client registration so it works from every repository.</p>
@@ -560,7 +584,7 @@ config or touching the network. The daemon re-validates the path anyway.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#flags-and-positionals">Flags and positionals</a></li><li class="lvl-2"><a href="#agent-loop">Agent loop</a></li><li class="lvl-3"><a href="#seam_prime">seam prime</a></li><li class="lvl-3"><a href="#seam_remember">seam remember</a></li><li class="lvl-3"><a href="#seam_recall">seam recall</a></li><li class="lvl-3"><a href="#seam_capture">seam capture</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-3"><a href="#seam_ready">seam ready</a></li><li class="lvl-3"><a href="#seam_task_list">seam task list</a></li><li class="lvl-3"><a href="#seam_task_add">seam task add</a></li><li class="lvl-3"><a href="#seam_task_transition">seam task done|start|drop|reopen</a></li><li class="lvl-3"><a href="#seam_task_claim">seam task claim</a></li><li class="lvl-3"><a href="#seam_task_heartbeat">seam task heartbeat</a></li><li class="lvl-3"><a href="#seam_task_release">seam task release</a></li><li class="lvl-2"><a href="#captured-plans">Captured plans</a></li><li class="lvl-3"><a href="#seam_plan_list">seam plan list</a></li><li class="lvl-3"><a href="#seam_plan_show">seam plan show</a></li><li class="lvl-3"><a href="#seam_plan_check">seam plan check</a></li><li class="lvl-3"><a href="#seam_plan_approve">seam plan approve</a></li><li class="lvl-2"><a href="#observability">Observability</a></li><li class="lvl-3"><a href="#seam_status">seam status</a></li><li class="lvl-3"><a href="#seam_sessions">seam sessions</a></li><li class="lvl-3"><a href="#seam_fav">seam fav</a></li><li class="lvl-3"><a href="#seam_project_isolation">seam project isolation</a></li><li class="lvl-3"><a href="#seam_usage">seam usage</a></li><li class="lvl-3"><a href="#seam_doctor">seam doctor</a></li><li class="lvl-3"><a href="#seam_version">seam version</a></li><li class="lvl-2"><a href="#mcp-bridge-and-auth-helper">MCP bridge and auth helper</a></li><li class="lvl-2"><a href="#hooks">Hooks</a></li>
+      <li class="lvl-2"><a href="#flags-and-positionals">Flags and positionals</a></li><li class="lvl-2"><a href="#which-session">Which session a command acts in</a></li><li class="lvl-2"><a href="#agent-loop">Agent loop</a></li><li class="lvl-3"><a href="#seam_prime">seam prime</a></li><li class="lvl-3"><a href="#seam_remember">seam remember</a></li><li class="lvl-3"><a href="#seam_recall">seam recall</a></li><li class="lvl-3"><a href="#seam_capture">seam capture</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-3"><a href="#seam_ready">seam ready</a></li><li class="lvl-3"><a href="#seam_task_list">seam task list</a></li><li class="lvl-3"><a href="#seam_task_add">seam task add</a></li><li class="lvl-3"><a href="#seam_task_transition">seam task done|start|drop|reopen</a></li><li class="lvl-3"><a href="#seam_task_claim">seam task claim</a></li><li class="lvl-3"><a href="#seam_task_heartbeat">seam task heartbeat</a></li><li class="lvl-3"><a href="#seam_task_release">seam task release</a></li><li class="lvl-2"><a href="#captured-plans">Captured plans</a></li><li class="lvl-3"><a href="#seam_plan_list">seam plan list</a></li><li class="lvl-3"><a href="#seam_plan_show">seam plan show</a></li><li class="lvl-3"><a href="#seam_plan_check">seam plan check</a></li><li class="lvl-3"><a href="#seam_plan_approve">seam plan approve</a></li><li class="lvl-2"><a href="#observability">Observability</a></li><li class="lvl-3"><a href="#seam_status">seam status</a></li><li class="lvl-3"><a href="#seam_sessions">seam sessions</a></li><li class="lvl-3"><a href="#seam_fav">seam fav</a></li><li class="lvl-3"><a href="#seam_project_isolation">seam project isolation</a></li><li class="lvl-3"><a href="#seam_usage">seam usage</a></li><li class="lvl-3"><a href="#seam_doctor">seam doctor</a></li><li class="lvl-3"><a href="#seam_version">seam version</a></li><li class="lvl-2"><a href="#mcp-bridge-and-auth-helper">MCP bridge and auth helper</a></li><li class="lvl-2"><a href="#hooks">Hooks</a></li>
     </ul>
   </aside>
   

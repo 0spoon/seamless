@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/0spoon/seamless/internal/agentproc"
 )
 
 // Codex's hook payloads differ from Claude Code's in a few field names (captured
@@ -154,16 +156,23 @@ func decodeSubagentStop(_ Client, body []byte) subagentPayload {
 // as ?client=, and for the same reason: the daemon must know which filesystem a
 // payload's paths belong to before it reads any of them, and a hook body is the
 // client's schema rather than ours. `seam hook` resolves its own git identity
-// locally (it is the only process that can) and appends these four params.
+// locally (it is the only process that can) and appends these params.
 //
 // Absent is the old `seam` binary, which only ever talked to a daemon on its own
 // machine -- so an absent host means the local one, and every existing Claude
 // Code install keeps working byte-for-byte.
+//
+// agent_process is the one identity that is not about the machine: it names the
+// agent process (agentproc.Anchor) that ran the hook. It rides on session-start
+// only, where the ambient session is created, and is what lets that agent's MCP
+// connection -- which names the same process on every request -- bind to the
+// session without a session_start call.
 const (
-	hostQueryParam     = "host"
-	repoRootQueryParam = "repo_root"
-	mainRootQueryParam = "main_root"
-	originQueryParam   = "origin"
+	hostQueryParam         = "host"
+	repoRootQueryParam     = "repo_root"
+	mainRootQueryParam     = "main_root"
+	originQueryParam       = "origin"
+	agentProcessQueryParam = "agent_process"
 )
 
 // IdentityQueryParams lists the identity query keys in a stable order. cmd/seam
@@ -172,15 +181,16 @@ const (
 // test-pinned, exactly as clientQueryParam is, so a rename cannot silently strip
 // the identity off every hook.
 func IdentityQueryParams() []string {
-	return []string{hostQueryParam, repoRootQueryParam, mainRootQueryParam, originQueryParam}
+	return []string{hostQueryParam, repoRootQueryParam, mainRootQueryParam, originQueryParam, agentProcessQueryParam}
 }
 
 // hookIdentity is the agent machine's self-reported identity for one hook call.
 type hookIdentity struct {
-	Host     string // lower-cased hostname; "" = not sent (an older seam)
-	RepoRoot string // enclosing repository root; "" = unknown or not a repo
-	MainRoot string // main checkout root when RepoRoot is a linked worktree
-	Origin   string // origin remote URL; "" = unknown
+	Host         string // lower-cased hostname; "" = not sent (an older seam)
+	RepoRoot     string // enclosing repository root; "" = unknown or not a repo
+	MainRoot     string // main checkout root when RepoRoot is a linked worktree
+	Origin       string // origin remote URL; "" = unknown
+	AgentProcess string // agentproc identity of the agent that ran the hook; "" = not sent or malformed
 }
 
 // identityFromRequest reads the machine identity off the hook request. Every
@@ -191,9 +201,23 @@ type hookIdentity struct {
 func identityFromRequest(r *http.Request) hookIdentity {
 	q := r.URL.Query()
 	return hookIdentity{
-		Host:     strings.ToLower(strings.TrimSpace(q.Get(hostQueryParam))),
-		RepoRoot: strings.TrimSpace(q.Get(repoRootQueryParam)),
-		MainRoot: strings.TrimSpace(q.Get(mainRootQueryParam)),
-		Origin:   strings.TrimSpace(q.Get(originQueryParam)),
+		Host:         strings.ToLower(strings.TrimSpace(q.Get(hostQueryParam))),
+		RepoRoot:     strings.TrimSpace(q.Get(repoRootQueryParam)),
+		MainRoot:     strings.TrimSpace(q.Get(mainRootQueryParam)),
+		Origin:       strings.TrimSpace(q.Get(originQueryParam)),
+		AgentProcess: agentProcessFrom(q.Get(agentProcessQueryParam)),
 	}
+}
+
+// agentProcessFrom keeps a well-formed agent process identity and drops anything
+// else. Dropping is the fail-open half of the hook contract, and it is safe: an
+// unstamped session is reached through the same fallbacks every session used
+// before identities existed, while a malformed stamp could only ever fail to
+// match.
+func agentProcessFrom(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if !agentproc.Valid(raw) {
+		return ""
+	}
+	return raw
 }

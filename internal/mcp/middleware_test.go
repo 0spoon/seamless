@@ -42,7 +42,7 @@ func TestLogMiddleware_RecordsArgsResultAndAttribution(t *testing.T) {
 	cli := dialClient(t, ctx, url, testKey)
 
 	// session_start binds the connection to project "demo" via the cwd map.
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo/sub", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo/sub"})
 	sessID, _ := start["session_id"].(string)
 	require.NotEmpty(t, sessID)
 
@@ -76,7 +76,7 @@ func TestLogMiddleware_RecordsErrorResult(t *testing.T) {
 	ctx := context.Background()
 	url, db := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	// memory_read of a missing name is an error result (not a Go error).
 	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
@@ -94,7 +94,7 @@ func TestLogMiddleware_Truncation(t *testing.T) {
 	ctx := context.Background()
 	url, db := newServerCfg(t, func(c *mcpserver.Config) { c.ToolEventMaxChars = 16 })
 	cli := dialClient(t, ctx, url, testKey)
-	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 
 	long := "abcdefghijklmnopqrstuvwxyz0123456789" // 36 runes, over the 16 cap
 	callJSON(t, ctx, cli, "notes_create", map[string]any{
@@ -175,7 +175,7 @@ func TestLogMiddleware_BoundSessionEndAttribution(t *testing.T) {
 	url, db := newServer(t)
 
 	cli := dialClient(t, ctx, url, testKey)
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo"})
 	bound, _ := start["session_id"].(string)
 	require.NotEmpty(t, bound)
 

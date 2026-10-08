@@ -11,8 +11,9 @@ so the agent has to run that loop itself.
 
 [Claude Code](https://thereisnospoon.org/docs/claude-code/) and [Codex](https://thereisnospoon.org/docs/codex-cli/) get Seamless mostly for
 free: [hooks](https://thereisnospoon.org/docs/reference/hooks/) open a session, inject a briefing, and harvest
-findings without the agent deciding to. Any other client is wired up by hand.
-This page is that loop.
+findings without the agent deciding to, and the agent's tool calls are
+[bound to that session](https://thereisnospoon.org/docs/concepts/sessions/#process-binding) without a
+`session_start`. Any other client is wired up by hand. This page is that loop.
 
 ## The loop
 
@@ -92,7 +93,7 @@ curl -s -X POST http://127.0.0.1:8081/api/mcp \
   -H "Accept: application/json, text/event-stream" -H "Mcp-Session-Id: $SID" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call",
        "params":{"name":"session_start",
-                 "arguments":{"cwd":"/abs/path/to/repo","source":"explicit"}}}'
+                 "arguments":{"cwd":"/abs/path/to/repo"}}}'
 ```
 
 Every tool returns its payload as JSON **encoded into a text content block**, not
@@ -131,7 +132,8 @@ consequences you have to design around:
 
 - **The id encodes nothing about you** - no working directory, no client
   identity. It is an opaque UUID. The only way scope reaches the server is the
-  `cwd` you passed to `session_start`, or an explicit `project` argument.
+  `cwd` or `project` you passed to `session_start`, or an explicit `project`
+  argument on the call.
 - **It does not reliably survive a daemon restart.** Sometimes the client
   re-initializes and is minted a new id, orphaning the old binding; sometimes it
   sends the old id and the fresh process accepts it. Which one happens is a race.
@@ -139,6 +141,18 @@ consequences you have to design around:
 So: **re-run `session_start` on reconnect**, with the same `name` to resume the
 same session rather than opening a second one. Treat a sudden run of
 ambiguous-scope errors as a lost binding, not as a bug in your arguments.
+
+Claude Code and Codex agents are spared all of this: their connection names the
+agent process, and the daemon matches it to the agent's own session on every
+request, so a restart or reconnect loses nothing
+([how](https://thereisnospoon.org/docs/concepts/sessions/#process-binding)). That only covers the session their
+hook opened. A connection they move with `session_start` holds an explicit
+binding like yours, and when that binding is lost the calls drop back to the
+agent's own session.
+
+`session_start` no longer takes `source`, so send none. The legacy values (this
+guide once showed `"source":"explicit"`) are accepted and ignored; anything else
+is refused.
 
 One more `session_start` argument worth passing from a custom client: `model`,
 the model id powering your agent exactly as the provider names it
@@ -157,13 +171,15 @@ knowledge lands somewhere nobody looks. The full precedence chain is in
 |---|---|
 | `session_start` with a `cwd` inside a mapped repo | That repo's project |
 | `session_start` with a `cwd` inside an **unmapped git repo** | A project is registered automatically, named after the repository root directory |
-| `session_start` with a `cwd` that is not in a git repo | Nothing - the session is global |
+| `session_start` with `project=<slug>` | That project - registered if it is new, with a `warning` in the result saying so; `project=global` binds the global scope |
+| `session_start` with a `cwd` and a `project` that disagree | An error - pass one or the other |
+| `session_start` with no `project`, and a `cwd` outside any git repo (or none) | Nothing - the session is global |
 | No session, no `project` argument | The durable write is **rejected** |
 
-That third row is the one that surprises people. A session started outside a git
-repo has no project, and its writes go global - silently, because a bound session
-always resolves, even to the global scope. If your agent does not run in a repo,
-pass `project` explicitly on every durable write.
+The global row is the one that surprises people. A session started outside a git
+repo without a `project` is global, and its writes go global - silently, because
+a bound session always resolves, even to the global scope. If your agent does not
+run in a repo, pass `project` to `session_start`, or on every durable write.
 
 Writes **fail closed**. A `memory_write` with nothing to infer scope from is
 rejected as ambiguous rather than landing globally, because a global memory is
@@ -171,10 +187,10 @@ seen by every agent in every repo forever and that is not something the system
 should do when it is *unsure*. Two distinct errors say so:
 
 - *no bound or ambient session to infer the project from* - nothing to inherit.
-  Call `session_start`, or pass `project`.
+  Call `session_start` (with `cwd` or `project`), or pass `project`.
 - *active ambient sessions span multiple projects* - you are unbound and other
   agents are live in several repos, so inheriting would bleed your write into
-  someone else's project. Pass `project`.
+  someone else's project. Pass `project`, or bind once with `session_start`.
 
 Pass `project: global` when you mean global. It is a token you use on purpose,
 never a default you fall into.

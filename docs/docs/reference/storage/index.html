@@ -460,7 +460,9 @@ and dims. Brute-force cosine; there is no vector database.</li>
 <p><strong>DB-of-record state that exists nowhere else.</strong> These have no file behind them,
 so losing <code>seam.db</code> loses them:</p>
 <ul>
-<li><code>sessions</code> - ambient and explicit sessions, findings, cwd, status.</li>
+<li><code>sessions</code> - ambient and explicit sessions, findings, cwd, status, and the
+agent process that owns an ambient session (what binds the agent's tool calls
+to it).</li>
 <li><code>tasks</code> and <code>task_deps</code> - the ready-queue, plan slugs, claims, and leases.</li>
 <li><code>trials</code> - research lab records with queryable JSON metrics.</li>
 <li><code>events</code> - the append-only log behind telemetry, the console feed, and

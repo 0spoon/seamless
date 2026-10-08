@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0spoon/seamless/internal/agentproc"
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/gitread"
 )
@@ -94,7 +95,7 @@ var hookClients = []string{"claude-code", "codex"}
 // absent value makes it fall back to treating the hook as local, which is
 // exactly right for the single-machine install every one of these was written
 // for.
-var hookIdentityParams = []string{"host", "repo_root", "main_root", "origin"}
+var hookIdentityParams = []string{"host", "repo_root", "main_root", "origin", "agent_process"}
 
 // hookOpts carries the flags for `seam hook`.
 type hookOpts struct {
@@ -234,6 +235,13 @@ func identityParams(event string, payload []byte) map[string]string {
 	}
 	if event != "session-start" {
 		return out
+	}
+	// The agent that ran this hook. The daemon stamps it on the ambient session,
+	// and the same agent's MCP connection names it on every request, which is
+	// what binds the two without a session_start call. Before the cwd checks: a
+	// session outside any repository is still that agent's session.
+	if proc, ok := agentproc.Anchor(); ok {
+		out["agent_process"] = proc
 	}
 	var body struct {
 		CWD string `json:"cwd"`

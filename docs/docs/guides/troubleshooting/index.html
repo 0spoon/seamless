@@ -230,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says trust unverified</a></li><li class="lvl-2"><a href="#codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-write-is-rejected-as-ambiguous-scope">A write is rejected as ambiguous scope</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#a-tool-is-missing-or-a-console-screen-says-it-is-switched-off">A tool is missing, or a console screen says it is switched off</a></li><li class="lvl-2"><a href="#a-console-screen-is-not-in-the-sidebar">A console screen is not in the sidebar</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
+      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says trust unverified</a></li><li class="lvl-2"><a href="#codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-call-is-rejected-as-ambiguous-scope-session-or-agent">A call is rejected as ambiguous scope, session, or agent</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#a-tool-is-missing-or-a-console-screen-says-it-is-switched-off">A tool is missing, or a console screen says it is switched off</a></li><li class="lvl-2"><a href="#a-console-screen-is-not-in-the-sidebar">A console screen is not in the sidebar</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
     </ul>
   </details>
   <p>Seamless has one property that makes troubleshooting unlike most software:
@@ -354,12 +354,25 @@ and the session is global.</li>
 <p>An empty briefing for a project that genuinely has no constraints and no memories
 is correct behavior, not a fault. The header counts what exists; if it says zero,
 the store is telling the truth.</p>
-<h2 id="a-write-is-rejected-as-ambiguous-scope">A write is rejected as ambiguous scope</h2>
+<h2 id="a-call-is-rejected-as-ambiguous-scope-session-or-agent">A call is rejected as ambiguous scope, session, or agent</h2>
 <p><strong>What is happening.</strong> This is the <a href="../../concepts/projects/">fail-closed rule</a> doing
-its job. A durable write with no resolvable scope is rejected rather than landing
-in the global scope, because a global memory is seen by every agent in every repo
-forever - and that must never be what happens when the system is <em>unsure</em>.</p>
-<p><strong>Fix.</strong> The message tells you which of two cases you are in:</p>
+its job. A call on a connection bound to no session has to infer its project or
+session from the agents that are live, and it refuses rather than guesses when
+that inference has no single answer. A durable write with no resolvable scope is
+rejected rather than landing in the global scope, because a global memory is seen
+by every agent in every repo forever - and that must never be what happens when
+the system is <em>unsure</em>.</p>
+<p><strong>From Claude Code or Codex, suspect the <code>seam</code> binary first.</strong> Their tool calls
+are <a href="../../concepts/sessions/#process-binding">bound to the agent's own session</a>
+automatically, so they should rarely see these errors. A <code>seam</code> older than that
+binding sends no agent-process identity, which leaves the connection unbound -
+and the briefing's <code>Seam session</code> line then tells the agent to
+<code>bind once with session_start name=...</code> instead of saying no <code>session_start</code> is
+needed. <a href="../../updating/">Update</a> Seamless on the agent's machine and start a new
+session. An agent that has ended its own session is unbound too, by design: its
+next bare call - a read as much as a write - is refused rather than borrowing
+another agent's project or quietly falling back to the global scope.</p>
+<p><strong>Fix.</strong> The message tells you which case you are in:</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -372,25 +385,35 @@ forever - and that must never be what happens when the system is <em>unsure</em>
 <tbody>
 <tr>
 <td><em>no bound or ambient session to infer the project from</em></td>
-<td>No <code>session_start</code>, and no ambient session for this cwd</td>
-<td>Call <code>session_start</code> with your <code>cwd</code>, or pass <code>project=&lt;slug&gt;</code></td>
+<td>Nothing bound, and no ambient session this caller may inherit</td>
+<td>Bind with <code>session_start</code> (<code>cwd</code>, or <code>project=&lt;slug&gt;</code>), or pass <code>project=&lt;slug&gt;</code> on the write</td>
+</tr>
+<tr>
+<td><em>the active ones belong to other agents</em></td>
+<td>This connection names its agent process but owns no live session - an agent that ended its own session, or <code>seam</code> run by hand - and every live session is another agent's</td>
+<td>Pass <code>project=&lt;slug&gt;</code> (<code>--project</code> on the CLI); an agent that ended its own session can resume it with <code>session_start name=</code> the <code>cc/...</code> or <code>cx/...</code> on its briefing's <code>Seam session</code> line</td>
 </tr>
 <tr>
 <td><em>active ambient sessions span multiple projects</em></td>
 <td>You are unbound and other agents are live in several repos, so inheriting would bleed your write into someone else's project</td>
-<td>Pass <code>project=&lt;slug&gt;</code> explicitly</td>
+<td>Pass <code>project=&lt;slug&gt;</code>, or bind once with <code>session_start</code> (<code>name=</code> the <code>cc/...</code> or <code>cx/...</code> on your briefing's <code>Seam session</code> line, or <code>project=&lt;slug&gt;</code>)</td>
+</tr>
+<tr>
+<td><em>ambiguous session</em> or <em>ambiguous agent</em></td>
+<td><code>session_update</code>, <code>session_end</code>, or a task claim or release named no session while several agents are live</td>
+<td>Pass <code>session=</code> with the <code>cc/...</code> or <code>cx/...</code> on your briefing's <code>Seam session</code> line, or bind once with <code>session_start name=&lt;that name&gt;</code></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>In both cases <code>project=&lt;slug&gt;</code> may name a project that does not exist yet - the
-write creates it. Do not answer this error with <code>project=global</code> because a new
+<p>In the scope cases, <code>project=&lt;slug&gt;</code> may name a project that does not exist yet -
+the write creates it. Do not answer this error with <code>project=global</code> because a new
 slug felt riskier: an invented project is cheap and local, while global puts the
 item in every project's briefing forever. The error text lists the slugs that do
 exist, so you can match one instead of coining a near-duplicate.</p>
-<p>If a call that worked all morning starts failing this way, suspect a <strong>lost
-binding</strong> - see the daemon-restart section below. <code>project: global</code> is always
-accepted; it is a token you pass on purpose.</p>
+<p>If a call that worked all morning starts failing this way on a connection bound
+with <code>session_start</code>, suspect a <strong>lost binding</strong> - see the daemon-restart section
+below. <code>project: global</code> is always accepted; it is a token you pass on purpose.</p>
 <h2 id="recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</h2>
 <p><strong>What is happening.</strong> Three unrelated causes wear the same symptom.</p>
 <p><strong>Recall has degraded to keyword-only.</strong> If the embedding provider is unreachable,
@@ -437,13 +460,15 @@ regardless of the lease. Neither is on the MCP surface - agents get the
 cooperative protocol, you get the override.</li>
 </ol>
 <h2 id="tasks-update-says-the-task-is-already-claimed---by-my-own-session"><code>tasks_update</code> says the task is already claimed - by my own session</h2>
-<p><strong>What is happening.</strong> The connection binding was lost. The task is genuinely held
-by your session id; your <em>connection</em> no longer knows that, so the holder check
-sees a stranger.</p>
+<p><strong>What is happening.</strong> The connection lost its <code>session_start</code> binding. The task
+is genuinely held by your session id; your <em>connection</em> no longer knows that, so
+the holder check sees a stranger.</p>
 <p><strong>Fix.</strong> Re-run <code>session_start</code> with the <strong>same name</strong> to rebind. It resumes the
 session rather than opening a second one.</p>
 <p>The binding is keyed by the transport's <code>Mcp-Session-Id</code>, held in the daemon's
-memory. Any daemon restart drops it - see below.</p>
+memory. Any daemon restart drops it - see below. A Claude Code or Codex agent's
+automatic binding is not held there - it is matched from the agent process on
+every request - so this bites only a connection bound with <code>session_start</code>.</p>
 <h2 id="a-seam-flag-did-nothing">A <code>seam</code> flag did nothing</h2>
 <p><strong>This no longer happens.</strong> A trailing flag was once dropped in silence - <code>seam task release 01K7ABCD --force</code> took the normal holder-checked path and the
 override never happened, with no error and no warning. Both halves of that are
@@ -548,9 +573,10 @@ silently upgrades the running daemon to whatever is in your working tree.</li>
 port is the right way to test in isolation, but that pattern matches the real
 service's command line too and kills it. Under launchd it comes back in about a
 second with a new pid and no data loss - but <strong>every agent's MCP connection
-drops and their session bindings are lost mid-task</strong>, which resurfaces as the
-ambiguous-scope and self-claimed-task symptoms above. Kill the throwaway by its
-own pid, or by its port.</li>
+drops, and bindings made with <code>session_start</code> are lost mid-task</strong>, which
+resurfaces as the ambiguous-scope and self-claimed-task symptoms above (a
+Claude Code or Codex agent's automatic binding survives). Kill the throwaway by
+its own pid, or by its port.</li>
 <li><strong>Tools missing in some repos?</strong> That is not a daemon problem. <code>claude mcp add</code>
 defaults to <code>local</code> scope, tying the registration to the directory you ran it
 from. Register with <code>--scope user</code>.</li>
@@ -593,7 +619,7 @@ name is a lossless in-place update, so retrying is safe.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says trust unverified</a></li><li class="lvl-2"><a href="#codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-write-is-rejected-as-ambiguous-scope">A write is rejected as ambiguous scope</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#a-tool-is-missing-or-a-console-screen-says-it-is-switched-off">A tool is missing, or a console screen says it is switched off</a></li><li class="lvl-2"><a href="#a-console-screen-is-not-in-the-sidebar">A console screen is not in the sidebar</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
+      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says trust unverified</a></li><li class="lvl-2"><a href="#codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-call-is-rejected-as-ambiguous-scope-session-or-agent">A call is rejected as ambiguous scope, session, or agent</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#a-tool-is-missing-or-a-console-screen-says-it-is-switched-off">A tool is missing, or a console screen says it is switched off</a></li><li class="lvl-2"><a href="#a-console-screen-is-not-in-the-sidebar">A console screen is not in the sidebar</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
     </ul>
   </aside>
   

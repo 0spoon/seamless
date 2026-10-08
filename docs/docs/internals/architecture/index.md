@@ -42,6 +42,7 @@ violation is visible in the import block.
 | `core` | foundation | Domain types and enums - `Project`, `Memory`, `Session`, `Task`, `Trial`, `Event`, `NewID()`. Pure data, no I/O. | - |
 | `config` | foundation | One YAML file plus `SEAMLESS_*` env overrides; env wins over file, file over defaults. | - |
 | `validate` | foundation | `Path`, `Name`, `Title` - the guards that stand between agent text and the filesystem. | - |
+| `agentproc` | foundation | Names the agent process (`claude` or `codex`) that launched a `seam` process - its nearest non-shell ancestor, as pid plus start time. The SessionStart hook stamps it on the ambient session and the MCP transports send it, which binds a connection to its agent's session. | - |
 | `store` | foundation | SQLite: connection setup, migrations, FTS5, embeddings, and every query. Sessions, tasks (including the dependency-aware ready-queue and lease-based claims), trials, proposals, settings, and the retrieval stats live here. | `core`, `config` |
 | `events` | foundation | The append-only event log - the single write path for the record of what happened - plus SSE fan-out to subscribers. | `core` |
 | `llm` | foundation | Chat and embeddings across OpenAI (default), Ollama, and Anthropic, with the remote/local error taxonomy. | `config` |
@@ -54,8 +55,8 @@ violation is visible in the import block.
 | `capture` | domain | SSRF-safe URL fetch: private-IP rejection, a pinned dialer, a port allowlist, redirect validation, a size cap. | - |
 | `archive` | domain | Instance archives: `VACUUM INTO` snapshot + corpus + manifest out, guarded tar extraction and restore-or-merge back in. Never imports `config` - an archive is described by its manifest and the data dir it is handed, not by whichever process is holding it. | `core`, `files`, `llm`, `store`, `validate` |
 | `importer` | domain | One-way migration from the v1 store. Reads v1, writes v2, never modifies v1. | `core`, `files`, `store` |
-| `mcp` | surface | The tool surface over streamable HTTP, plus per-connection session bindings and scope resolution. | `capture`, `core`, `events`, `files`, `gardener`, `lifecycle`, `llm`, `plans`, `retrieve`, `store`, `validate` |
-| `hooks` | surface | Shared Claude Code/Codex hook endpoints and adapters, ambient sessions, bounded injection, findings harvest, and Claude-specific plan capture. | `config`, `core`, `events`, `files`, `plans`, `retrieve`, `store`, `validate` |
+| `mcp` | surface | The tool surface over streamable HTTP, plus session bindings (per connection, and by agent process) and scope resolution. | `agentproc`, `capture`, `core`, `events`, `files`, `gardener`, `lifecycle`, `llm`, `plans`, `retrieve`, `store`, `validate` |
+| `hooks` | surface | Shared Claude Code/Codex hook endpoints and adapters, ambient sessions, bounded injection, findings harvest, and Claude-specific plan capture. | `agentproc`, `config`, `core`, `events`, `files`, `plans`, `retrieve`, `store`, `validate` |
 | `console` | surface | The server-rendered observability UI and its SSE feed. | `config`, `core`, `events`, `files`, `gardener`, `lifecycle`, `markdown`, `plans`, `retrieve`, `store` |
 
 The import columns are the real ones, and they are the quickest way to check a
@@ -107,7 +108,7 @@ SessionStart trace
 Claude → hook · 1–3 Authenticate, bound, map seam hook session-start forwards stdin; only auth and request shape can return non-2xx; work is capped at two seconds; cwd grows the project map.
 Retrieve · 4–8 Resolve effective scope Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents take constraints plus spawn-prompt-matched RELEVANT lines.
 Pack · 9–11 Trim only eligible context Apply recency after partitioning, add findings/tasks/family/plan signals, then pack to budget and hard cap.
-Hook response · 12–15 Bind, inject, record Create or resume the ambient session, append its line, record the exact text sent, and return additionalContext .
+Hook response · 12–15 Bind, inject, record Create or resume the ambient session, stamp the agent process on it, append its line, record the exact text sent, and return additionalContext .
 The hook fails open after authentication: a retrieval problem may remove context, but it cannot stop the agent's turn.
 ```
 
