@@ -15,6 +15,20 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.5.4 {#v0-5-4}
+
+Released 2026-10-08 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.4)
+
+### Features
+
+- feat(update): accept the arctop release signer ahead of the move to github.com/arctop/seamless
+- feat(mcp): bind each agent's tool calls to its own session
+- feat(cli): seamlessd unmap-repo removes this machine's repo mappings
+
+### Other
+
+- build(deps): raise the toolchain floor to go1.26.9 and x/net to v0.60.0
+
 ## v0.5.3 {#v0-5-3}
 
 Released 2026-09-28 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.3)
