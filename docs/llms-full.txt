@@ -18,6 +18,10 @@ served over MCP by the local `seamlessd` daemon. The companion `seam` CLI gives
 headless agents a direct interface. There is no hosted Seamless service,
 external vector database, or account.
 
+The same store also works from chats in the Claude desktop app, for long-running
+work that isn't code: [Seamless in the Claude app](https://thereisnospoon.org/claude-app/)
+covers that side in plain terms.
+
 ## Which agent do you run?
 
 Setup is client-shaped: pick yours and that page walks install, wiring, and
@@ -442,6 +446,11 @@ differently:
 - **Chat conversations** are this page: a plain MCP client with **no hooks**,
   wired through `claude_desktop_config.json`. Seamless treats it as its own
   install target, named `claude-desktop`.
+
+If you came here from chat work that isn't code - a legal matter, a deal, a
+manuscript - [Seamless in the Claude app](https://thereisnospoon.org/claude-app/)
+shows what that looks like in plain terms. This page is the technical setup
+behind it.
 
 ## No hooks means no ambient layer
 

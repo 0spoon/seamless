@@ -2,6 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://thereisnospoon.org/</loc></url>
   <url><loc>https://thereisnospoon.org/compare/</loc></url>
+  <url><loc>https://thereisnospoon.org/claude-app/</loc></url>
   <url><loc>https://thereisnospoon.org/scenarios/cold-start/</loc></url>
   <url><loc>https://thereisnospoon.org/scenarios/constraint-violation/</loc></url>
   <url><loc>https://thereisnospoon.org/scenarios/token-safety/</loc></url>

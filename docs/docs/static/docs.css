@@ -1,47 +1,34 @@
 /* thereisnospoon.org/docs/ -- documentation shell.
-   Loaded AFTER static/site.css and consumes its custom properties: the docs and
-   the landing page share one design system, one font set, and one theme choice
-   (localStorage "theme"). Nothing here redefines a base token; the only new
-   variables are the --syn-* syntax colors, which have no landing-page
-   equivalent. Self-contained: no CDNs, no trackers. */
+   Loaded AFTER static/site.css and consumes its custom properties: the docs,
+   the scenario pages, and the compare hub share one design system with the
+   landing page (home.css's palette and faces -- Fraunces, Instrument Sans,
+   IBM Plex Mono), one font set, and one theme choice (localStorage "theme").
+   Nothing here redefines a base token; the only new variables are the --syn-*
+   syntax colors, which have no landing-page equivalent. Self-contained: no
+   CDNs, no trackers. */
 
 /* ==========================================================================
-   SYNTAX TOKENS -- consumed by the chroma classes at the bottom
+   SYNTAX TOKENS -- consumed by the chroma classes at the bottom.
+   Code blocks are the dark terminal panel in BOTH themes, so one palette --
+   the landing's terminal inks -- serves both. (A per-theme light set used to
+   paint ink-dark names and punctuation onto that dark panel.)
    ========================================================================== */
 :root {
-  --syn-comment: #6f7480;
-  --syn-keyword: #7d3cc4;
-  --syn-string:  #0e6a44;
-  --syn-number:  #b0431a;
-  --syn-func:    #2c3ec6;
-  --syn-type:    #0a6a86;
-  --syn-name:    var(--ink);
-  --syn-punct:   var(--muted);
-}
-[data-theme="dark"] {
-  --syn-comment: #6d7383;
-  --syn-keyword: #c4a2ff;
-  --syn-string:  #7fd6a4;
-  --syn-number:  #ffa285;
-  --syn-func:    #93a0ff;
-  --syn-type:    #6fd3e8;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --syn-comment: #6d7383;
-    --syn-keyword: #c4a2ff;
-    --syn-string:  #7fd6a4;
-    --syn-number:  #ffa285;
-    --syn-func:    #93a0ff;
-    --syn-type:    #6fd3e8;
-  }
+  --syn-comment: var(--term-faint);
+  --syn-keyword: #c39bff;
+  --syn-string:  var(--term-str);
+  --syn-number:  var(--term-bad);
+  --syn-func:    #6fd3ff;
+  --syn-type:    var(--term-key);
+  --syn-name:    var(--term-ink);
+  --syn-punct:   var(--term-muted);
 }
 
 /* docs-only layout metrics */
 :root {
   --sidebar-w: 250px;
   --toc-w:     200px;
-  --head-h:    56px;
+  --head-h:    60px;
 }
 
 /* ==========================================================================
@@ -51,23 +38,28 @@ body.docs {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
-  /* Pinned, not inherited: site.css sets the body to 17px for the landing
-     page, and a landing type change must not silently resize the docs. */
+  /* Pinned, not inherited: site.css sets the body to 17px for the pages it
+     shares, and a change there must not silently resize the docs. */
   font-size: 17px;
   margin: 0;
 }
+/* No paper grain on the docs (site.css paints one behind every other page):
+   the .table-wrap scroll-shadow covers are opaque --paper, so over a grained
+   page every table edge would show as a flat band. */
+body.docs::before { content: none; }
 
 .skip-link {
   position: absolute;
-  left: -9999px;
-  top: 0;
+  left: 12px;
+  top: -60px;
   z-index: 100;
-  background: var(--brand);
-  color: var(--brand-ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
   padding: 10px 16px;
-  border-radius: 0 0 var(--radius-sm) 0;
+  border-radius: 10px;
 }
-.skip-link:focus { left: 0; }
+.skip-link:focus { top: 12px; text-decoration: none; }
 
 .docs-head {
   position: sticky;
@@ -78,44 +70,55 @@ body.docs {
   align-items: center;
   gap: 14px;
   padding: 0 20px;
-  background: color-mix(in srgb, var(--paper) 88%, transparent);
-  backdrop-filter: saturate(140%) blur(8px);
+  background: color-mix(in oklab, var(--paper) 82%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
   border-bottom: 1px solid var(--border);
 }
-.docs-head .wordmark { flex: none; }
+.docs-head .brand { flex: none; }
+.docs-head .brand-mark { width: 25px; height: 25px; }
+.docs-head .brand-word { font-size: 22px; }
+/* "docs" beside the brand: the landing's italic-serif label voice, set off by
+   a hairline -- the section's name, and a link to its front page */
 .docs-badge {
   flex: none;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--brand);
-  background: var(--brand-soft);
-  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
-  border-radius: var(--radius-pill);
-  padding: 3px 9px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 19px;
+  line-height: 1;
+  font-variation-settings: "opsz" 24;
+  color: var(--accent);
+  padding: 3px 2px 4px 13px;
+  border-left: 1px solid var(--border-strong);
   text-decoration: none;
 }
-.docs-badge:hover { border-color: var(--brand); }
+.docs-badge:hover { color: var(--ink); text-decoration: none; }
 
 .docs-head-nav {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-left: auto;
 }
+.docs-head .theme-toggle, .docs-head .gh-link { width: 36px; height: 36px; }
 
 .nav-toggle {
   display: none;
   flex: none;
-  background: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--ink);
-  padding: 6px;
+  padding: 0;
   cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
+.nav-toggle:hover, .nav-toggle[aria-expanded="true"] { border-color: var(--border-strong); }
 .nav-toggle svg { width: 18px; height: 18px; display: block; }
 
 .docs-shell {
@@ -132,49 +135,67 @@ body.docs {
 }
 
 /* ==========================================================================
-   SIDEBAR
+   SIDEBAR -- each group is a hairline with its pages strung along it; the
+   current page is the star on the line (the landing's chapter rail)
    ========================================================================== */
 .docs-sidebar {
   position: sticky;
   top: var(--head-h);
   max-height: calc(100vh - var(--head-h));
   overflow-y: auto;
-  padding: 28px 0 60px;
-  font-size: 14px;
+  /* the left inset keeps the current page's star (it sits on the line) clear
+     of this scroll box's clip edge */
+  padding: 28px 0 60px 8px;
+  font-size: 14.5px;
 }
-.nav-group { margin-bottom: 22px; }
+.nav-group { margin-bottom: 24px; }
 .nav-head {
   display: block;
   font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-style: italic;
+  font-size: 16.5px;
+  font-weight: 400;
+  line-height: 1.3;
+  font-variation-settings: "opsz" 24;
+  color: var(--ink);
   text-decoration: none;
-  padding: 4px 10px;
-  margin-bottom: 4px;
+  padding: 4px 12px;
+  margin-bottom: 6px;
 }
-a.nav-head:hover { color: var(--brand); }
-a.nav-head.current { color: var(--brand); }
+a.nav-head:hover { color: var(--accent); text-decoration: none; }
+a.nav-head.current { color: var(--accent); }
 .docs-sidebar ul { list-style: none; margin: 0; padding: 0; }
 .docs-sidebar li a {
+  position: relative;
   display: block;
-  padding: 5px 10px;
-  border-left: 2px solid var(--border);
+  padding: 5px 12px;
+  border-left: 1px solid var(--border-strong);
   color: var(--ink-2);
   text-decoration: none;
   transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .docs-sidebar li a:hover {
   color: var(--ink);
-  border-left-color: var(--border-strong);
+  border-left-color: var(--muted);
+  text-decoration: none;
 }
 .docs-sidebar li a.current {
-  color: var(--brand);
-  border-left-color: var(--brand);
+  color: var(--ink);
   font-weight: 600;
-  background: color-mix(in srgb, var(--brand-soft) 60%, transparent);
+  background: linear-gradient(90deg, var(--accent-soft), transparent 90%);
+}
+.docs-sidebar li a.current::before,
+.docs-toc li a.active::before {
+  content: "";
+  position: absolute;
+  /* centered on the 1px line: the box starts inside the border */
+  left: -4px;
+  top: calc(50% - 3.5px);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 12px var(--glow);
 }
 
 /* ==========================================================================
@@ -182,120 +203,161 @@ a.nav-head.current { color: var(--brand); }
    ========================================================================== */
 .docs-main {
   min-width: 0; /* pairs with minmax(0,1fr): lets code blocks scroll, not stretch */
-  padding: 36px 0 80px;
+  padding: 40px 0 80px;
 }
 .docs-toc {
   position: sticky;
   top: var(--head-h);
   max-height: calc(100vh - var(--head-h));
   overflow-y: auto;
-  padding: 40px 0 60px;
-  font-size: 13px;
+  padding: 44px 0 60px 8px;
+  font-size: 13.5px;
 }
 .toc-head {
   font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-style: italic;
+  font-size: 15.5px;
+  font-weight: 400;
+  font-variation-settings: "opsz" 24;
+  color: var(--muted);
   margin: 0 0 10px;
 }
 .docs-toc ul { list-style: none; margin: 0; padding: 0; }
 .docs-toc li a {
+  position: relative;
   display: block;
-  padding: 4px 0 4px 12px;
-  border-left: 2px solid var(--border);
+  padding: 4px 0 4px 14px;
+  border-left: 1px solid var(--border-strong);
   color: var(--muted);
   text-decoration: none;
   overflow-wrap: anywhere;
+  transition: color var(--dur-fast) var(--ease-out);
 }
-.docs-toc li.lvl-3 a { padding-left: 24px; font-size: 12px; }
-.docs-toc li a:hover { color: var(--ink); }
-.docs-toc li a.active {
-  color: var(--brand);
-  border-left-color: var(--brand);
-}
+.docs-toc li.lvl-3 a { padding-left: 26px; font-size: 12.5px; }
+.docs-toc li a:hover { color: var(--ink); text-decoration: none; }
+.docs-toc li a.active { color: var(--ink); }
 
 /* ==========================================================================
    PROSE
    ========================================================================== */
 .prose { max-width: 46rem; }
+/* The breadcrumb is the landing's chapter mark: an accent star, then the
+   trail in italic serif, the current page in the accent. */
 .prose .breadcrumb {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.35;
+  font-variation-settings: "opsz" 24;
+  margin: 0 0 14px;
+}
+.prose .breadcrumb::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 0 14px var(--glow);
 }
 .prose .breadcrumb ol {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 4px 6px;
   margin: 0;
   padding: 0;
 }
+.prose .breadcrumb li { margin: 0; line-height: inherit; color: var(--muted); }
 .prose .breadcrumb li + li::before {
   content: "/";
-  margin-right: 4px;
-  color: var(--muted);
+  margin-right: 6px;
+  color: var(--faint);
+  font-style: normal;
 }
 .prose .breadcrumb a {
   color: var(--muted);
   text-decoration: none;
 }
-.prose .breadcrumb a:hover { color: var(--pop); }
-.prose .breadcrumb [aria-current="page"] { color: var(--pop); }
+.prose .breadcrumb a:hover { color: var(--ink); text-decoration: none; }
+.prose .breadcrumb [aria-current="page"] { color: var(--accent); }
 .prose h1 {
   font-family: var(--font-display);
-  font-size: clamp(30px, 4vw, 40px);
-  font-weight: 600;
-  letter-spacing: var(--tracking-tight);
-  line-height: 1.15;
-  margin: 0 0 14px;
+  font-size: clamp(34px, 4.3vw, 50px);
+  font-weight: 400;
+  font-variation-settings: "opsz" 144, "SOFT" 30;
+  letter-spacing: -0.024em;
+  line-height: 1.06;
+  color: var(--ink);
+  margin: 0 0 16px;
+  text-wrap: balance;
 }
 .prose .lede {
-  font-size: 18px;
+  font-size: 19px;
   line-height: 1.6;
   color: var(--muted);
-  margin: 0 0 28px;
+  margin: 0 0 30px;
+  text-wrap: pretty;
 }
 .prose h2 {
   font-family: var(--font-display);
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: var(--tracking-tight);
-  margin: 44px 0 12px;
-  padding-top: 10px;
+  font-size: 29px;
+  font-weight: 400;
+  font-variation-settings: "opsz" 96, "SOFT" 30;
+  letter-spacing: -0.018em;
+  line-height: 1.15;
+  color: var(--ink);
+  margin: 48px 0 14px;
+  padding-top: 18px;
   border-top: 1px solid var(--border);
   scroll-margin-top: calc(var(--head-h) + 16px);
 }
 .prose h3 {
   font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
-  margin: 28px 0 10px;
+  font-size: 21px;
+  font-weight: 500;
+  font-variation-settings: "opsz" 32;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--ink);
+  margin: 30px 0 10px;
   scroll-margin-top: calc(var(--head-h) + 16px);
 }
 .prose h4 {
-  font-size: 15px;
+  font-family: var(--font-sans);
+  font-size: 15.5px;
   font-weight: 700;
+  color: var(--ink);
   margin: 22px 0 8px;
   scroll-margin-top: calc(var(--head-h) + 16px);
 }
+.prose :is(h2, h3) code { font-size: 0.8em; }
 .prose p, .prose li { line-height: 1.7; color: var(--ink-2); }
 .prose p { margin: 0 0 16px; }
 .prose ul, .prose ol { margin: 0 0 16px; padding-left: 22px; }
 .prose li { margin-bottom: 6px; }
-.prose a { color: var(--brand); text-decoration-thickness: 1px; text-underline-offset: 2px; }
-.prose a:hover { color: var(--brand-strong); }
+.prose li::marker { color: var(--faint); }
+/* Prose links are underlined, as on the landing, but with a quiet rule that
+   comes up to full strength on hover. */
+.prose a {
+  color: var(--brand);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, currentColor 38%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color var(--dur-fast) var(--ease-out), text-decoration-color var(--dur-fast) var(--ease-out);
+}
+.prose a:hover { color: var(--ink); text-decoration-color: var(--accent); }
+.prose a.doc-card { text-decoration: none; }
 .prose strong { color: var(--ink); }
 .prose hr { border: 0; border-top: 1px solid var(--border); margin: 36px 0; }
 .prose blockquote {
   margin: 0 0 16px;
   padding: 2px 0 2px 16px;
-  border-left: 3px solid var(--pop);
+  border-left: 2px solid var(--accent);
   color: var(--muted);
 }
 .prose blockquote p:last-child { margin-bottom: 0; }
@@ -304,11 +366,12 @@ a.nav-head.current { color: var(--brand); }
 /* inline code */
 .prose :not(pre) > code {
   font-family: var(--font-mono);
-  font-size: 0.875em;
+  font-size: 0.86em;
+  color: var(--ink);
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
-  padding: 1px 5px;
+  padding: 0.08em 0.38em;
   overflow-wrap: anywhere;
 }
 
@@ -321,57 +384,58 @@ a.nav-head.current { color: var(--brand); }
   padding: 16px 18px;
   margin: 0 0 20px;
   overflow-x: auto; /* wide content scrolls in its own box; the page never does */
+  scrollbar-width: thin;
+  scrollbar-color: var(--term-line) transparent;
 }
 .prose pre code {
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--term-ink);
   background: none;
   border: 0;
   padding: 0;
 }
 /* Build-time language labels: markdown.go wraps every fence in .code-block
-   carrying the fence's info string as data-lang, rendered here in the
-   sample-panel-head idiom -- mono, uppercase, muted -- at the panel's top
-   left (the copy button owns the top right). Bare and `text` fences carry
-   no label and keep the compact padding. */
+   carrying the fence's info string as data-lang, rendered here in the landing
+   terminal bar's voice -- lowercase mono, muted -- at the panel's top left
+   (the copy button owns the top right). Bare and `text` fences carry no label
+   and keep the compact padding. */
 .prose .code-block { position: relative; }
 .prose .code-block::before {
   content: attr(data-lang);
   position: absolute;
   top: 10px;
-  left: 14px;
+  left: 16px;
   /* Above the pre: it is positioned too (for the copy button) and later in
      tree order, so without this its opaque panel paints over the label. */
   z-index: 1;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--term-muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  color: var(--term-faint);
   pointer-events: none;
 }
 .prose .code-block:not([data-lang])::before,
 .prose .code-block[data-lang="text"]::before { content: none; }
-.prose .code-block[data-lang]:not([data-lang="text"]) pre { padding-top: 32px; }
+.prose .code-block[data-lang]:not([data-lang="text"]) pre { padding-top: 34px; }
 
 .copy-code {
   position: absolute;
   top: 8px;
   right: 8px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 500;
   color: var(--term-muted);
-  background: color-mix(in srgb, var(--term-bg) 70%, transparent);
+  background: color-mix(in srgb, var(--term-bg) 78%, transparent);
   border: 1px solid var(--term-border);
-  border-radius: var(--radius-xs);
-  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  padding: 3px 9px;
   cursor: pointer;
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out);
+  transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .prose pre:hover .copy-code, .copy-code:focus-visible { opacity: 1; }
 /* A hover-revealed control never reveals on a touch screen, where there is no
@@ -379,23 +443,25 @@ a.nav-head.current { color: var(--brand); }
 @media (hover: none) {
   .copy-code { opacity: 1; }
 }
-.copy-code:hover { color: var(--term-ink); border-color: var(--term-muted); }
+.copy-code:hover { color: var(--term-user); border-color: var(--term-str); }
 .copy-code.ok { color: var(--term-green); border-color: var(--term-green); opacity: 1; }
 /* The clipboard-refused state: the code is selected, one keystroke finishes. */
-.copy-code.sel { color: var(--term-pop); border-color: var(--term-pop); opacity: 1; }
+.copy-code.sel { color: var(--term-str); border-color: var(--term-str); opacity: 1; }
 
 /* Heading anchor handles, added by docs.js next to the goldmark ids. The
    .copy-code idiom: invisible until the heading is hovered or the anchor is
    focused, always present where there is no hover to give. */
 .prose .h-anchor {
   margin-left: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.8em;
   color: var(--faint);
   text-decoration: none;
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
 }
 .prose h2:hover .h-anchor, .prose h3:hover .h-anchor, .prose .h-anchor:focus-visible { opacity: 1; }
-.prose .h-anchor:hover { color: var(--brand); }
+.prose .h-anchor:hover { color: var(--accent); }
 @media (hover: none) {
   .prose .h-anchor { opacity: 1; }
 }
@@ -420,20 +486,20 @@ a.nav-head.current { color: var(--brand); }
 }
 /* A scrollable box must be reachable by keyboard; docs.js adds the tabindex only
    to the wrappers that actually overflow, so the other 60-odd are not tab stops. */
-.table-wrap[tabindex]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.table-wrap[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .prose table {
   width: 100%;
   border-collapse: collapse;
   margin: 0;
-  font-size: 14px;
+  font-size: 14.5px;
 }
 .prose thead th {
   text-align: left;
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-size: 12px;
-  letter-spacing: var(--tracking-wide);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   font-weight: 600;
   border-bottom: 1px solid var(--border-strong);
   padding: 8px 16px 8px 0;
@@ -441,7 +507,7 @@ a.nav-head.current { color: var(--brand); }
 }
 .prose tbody td {
   border-bottom: 1px solid var(--border);
-  padding: 9px 16px 9px 0;
+  padding: 10px 16px 10px 0;
   color: var(--ink-2);
   vertical-align: top;
 }
@@ -471,8 +537,8 @@ a.nav-head.current { color: var(--brand); }
   padding: 20px;
   overflow: hidden;
   background:
-    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--figure-accent) 12%, transparent), transparent 42%),
-    linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--surface-2) 72%, var(--surface)));
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--figure-accent) 10%, transparent), transparent 42%),
+    linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--surface-2) 55%, var(--surface)));
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
@@ -484,19 +550,20 @@ a.nav-head.current { color: var(--brand); }
   margin-top: 16px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.55;
   color: var(--muted);
 }
 .doc-figure figcaption strong { color: var(--ink); }
+/* the landing's step kicker (.ostep-n): mono, as authored, in the accent --
+   kickers name identifiers ("memory_write trace"), so no case transform */
 .figure-kicker {
   display: block;
   margin-bottom: 12px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   color: var(--figure-accent);
 }
 .doc-flow {
@@ -569,7 +636,7 @@ a.nav-head.current { color: var(--brand); }
   margin-bottom: 5px;
   font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.3;
   letter-spacing: .02em;
   /* Tool names are single atoms. Wrap the label at its spaces, never inside
@@ -582,14 +649,16 @@ a.nav-head.current { color: var(--brand); }
 .flow-node strong {
   display: block;
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 500;
+  font-variation-settings: "opsz" 24;
   line-height: 1.25;
   color: var(--ink);
 }
 .flow-node small {
   display: block;
   margin-top: 5px;
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.45;
   color: var(--muted);
 }
@@ -599,7 +668,7 @@ a.nav-head.current { color: var(--brand); }
   overflow-wrap: normal;
 }
 .flow-node.success { border-color: color-mix(in srgb, var(--ok) 55%, var(--border)); }
-.flow-node.error { border-color: color-mix(in srgb, var(--pop) 55%, var(--border)); }
+.flow-node.error { border-color: color-mix(in srgb, var(--bad) 55%, var(--border)); }
 .flow-node.warn { border-color: color-mix(in srgb, var(--pop-strong) 55%, var(--border)); }
 .flow-node.emphasis {
   background: color-mix(in srgb, var(--brand-soft) 68%, var(--surface));
@@ -622,8 +691,8 @@ a.nav-head.current { color: var(--brand); }
 .flow-lane > .flow-node::before,
 .flow-lane > .flow-node::after { display: none; }
 .flow-lane-head {
-  font-family: var(--font-display);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--ink);
 }
@@ -687,7 +756,10 @@ a.nav-head.current { color: var(--brand); }
 .system-core strong {
   display: block;
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 500;
+  font-variation-settings: "opsz" 48;
+  letter-spacing: -0.01em;
   color: var(--ink);
 }
 .system-core small { color: var(--muted); }
@@ -712,8 +784,10 @@ a.nav-head.current { color: var(--brand); }
 }
 .tree-branch { margin-left: 18px; background: var(--surface); border: 1px solid var(--border); }
 .tree-leaf { margin-left: 36px; border-left: 2px solid var(--figure-accent); }
-.doc-tree code { color: var(--ink); }
-.tree-note { font-size: 12px; color: var(--muted); }
+/* A path is one atom: a hair smaller and tighter than prose code, so the
+   longest leaf ({project}/{name}.md) fits its column instead of breaking. */
+.prose .doc-tree code { color: var(--ink); font-size: 0.83em; padding-inline: 0.32em; }
+.tree-note { font-size: 12.5px; color: var(--muted); }
 .sample-panel {
   overflow: hidden;
   background: var(--term-bg);
@@ -727,11 +801,10 @@ a.nav-head.current { color: var(--brand); }
   gap: 12px;
   padding: 9px 12px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  font-size: 11px;
   color: var(--term-muted);
   border-bottom: 1px solid var(--term-border);
+  background: linear-gradient(var(--term-bg-2), var(--term-bg));
 }
 .sample-panel-body { padding: 14px 16px; font-family: var(--font-mono); font-size: 12px; line-height: 1.65; }
 .sample-panel-body .sample-strong { color: var(--term-green); }
@@ -747,31 +820,42 @@ a.nav-head.current { color: var(--brand); }
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
-.comparison-card.bad { border-top: 3px solid var(--pop); }
+.comparison-card.bad { border-top: 3px solid var(--bad); }
 .comparison-card.good { border-top: 3px solid var(--ok); }
 .comparison-card > span {
   display: block;
   margin-bottom: 7px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--muted);
 }
-.comparison-card p { margin: 0; font-size: 13px; }
+.comparison-card p { margin: 0; font-size: 13.5px; }
 
 /* ==========================================================================
    CARD GRIDS (home + section indexes)
    ========================================================================== */
+/* "Browse the docs": the landing's chapter mark -- accent star, italic serif */
 .grid-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
-  color: var(--faint);
-  margin: 44px 0 16px;
+  font-style: italic;
+  font-size: 19px;
+  font-weight: 400;
+  font-variation-settings: "opsz" 24;
+  color: var(--muted);
+  margin: 48px 0 18px;
+}
+.grid-head::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 0 14px var(--glow);
 }
 .card-grid {
   display: grid;
@@ -786,21 +870,21 @@ a.nav-head.current { color: var(--brand); }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 18px;
+  padding: 20px;
   text-decoration: none;
   box-shadow: var(--shadow-sm);
-  transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  transition: transform var(--dur-med) var(--ease-out), border-color var(--dur-med) var(--ease-out), box-shadow var(--dur-med) var(--ease-out);
 }
 /* Corner arrow on hover -- garnish on the generic cards; the router cards
    already carry their own arrow in the Set up line. */
 .doc-card:not(.router-card)::after {
   content: "\2192";
   position: absolute;
-  top: 16px;
-  right: 18px;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--brand);
+  top: 18px;
+  right: 20px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--accent);
   opacity: 0;
   transform: translateX(-3px);
   transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
@@ -808,56 +892,56 @@ a.nav-head.current { color: var(--brand); }
 .doc-card:not(.router-card):hover::after { opacity: 1; transform: none; }
 .card-count {
   display: block;
-  margin-top: 10px;
+  margin-top: 12px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  font-size: 11.5px;
   color: var(--faint);
 }
 .doc-card:hover {
   transform: translateY(-2px);
-  border-color: var(--brand);
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
   box-shadow: var(--shadow-md);
+  text-decoration: none;
 }
 .doc-card h2 {
   font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 500;
+  font-variation-settings: "opsz" 32;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
   color: var(--ink);
   margin: 0 0 6px;
   border: 0;
   padding: 0;
 }
-.doc-card p { font-size: 14px; line-height: 1.55; color: var(--muted); margin: 0; }
+.doc-card p { font-size: 14.5px; line-height: 1.55; color: var(--muted); margin: 0; }
 
 /* Router cards -- the docs home's "Which agent do you run?" grid. They extend
    .doc-card with a glyph tile and a set-up call to action so the router reads
-   as the page's main move, not another navigation grid. One brand accent for
-   all four: the router routes by client, it does not rank them. */
+   as the page's main move, not another navigation grid. One accent for all
+   four: the router routes by client, it does not rank them. */
 .router-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
-.router-card { display: flex; flex-direction: column; padding: 20px; }
+.router-card { display: flex; flex-direction: column; padding: 22px; }
 .router-card .card-glyph {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  margin-bottom: 12px;
-  color: var(--brand);
-  background: var(--brand-soft);
-  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
-  border-radius: var(--radius-sm);
+  width: 38px;
+  height: 38px;
+  margin-bottom: 14px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in oklab, var(--accent) 24%, transparent);
+  border-radius: var(--radius-pill);
 }
 .router-card .card-glyph svg { width: 18px; height: 18px; }
 .router-card p { flex: 1 1 auto; }
 .router-card .card-cta {
-  margin-top: 14px;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  margin-top: 16px;
+  font-family: var(--font-sans);
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
   color: var(--brand);
 }
 .router-card .card-cta::after {
@@ -866,7 +950,7 @@ a.nav-head.current { color: var(--brand); }
   margin-left: 6px;
   transition: transform var(--dur-fast) var(--ease-out);
 }
-.router-card:hover .card-cta::after { transform: translateX(2px); }
+.router-card:hover .card-cta::after { transform: translateX(3px); }
 
 /* ==========================================================================
    CONTEXT PICKER -- one OS/client state, three presentations: the header
@@ -894,23 +978,39 @@ a.nav-head.current { color: var(--brand); }
 :root[data-clients~="codex"] .ctx-variant[data-ctx-client~="codex"] { display: block; }
 
 /* The header chip: the always-there indicator and editor of the context.
-   Styled after .docs-badge so it reads as header chrome, not page content. */
+   A hairline pill like the landing's OS switch, so it reads as header
+   chrome, not page content. */
 .ctx-chip-btn {
   flex: none;
   appearance: none;
   cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--brand);
-  background: var(--brand-soft);
-  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
+  /* inline-block, not flex: the two halves are text runs ("macOS", " · All")
+     and a flex container would strip the space that opens the second */
+  display: inline-block;
+  height: 36px;
+  line-height: 34px;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: var(--panel-a);
+  border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  padding: 3px 9px;
+  padding: 0 14px 0 12px;
   white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
-.ctx-chip-btn:hover, .ctx-chip-btn[aria-expanded="true"] { border-color: var(--brand); }
+.ctx-chip-btn::before {
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  width: 6px;
+  height: 6px;
+  margin: -2px 8px 0 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.ctx-chip-btn:hover, .ctx-chip-btn[aria-expanded="true"] { color: var(--ink); border-color: var(--border-strong); }
 /* The popover anchors to the sticky header (its containing block), so it is
    reachable mid-scroll from anywhere; above .search-results (z-index 40). */
 .ctx-pop {
@@ -921,8 +1021,8 @@ a.nav-head.current { color: var(--brand); }
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  padding: 12px;
+  gap: 10px;
+  padding: 14px;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
@@ -930,8 +1030,8 @@ a.nav-head.current { color: var(--brand); }
 }
 .ctx-pop[hidden] { display: none; }
 .ctx-pop-note {
-  margin: 0;
-  font-size: 12px;
+  margin: 2px 0 0;
+  font-size: 12.5px;
   color: var(--muted);
 }
 
@@ -945,69 +1045,68 @@ a.nav-head.current { color: var(--brand); }
   gap: 10px;
   max-width: 46rem;
   margin: 0 0 22px;
-  padding: 7px 10px;
+  padding: 8px 10px 8px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 /* Mobile-only bar chrome (see the 900px block): the one-line summary of the
    active context and the button that hands editing to the header popover. */
-.ctx-bar-summary { display: none; font-size: 13px; color: var(--ink-2); }
+.ctx-bar-summary { display: none; font-size: 14px; color: var(--ink-2); }
 .ctx-bar-open {
   display: none;
   appearance: none;
   cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--brand);
-  background: var(--brand-soft);
-  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
-  padding: 3px 9px;
+  padding: 4px 13px;
 }
-.ctx-bar-open:hover { border-color: var(--brand); }
+.ctx-bar-open:hover { border-color: var(--accent); }
 /* The count of blocks the current filter hides; clicking shows everything. */
 .ctx-hidden-note {
   appearance: none;
   cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
   color: var(--muted);
   background: none;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-pill);
-  padding: 2px 8px;
+  padding: 3px 10px;
 }
-.ctx-hidden-note:hover { color: var(--ink); border-color: var(--ink-2); }
+.ctx-hidden-note:hover { color: var(--ink); border-color: var(--accent); }
 .ctx-bar-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 16px;
+  font-variation-settings: "opsz" 24;
   color: var(--muted);
 }
 .ctx-seg {
   display: inline-flex;
   gap: 2px;
   padding: 3px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  background: var(--surface);
+  background: var(--panel-a);
 }
 .ctx-seg button {
   appearance: none; border: 0; background: transparent; cursor: pointer;
-  font-family: var(--font-mono); font-size: 11.5px; letter-spacing: var(--tracking-wide);
+  font-family: var(--font-sans); font-size: 13px; font-weight: 500;
   color: var(--muted);
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: var(--radius-pill);
   transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 .ctx-seg button:hover { color: var(--ink); }
-.ctx-seg button[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
+/* the landing's OS-switch pick: an inverted ink pill */
+.ctx-seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 /* Visually hidden, still announced: the aria-live confirmation of a pick. */
 .ctx-status {
   position: absolute;
@@ -1020,7 +1119,7 @@ a.nav-head.current { color: var(--brand); }
 .prose .ctx-variant {
   margin: 18px 0;
   padding: 2px 0 2px 16px;
-  border-left: 3px solid color-mix(in srgb, var(--brand) 35%, transparent);
+  border-left: 2px solid color-mix(in oklab, var(--accent) 40%, transparent);
 }
 .prose .ctx-label {
   display: flex;
@@ -1029,14 +1128,14 @@ a.nav-head.current { color: var(--brand); }
   margin: 0 0 10px;
 }
 .ctx-chip {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--brand);
-  background: var(--brand-soft);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--pop-strong);
+  background: var(--accent-soft);
   border-radius: var(--radius-pill);
-  padding: 2px 8px;
+  padding: 1px 10px;
 }
 
 /* The setup configurator: composes the canonical install command from the
@@ -1049,10 +1148,10 @@ a.nav-head.current { color: var(--brand); }
   background: var(--surface);
 }
 .prose .cfg-head {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 16.5px;
+  font-variation-settings: "opsz" 24;
   color: var(--muted);
   margin: 0 0 10px;
 }
@@ -1064,19 +1163,20 @@ a.nav-head.current { color: var(--brand); }
   margin: 0 0 6px;
   cursor: pointer;
 }
+.prose .cfg-opt input { accent-color: var(--accent); }
 .prose .cfg-out { margin: 12px 0 0; }
 
 /* The inline TOC disclosure, shown only where the right rail dies (the
    1100px breakpoint below). Explicit overrides of the generic .prose
    details/summary panel styling: this is chrome, not an alternative route. */
-.prose .toc-inline { display: none; margin: 0 0 20px; padding: 10px 14px; }
+.prose .toc-inline { display: none; margin: 0 0 20px; padding: 10px 16px; }
 .prose .toc-inline summary {
   font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: var(--tracking-wider);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-style: italic;
+  font-size: 16px;
+  font-weight: 400;
+  font-variation-settings: "opsz" 24;
+  color: var(--muted);
 }
 .prose .toc-inline summary:hover { color: var(--ink); }
 .prose .toc-inline[open] summary { margin-bottom: 10px; color: var(--ink); }
@@ -1084,14 +1184,14 @@ a.nav-head.current { color: var(--brand); }
 .prose .toc-inline li { margin: 0; }
 .prose .toc-inline li a {
   display: block;
-  padding: 4px 0 4px 12px;
-  border-left: 2px solid var(--border);
+  padding: 4px 0 4px 14px;
+  border-left: 1px solid var(--border-strong);
   font-size: 14px;
   color: var(--muted);
   text-decoration: none;
   overflow-wrap: anywhere;
 }
-.prose .toc-inline li.lvl-3 a { padding-left: 24px; font-size: 13px; }
+.prose .toc-inline li.lvl-3 a { padding-left: 26px; font-size: 13px; }
 .prose .toc-inline li a:hover { color: var(--ink); }
 @media (max-width: 1100px) {
   .prose .toc-inline { display: block; }
@@ -1100,7 +1200,7 @@ a.nav-head.current { color: var(--brand); }
 /* Native disclosure for alternative routes -- never put headings inside. */
 .prose details {
   margin: 16px 0;
-  padding: 10px 14px;
+  padding: 10px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
@@ -1108,9 +1208,10 @@ a.nav-head.current { color: var(--brand); }
 .prose summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: 15px;
   color: var(--muted);
 }
+.prose summary::marker { color: var(--accent); }
 .prose summary:hover { color: var(--ink); }
 .prose details[open] summary { margin-bottom: 8px; color: var(--ink); }
 
@@ -1129,36 +1230,46 @@ a.nav-head.current { color: var(--brand); }
 .page-nav a {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   max-width: 48%;
-  padding: 12px 16px;
+  padding: 13px 18px 15px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--surface);
   text-decoration: none;
-  transition: border-color var(--dur-fast) var(--ease-out);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
-.page-nav a:hover { border-color: var(--brand); }
+.page-nav a:hover { border-color: color-mix(in oklab, var(--accent) 55%, transparent); box-shadow: var(--shadow-sm); text-decoration: none; }
 .page-nav .next { margin-left: auto; text-align: right; }
 .page-nav .dir {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 15px;
+  font-variation-settings: "opsz" 24;
+  color: var(--muted);
 }
-.page-nav .t { font-weight: 600; color: var(--brand); }
+.page-nav .t {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 450;
+  font-variation-settings: "opsz" 32;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--ink);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.page-nav a:hover .t { color: var(--accent); }
 
 .docs-foot {
   border-top: 1px solid var(--border);
-  padding: 22px 20px;
+  padding: 26px 20px;
   text-align: center;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted);
 }
 .docs-foot p { margin: 0; }
-.docs-foot a { color: var(--muted); }
-.docs-foot a:hover { color: var(--brand); }
+.docs-foot a { color: var(--muted); text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 40%, transparent); }
+.docs-foot a:hover { color: var(--ink); }
 
 /* ==========================================================================
    SEARCH
@@ -1166,18 +1277,19 @@ a.nav-head.current { color: var(--brand); }
 .docs-search { position: relative; flex: 1 1 auto; max-width: 320px; margin-left: auto; }
 .docs-search input {
   width: 100%;
+  height: 36px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--panel-a);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
-  padding: 7px 14px;
+  padding: 0 34px 0 16px;
   outline: none;
-  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 .docs-search input::placeholder { color: var(--faint); }
-.docs-search input:focus { border-color: var(--brand); box-shadow: var(--shadow-focus); }
+.docs-search input:focus { border-color: var(--accent); background: var(--surface); box-shadow: var(--shadow-focus); }
 /* The "/" affordance for the focus shortcut; it yields once focus arrives
    and never shows where a hardware keyboard is unlikely (the 900px block). */
 .docs-search .search-key {
@@ -1186,12 +1298,12 @@ a.nav-head.current { color: var(--brand); }
   right: 12px;
   transform: translateY(-50%);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.6;
   color: var(--faint);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-xs);
-  padding: 0 5px;
+  padding: 0 6px;
   pointer-events: none;
 }
 .docs-search input:focus + .search-key { display: none; }
@@ -1204,18 +1316,18 @@ a.nav-head.current { color: var(--brand); }
   overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 6px;
   z-index: 40;
 }
 .search-results a {
   display: block;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  border-radius: var(--radius-md);
   text-decoration: none;
 }
-.search-results a .r-title { display: block; font-weight: 600; color: var(--ink); font-size: 14px; }
+.search-results a .r-title { display: block; font-weight: 600; color: var(--ink); font-size: 14.5px; }
 .search-results a .r-snippet {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1228,26 +1340,26 @@ a.nav-head.current { color: var(--brand); }
   margin-top: 2px;
 }
 .search-results .r-snippet mark {
-  background: var(--brand-soft);
-  color: var(--brand);
+  background: color-mix(in oklab, var(--accent) 20%, transparent);
+  color: var(--ink);
   border-radius: 2px;
   padding: 0 1px;
 }
 /* Section label rows between result groups -- labels, not options. */
 .search-results .r-group {
   margin: 6px 0 2px;
-  padding: 8px 10px 0;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--faint);
+  padding: 9px 11px 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 15px;
+  font-variation-settings: "opsz" 24;
+  color: var(--muted);
   border-top: 1px solid var(--border);
 }
 .search-results .r-group:first-child { margin-top: 0; padding-top: 2px; border-top: 0; }
-.search-results a:hover, .search-results a.sel { background: var(--brand-soft); }
-.search-results a:hover .r-title, .search-results a.sel .r-title { color: var(--brand); }
-.search-empty { padding: 12px 10px; font-size: 13px; color: var(--muted); }
+.search-results a:hover, .search-results a.sel { background: var(--accent-soft); text-decoration: none; }
+.search-results a:hover .r-title, .search-results a.sel .r-title { color: var(--ink); }
+.search-empty { padding: 12px 10px; font-size: 13.5px; color: var(--muted); }
 
 /* ==========================================================================
    RESPONSIVE -- single column with a slide-in sidebar
@@ -1257,7 +1369,7 @@ a.nav-head.current { color: var(--brand); }
   .docs-toc { display: none; }
 }
 @media (max-width: 900px) {
-  .nav-toggle { display: block; }
+  .nav-toggle { display: inline-grid; }
   .docs-shell { grid-template-columns: minmax(0, 1fr); padding: 0 16px; }
   .docs-sidebar {
     position: fixed;
@@ -1270,7 +1382,7 @@ a.nav-head.current { color: var(--brand); }
     z-index: 25;
     background: var(--surface);
     border-right: 1px solid var(--border);
-    padding: 20px 12px 60px;
+    padding: 20px 16px 60px;
     transform: translateX(-102%);
     transition: transform var(--dur-med) var(--ease-out);
   }
@@ -1279,19 +1391,21 @@ a.nav-head.current { color: var(--brand); }
      (the sticky ctx-bar at 20 included) while staying under the sidebar (25)
      and header (30). Pseudo-elements take no clicks: a tap on the scrim hits
      whatever sits beneath it, which is an outside click, and the document
-     handler already closes the drawer on those. */
+     handler already closes the drawer on those. The scrim is the night ink in
+     both themes -- an ink-derived veil would turn light in the dark. */
   body.docs.drawer-open { overflow: hidden; }
   body.docs.drawer-open::after {
     content: "";
     position: fixed;
     inset: 0;
     z-index: 24;
-    background: color-mix(in srgb, var(--ink) 35%, transparent);
+    background: rgba(4, 7, 18, 0.42);
     animation: scrim-in var(--dur-med) var(--ease-out);
   }
   .docs-head { gap: 10px; padding: 0 14px; }
-  .docs-badge, .gh-link span { display: none; }
+  .docs-badge { display: none; }
   .docs-search { max-width: none; }
+  .docs-search input { padding-right: 14px; }
   .docs-search .search-key { display: none; }
   /* The chip shortens to its OS half but stays: it is the bar's "Change"
      target and the only always-visible signal that a filter is active. */
@@ -1337,10 +1451,30 @@ a.nav-head.current { color: var(--brand); }
   .tree-branch { margin-left: 10px; }
   .tree-leaf { margin-left: 20px; }
 }
+@media (max-width: 600px) {
+  /* Phones: the search box needs the width. GitHub leaves the header (the
+     landing does the same; the footer still links it), and the brand steps
+     down -- then, on the narrowest screens, keeps only its mark. */
+  .docs-head .gh-link { display: none; }
+  .docs-head .brand { gap: 8px; }
+  .docs-head .brand-mark { width: 23px; height: 23px; }
+  .docs-head .brand-word { font-size: 19px; }
+  .ctx-chip-btn { padding: 0 11px 0 10px; }
+}
+@media (max-width: 460px) {
+  .docs-head .brand-word { display: none; }
+}
+@media (max-width: 380px) {
+  /* 320-380px: every pixel goes to the search box's placeholder */
+  .docs-head { gap: 8px; padding: 0 10px; }
+  .docs-search input { padding: 0 12px; }
+  .ctx-chip-btn { padding: 0 10px; }
+  .ctx-chip-btn::before { display: none; }
+}
 @keyframes scrim-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .docs-sidebar, .doc-card, .copy-code, .router-card .card-cta::after,
-  .doc-card:not(.router-card)::after, .prose .h-anchor { transition: none; }
+  .doc-card:not(.router-card)::after, .prose .h-anchor, .page-nav .t { transition: none; }
   body.docs.drawer-open::after { animation: none; }
 }
 
@@ -1365,8 +1499,8 @@ a.nav-head.current { color: var(--brand); }
 /* ==========================================================================
    CHROMA -- build-time syntax classes, mapped to the --syn-* tokens.
    Hand-written rather than `chroma --html-styles`: only the token classes the
-   docs' languages (go, yaml, bash, json) actually emit, in both themes, on the
-   site's own palette.
+   docs' languages (go, yaml, bash, json) actually emit, on the site's own
+   terminal palette.
    ========================================================================== */
 .prose pre .c, .prose pre .ch, .prose pre .cm, .prose pre .c1, .prose pre .cs, .prose pre .cp, .prose pre .cpf {
   color: var(--syn-comment);
@@ -1387,8 +1521,8 @@ a.nav-head.current { color: var(--brand); }
 .prose pre .na, .prose pre .nl { color: var(--syn-func); }
 .prose pre .nv, .prose pre .vc, .prose pre .vg, .prose pre .vi { color: var(--syn-name); }
 .prose pre .p, .prose pre .o { color: var(--syn-punct); }
-.prose pre .err { color: var(--term-pop); }
-.prose pre .gd { color: var(--term-pop); }
+.prose pre .err { color: var(--term-bad); }
+.prose pre .gd { color: var(--term-bad); }
 .prose pre .gi { color: var(--term-green); }
 .prose pre .ge { font-style: italic; }
 .prose pre .gs { font-weight: 700; }

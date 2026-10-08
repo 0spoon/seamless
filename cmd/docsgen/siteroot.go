@@ -8,10 +8,11 @@ import (
 )
 
 // rootURLs are the site-root pages docsgen does not render but the sitemap must
-// still name -- the hand-written landing page and the hand-written comparison
-// hub. Deliberately a constant rather than a directory scan, which would sweep
-// in install, install.ps1, and static assets.
-var rootURLs = []string{"/", "/compare/"}
+// still name -- the hand-written landing page, the hand-written comparison hub,
+// and the hand-written Claude app page (Seamless for chat work that is not
+// code). Deliberately a constant rather than a directory scan, which would
+// sweep in install, install.ps1, and static assets.
+var rootURLs = []string{"/", "/compare/", "/claude-app/"}
 
 // robotsTxt is written verbatim to the site root. The marker line is
 // load-bearing: the live host sits behind Cloudflare, which can serve its own

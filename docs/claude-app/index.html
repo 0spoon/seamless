@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seamless in the Claude app - a record of your work, kept on your own computer</title>
+<meta name="description" content="Use Seamless from Claude desktop app chats to keep what each conversation settles about a matter, a deal, a study, or a manuscript: rules, decisions with their history, and open items, saved as plain files on your own computer and loaded at the start of the next chat.">
+<link rel="canonical" href="https://thereisnospoon.org/claude-app/">
+<meta name="robots" content="max-image-preview:large, max-snippet:-1">
+<meta property="og:site_name" content="Seamless">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://thereisnospoon.org/claude-app/">
+<meta property="og:title" content="Seamless in the Claude app - the tenth chat about a deal should know what the first nine decided">
+<meta property="og:description" content="For lawyers, investors, researchers, writers, and consultants who work in the Claude desktop app: a record you own, one plain file per rule or decision, walls between clients, and one command to install.">
+<meta property="og:image" content="https://thereisnospoon.org/static/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Seamless - sessions end. What they learned doesn't.">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "@id": "https://thereisnospoon.org/claude-app/",
+  "url": "https://thereisnospoon.org/claude-app/",
+  "name": "Seamless in the Claude app - a record of your work, kept on your own computer",
+  "description": "How Seamless works from Claude desktop app chats for long-running work such as legal matters, deals, research, and writing: what it keeps, how it differs from Claude's built-in memory, where the data lives, how to set it up, and what it does not do.",
+  "isPartOf": {"@id": "https://thereisnospoon.org/#website"},
+  "about": {"@id": "https://thereisnospoon.org/#app"}
+}
+</script>
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#eef1f5">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#070a13">
+<link rel="icon" type="image/svg+xml" href="../static/favicon.svg">
+<link rel="preload" as="font" type="font/woff2" href="../static/fonts/fraunces.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="../static/fonts/fraunces-italic.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="../static/fonts/instrument-sans.woff2" crossorigin>
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("theme");if(t)d.dataset.theme=t;var o=localStorage.getItem("os");if(o==="macos"||o==="linux")o="unix";if(o!=="unix"&&o!=="windows")o=/Windows/i.test(navigator.userAgent)?"windows":"unix";d.dataset.os=o;d.className+=" js";})();</script>
+<link rel="stylesheet" href="../static/home.css?v=bb7f0dfa">
+<style>
+/* /claude-app/ -- Seamless for people who use Claude in the desktop app for
+   work that isn't code. The landing's stylesheet (home.css) carries the
+   identity: header, rail, chapters, steps, file card, FAQ, finale, footer.
+   This block adds only what this page has and the landing doesn't: the
+   matter chart in the hero, the desk switcher, the claims ledger, the
+   comparison table, and the say-this-to-Claude boxes. */
+:root { --k-refuted: #7a7c8e; --k-note: var(--muted); }
+:root[data-theme="dark"] { --k-refuted: #8b91ad; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --k-refuted: #8b91ad; } }
+.k-constraint { color: var(--k-constraint); }
+.k-decision { color: var(--k-decision); }
+.k-refuted { color: var(--k-refuted); }
+.k-reference { color: var(--k-reference); }
+.k-gotcha { color: var(--k-gotcha); }
+.k-note { color: var(--k-note); }
+
+/* ---------- hero ---------- */
+.ca-hero { position: relative; padding: calc(var(--head-h) + clamp(44px, 8vh, 96px)) 0 clamp(72px, 11vh, 120px); }
+.ca-hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: clamp(32px, 4.5vw, 72px); align-items: center; }
+.ca-hero .h1 { font-size: clamp(44px, 5.1vw, 78px); line-height: 1; }
+.ca-act { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  height: 50px; padding: 0 24px; border-radius: 999px;
+  background: var(--ink); color: var(--bg);
+  font-size: 16px; font-weight: 600; text-decoration: none;
+  transition: transform 0.4s var(--ease-out), box-shadow 0.4s;
+}
+.btn svg { width: 17px; height: 17px; }
+.btn:hover { color: var(--bg); transform: translateY(-1px); box-shadow: 0 10px 28px -12px var(--glow), 0 0 0 4px var(--accent-soft); }
+
+/* the matter chart: one project's record drawn as the landing's sky */
+.chart { margin: 0; position: relative; min-width: 0; }
+.chart-head { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+.chart-head b { color: var(--ink); font-weight: 500; }
+.chart-head .tag { margin-left: auto; }
+.fence {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px 2px 7px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.5;
+}
+.fence svg { width: 12px; height: 12px; }
+.chart-svg { display: block; width: 100%; height: auto; }
+.c-ring { fill: none; stroke: var(--sky-line); }
+.c-ring-outer { stroke: var(--sky-line-2); }
+.c-ticks { fill: none; stroke: var(--sky-line-2); stroke-width: 6; stroke-dasharray: 1 9; opacity: 0.55; }
+.c-spoke { stroke: var(--sky-line); }
+.c-wedge { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; fill: var(--sky-label); }
+.c-age, .c-chat { font-family: var(--mono); font-size: 10px; fill: var(--sky-label); }
+.c-dust circle { fill: var(--sky-dust); opacity: 0.5; }
+.c-streak { fill: none; stroke-width: 1.6; stroke-linecap: round; }
+.c-link { fill: none; stroke: var(--accent); stroke-width: 1.3; stroke-dasharray: 3 5; opacity: 0.85; }
+.c-st { cursor: default; }
+.c-st .c-dot { fill: currentColor; }
+.c-st .c-halo { fill: currentColor; opacity: 0.16; transition: opacity 0.3s; }
+.c-st .c-hollow { fill: var(--bg); stroke: currentColor; stroke-width: 1.5; }
+.c-st.is-was .c-halo { opacity: 0.06; }
+.c-st:hover .c-halo, .c-st.is-hot .c-halo { opacity: 0.42; }
+.c-st.is-new .c-dot { filter: drop-shadow(0 0 5px currentColor); }
+.c-ping { fill: none; stroke: currentColor; stroke-width: 1; opacity: 0; animation: c-ping 3.4s var(--ease-out) 1.6s infinite; }
+@keyframes c-ping { 0% { transform: scale(0.5); opacity: 0.85; } 70%, 100% { transform: scale(2.3); opacity: 0; } }
+.c-label { font-family: var(--mono); font-size: 11px; fill: var(--ink); }
+.c-sub { font-family: var(--mono); font-size: 10px; fill: var(--sky-label); }
+.c-core-disc { fill: var(--panel); stroke: var(--hair-2); }
+.c-core use { color: var(--accent); }
+.js .c-streak { stroke-dasharray: 320; stroke-dashoffset: 320; animation: c-draw 1.7s var(--ease-out) 0.7s forwards; }
+.js .c-streak-b { animation-delay: 1.2s; }
+@keyframes c-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .js .c-streak { animation: none; stroke-dashoffset: 0; } }
+.chart-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 12px 0 0; font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.chart-legend > span { display: inline-flex; align-items: center; gap: 8px; }
+.lg-was { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--k-decision); }
+.chart .sky-tip { top: 0; left: 0; }
+
+/* ---------- i. at work: the desk switcher ---------- */
+.desk-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 26px; }
+:root:not(.js) .desk-tabs { display: none; }
+.desk { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 20px; align-items: start; }
+.js .desk[hidden] { display: none; }
+.js .desk.is-shown { animation: scene-in 0.6s var(--ease-out); }
+:root:not(.js) .desk + .desk { margin-top: 48px; }
+.desk-name { grid-column: 1 / -1; margin: 0; font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink); }
+.js .desk-name { display: none; }
+.chat {
+  margin: 0; min-width: 0; overflow: hidden;
+  border: 1px solid var(--hair-2); border-radius: 20px;
+  background: var(--panel); box-shadow: var(--shadow-lg);
+}
+.chat-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0; padding: 12px 18px; border-bottom: 1px solid var(--hair);
+  font-family: var(--mono); font-size: 12.5px; color: var(--muted);
+}
+.chat-bar > span:first-child { display: inline-flex; align-items: center; gap: 9px; }
+.chat-bar > span:first-child::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 9px var(--ok); }
+.chat-body { display: flex; flex-direction: column; gap: 14px; padding: 20px 20px 22px; }
+.msg { margin: 0; max-width: 90%; font-size: 16px; line-height: 1.6; color: var(--text); }
+.msg.me {
+  align-self: flex-end; padding: 11px 15px;
+  border-radius: 16px 16px 4px 16px; border: 1px solid var(--hair);
+  background: var(--bg); color: var(--ink);
+}
+.call {
+  align-self: flex-start; max-width: 100%;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px;
+  margin: 0; padding: 7px 12px; border-radius: 10px; border: 1px dashed var(--hair-2);
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.5; color: var(--faint);
+}
+.call b { font-weight: 500; color: var(--ink); }
+.call b::before { content: "\25CF"; margin-right: 8px; font-size: 8px; vertical-align: 2px; color: var(--ok); }
+.rec {
+  margin: 0; min-width: 0; padding: 20px 20px 16px;
+  border: 1px solid var(--hair-2); border-radius: 20px;
+  background: var(--panel-a); box-shadow: var(--shadow-lg);
+}
+.rec-head { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.rec-title { font-family: var(--mono); font-size: 13.5px; color: var(--ink); }
+.rec-count { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.entries { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.entry {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; align-items: baseline;
+  padding: 11px 14px 12px; border: 1px solid var(--hair); border-radius: 12px; background: var(--bg);
+}
+.entry .nm { font-family: var(--mono); font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+.entry .kd { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
+.entry .kd::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.entry .ds { grid-column: 1 / -1; font-size: 14.5px; line-height: 1.5; color: var(--text); }
+.entry .new { margin-left: 8px; font-size: 11px; color: var(--ok); }
+.entry.is-new { border-color: color-mix(in oklab, var(--ok) 40%, var(--hair)); box-shadow: inset 3px 0 0 var(--ok); }
+.entry.is-was { margin: -3px 0 0 18px; background: transparent; border-style: dashed; }
+.entry.is-was .nm { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in oklab, var(--muted) 70%, transparent); }
+.entry.is-was .ds { color: var(--muted); }
+.entry.is-task .nm { font-family: var(--sans); font-size: 15px; font-weight: 500; }
+.entry .st { font-family: var(--mono); font-size: 12px; white-space: nowrap; color: var(--accent); }
+.entry .st.is-wait { color: var(--muted); }
+.work-note { margin: 24px 0 0; max-width: 860px; }
+
+/* ---------- ii. what changes: a ruled ledger of claims ---------- */
+.gains { list-style: none; margin: 0; padding: 6px 0; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+.gain {
+  display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); gap: 8px 48px; align-items: baseline;
+  padding: 22px 4px; border-bottom: 1px dashed var(--hair);
+}
+.gain:last-child { border-bottom: 0; }
+.gain-claim {
+  margin: 0; font-family: var(--serif); font-style: italic;
+  font-size: clamp(21px, 1.9vw, 27px); line-height: 1.25; color: var(--ink);
+  font-variation-settings: "opsz" 48, "SOFT" 80;
+}
+.gain-claim::before { content: "\2726"; font-style: normal; font-size: 0.5em; color: var(--accent); margin-right: 14px; vertical-align: 0.32em; }
+.gain-note { margin: 0; font-size: 16.5px; line-height: 1.6; color: var(--muted); }
+
+/* ---------- iii. next to Claude's memory ---------- */
+.vs-wrap { overflow-x: auto; border: 1px solid var(--hair-2); border-radius: 20px; background: var(--panel-a); box-shadow: var(--shadow-lg); }
+table.vs { width: 100%; border-collapse: collapse; }
+.vs th, .vs td { padding: 15px 22px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--hair); font-size: 16px; line-height: 1.5; }
+.vs thead th { padding: 20px 22px 16px; font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 21px; color: var(--ink); font-variation-settings: "opsz" 48; }
+.vs thead th.us { color: var(--accent); }
+.vs tbody th { width: 22%; padding-top: 18px; font-family: var(--mono); font-size: 12.5px; font-weight: 400; color: var(--faint); }
+.vs td { color: var(--text); }
+.vs .us { background: var(--accent-soft); }
+.vs td.us { color: var(--ink); }
+.vs tbody tr:last-child > * { border-bottom: 0; }
+.vs-after { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 20px 44px; align-items: start; margin: 26px 0 0; }
+.vs-after .qs-try { margin: 0; }
+.vs-after .fine { margin: 0; }
+
+/* ---------- iv. your files ---------- */
+.files .points { margin-top: 0; }
+
+/* ---------- v. set it up: things you say to Claude, not to a shell ---------- */
+.code.say {
+  align-items: flex-start;
+  background: var(--panel); color: var(--ink); border-color: var(--hair-2);
+  font-family: var(--sans); font-size: 15.5px; line-height: 1.55;
+  box-shadow: var(--shadow-md);
+}
+.code.say .cmd { white-space: normal; overflow: visible; }
+.say-label {
+  flex: none; margin-top: 2px; padding: 2px 8px;
+  border: 1px solid var(--hair-2); border-radius: 6px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+}
+.code.say .copy-btn { background: var(--bg); border-color: var(--hair-2); color: var(--muted); }
+.code.say .copy-btn:hover { color: var(--ink); border-color: var(--accent); }
+.qs-note + .code, .qs-note + .qs-try, .code + .qs-note { margin-top: 12px; }
+.leave .code .cmd { white-space: normal; overflow-wrap: anywhere; }
+
+@media (max-width: 1100px) {
+  .ca-hero-grid { grid-template-columns: minmax(0, 1fr); }
+  .chart { max-width: 580px; }
+  .vs-after { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 960px) {
+  .desk { grid-template-columns: minmax(0, 1fr); }
+  .gain { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+}
+@media (max-width: 760px) {
+  /* the table becomes one card per row: the row's name, then each side */
+  .vs thead { display: none; }
+  table.vs, .vs tbody, .vs tr, .vs th, .vs td { display: block; width: auto; }
+  .vs tr { padding: 14px 16px; border-bottom: 1px solid var(--hair); }
+  .vs tbody tr:last-child { border-bottom: 0; }
+  .vs th, .vs td { padding: 0; border: 0; }
+  .vs tbody th { width: auto; margin: 0 0 8px; padding: 0; }
+  .vs td { padding: 8px 12px; border-radius: 10px; font-size: 15px; }
+  .vs td::before { content: attr(data-col); display: block; margin: 0 0 2px; font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--muted); }
+  .vs td.us::before { color: var(--accent); }
+  .vs td + td { margin-top: 6px; }
+}
+@media (max-width: 700px) {
+  .c-labels, .c-wedges, .c-ages, .c-chat { display: none; }
+}
+@media (max-width: 600px) {
+  .ca-hero { padding-top: calc(var(--head-h) + 34px); }
+  .btn { height: 46px; padding: 0 20px; font-size: 15.5px; }
+  .chat-bar { padding: 10px 14px; font-size: 11.5px; }
+  .chat-bar .tag { white-space: nowrap; }
+  .chat-body { padding: 16px 14px 18px; }
+  .rec { padding: 16px 14px 12px; }
+  .msg { max-width: 100%; font-size: 15.5px; }
+  .gain { padding: 18px 2px; }
+  .code.say { font-size: 15px; }
+}
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="starfield" aria-hidden="true"></div>
+<p class="sr-only" id="announce" aria-live="polite"></p>
+
+<!-- Shared glyphs, as on the landing page. -->
+<svg class="defs" width="0" height="0" aria-hidden="true" focusable="false">
+  <symbol id="i-mark" viewBox="0 0 32 32">
+    <circle cx="16" cy="16" r="8.6" fill="none" stroke="currentColor" stroke-width="1.9"/>
+    <path d="M6.2 25.8 24.6 7.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+    <circle cx="25.6" cy="6.4" r="2.6" style="fill:var(--mark-star,currentColor)"/>
+  </symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13m-5-5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v13m-5-5 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-gh" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 13.4A8.5 8.5 0 1 1 10.6 3.5a6.6 6.6 0 0 0 9.9 9.9z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2.2m0 14.6v2.2M4.6 4.6l1.6 1.6m11.6 11.6 1.6 1.6M2.5 12h2.2m14.6 0h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+</svg>
+
+<header class="site-head" data-head>
+  <div class="head-in">
+    <a class="brand" href="../" aria-label="Seamless home">
+      <svg class="brand-mark" aria-hidden="true"><use href="#i-mark"/></svg>
+      <span class="brand-word">seamless</span>
+    </a>
+    <!-- One list, two presentations, as on the landing: inline on wide
+         screens, a native disclosure panel on phones. -->
+    <details class="nav-menu">
+      <summary aria-label="Menu"><span></span><span></span></summary>
+      <nav class="nav-panel" aria-label="Menu">
+        <a href="#work">At work</a>
+        <a href="#changes">What changes</a>
+        <a href="#memory">Claude&rsquo;s memory</a>
+        <a href="#files">Your files</a>
+        <a href="#setup">Set it up</a>
+        <a href="#questions">Questions</a>
+        <a href="../">For developers</a>
+        <a href="../docs/claude-app/">Docs</a>
+        <a href="https://github.com/0spoon/seamless">GitHub</a>
+      </nav>
+    </details>
+    <nav class="head-nav" aria-label="Site">
+      <a href="#work">At work</a>
+      <a href="#changes">What changes</a>
+      <a href="#memory">Claude&rsquo;s memory</a>
+      <a href="#files">Your files</a>
+      <a href="#questions">Questions</a>
+      <a href="../docs/claude-app/">Docs</a>
+    </nav>
+    <div class="head-tools">
+      <button class="theme-toggle" type="button" aria-label="Toggle color theme">
+        <svg class="icon-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+        <svg class="icon-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+      </button>
+      <a class="gh-link" href="https://github.com/0spoon/seamless" aria-label="Seamless on GitHub">
+        <svg aria-hidden="true"><use href="#i-gh"/></svg>
+      </a>
+      <a class="head-cta" href="#setup">Set up</a>
+    </div>
+  </div>
+  <div class="head-progress" aria-hidden="true"><i></i></div>
+</header>
+
+<!-- The chapter rail, as on the landing: one star per chapter. -->
+<nav class="rail" aria-label="Chapters">
+  <ol>
+    <li><a href="#work" data-rail="work"><span class="rail-dot"></span><span class="rail-label"><em>i.</em> At work</span></a></li>
+    <li><a href="#changes" data-rail="changes"><span class="rail-dot"></span><span class="rail-label"><em>ii.</em> What changes</span></a></li>
+    <li><a href="#memory" data-rail="memory"><span class="rail-dot"></span><span class="rail-label"><em>iii.</em> Claude&rsquo;s memory</span></a></li>
+    <li><a href="#files" data-rail="files"><span class="rail-dot"></span><span class="rail-label"><em>iv.</em> Your files</span></a></li>
+    <li><a href="#setup" data-rail="setup"><span class="rail-dot"></span><span class="rail-label"><em>v.</em> Set it up</span></a></li>
+  </ol>
+  <span class="rail-line" aria-hidden="true"><i></i></span>
+</nav>
+
+<main id="main">
+
+<!-- ================================================================ HERO -->
+<section class="ca-hero" id="top">
+  <div class="wrap ca-hero-grid">
+    <div class="hero-copy">
+      <p class="hero-pre"><svg aria-hidden="true"><use href="#i-mark"/></svg> Seamless for the Claude app</p>
+      <h1 class="h1" data-split>The tenth chat about a deal should know what the first nine <em>decided.</em></h1>
+      <p class="hero-sub">Seamless gives Claude in the desktop app a record of your work that lives on your own computer. As you go, Claude saves each rule and decision as a plain file, with the date it was made and what it replaced. The next chat reads the record before it answers.</p>
+      <div class="ca-act">
+        <a class="btn" href="#setup">Set it up <svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="lnk" href="#work">See it at five desks <svg aria-hidden="true"><use href="#i-down"/></svg></a>
+      </div>
+      <p class="hero-fork">Writing code? <a class="lnk" href="../">See it with Claude Code and Codex <svg aria-hidden="true"><use href="#i-arrow"/></svg></a></p>
+      <ul class="hero-facts">
+        <li>Free and open source (MIT)</li>
+        <li>Runs on your computer, no account</li>
+        <li>Claude desktop app for Mac and Windows</li>
+        <li>One command to remove</li>
+      </ul>
+    </div>
+    <!-- One matter's record drawn the way the landing draws the whole store:
+         stars are entries (placed by kind and by age), streaks are chats, and
+         a ring marks an entry that was replaced but stays readable. An
+         illustration; the names match the Law desk below. -->
+    <figure class="chart" data-chart>
+      <figcaption class="chart-head"><b>harbor-acquisition</b><span class="fence"><svg aria-hidden="true"><use href="#i-lock"/></svg>sealed</span><span class="tag">an illustration</span></figcaption>
+<svg class="chart-svg" viewBox="0 0 560 560" role="img" aria-labelledby="chart-t">
+<title id="chart-t">An illustration of one matter's record as a star chart: each star is an entry placed by kind and by age, a decision replaced today is linked to its replacement, and two chats streak in.</title>
+<defs>
+<linearGradient id="sk-a" gradientUnits="userSpaceOnUse" x1="548" y1="40" x2="343" y2="271"><stop offset="0" stop-color="var(--sky-streak)" stop-opacity="0"/><stop offset="1" stop-color="var(--sky-streak)" stop-opacity="0.9"/></linearGradient>
+<linearGradient id="sk-b" gradientUnits="userSpaceOnUse" x1="16" y1="420" x2="198" y2="469"><stop offset="0" stop-color="var(--sky-streak)" stop-opacity="0"/><stop offset="1" stop-color="var(--sky-streak)" stop-opacity="0.75"/></linearGradient>
+<path id="w-con" d="M330.1 44.3 A241 241 0 0 1 469.9 131.6"/>
+<path id="w-dec" d="M503.5 189.7 A241 241 0 0 1 503.5 370.3"/>
+<path id="w-ref" d="M313.5 518.7 A241 241 0 0 0 469.9 428.4"/>
+<path id="w-not" d="M90.1 428.4 A241 241 0 0 0 246.5 518.7"/>
+<path id="w-rfc" d="M56.5 370.3 A241 241 0 0 1 56.5 189.7"/>
+<path id="w-got" d="M90.1 131.6 A241 241 0 0 1 246.5 41.3"/>
+</defs>
+<g class="c-grid">
+<circle class="c-ring" cx="280" cy="280" r="96"/>
+<circle class="c-ring" cx="280" cy="280" r="176"/>
+<circle class="c-ring c-ring-outer" cx="280" cy="280" r="252"/>
+<circle class="c-ticks" cx="280" cy="280" r="262"/>
+<line class="c-spoke" x1="280.0" y1="246.0" x2="280.0" y2="28.0"/>
+<line class="c-spoke" x1="309.4" y1="263.0" x2="498.2" y2="154.0"/>
+<line class="c-spoke" x1="309.4" y1="297.0" x2="498.2" y2="406.0"/>
+<line class="c-spoke" x1="280.0" y1="314.0" x2="280.0" y2="532.0"/>
+<line class="c-spoke" x1="250.6" y1="297.0" x2="61.8" y2="406.0"/>
+<line class="c-spoke" x1="250.6" y1="263.0" x2="61.8" y2="154.0"/>
+</g>
+<g class="c-wedges">
+<text class="c-wedge"><textPath href="#w-con" startOffset="50%" text-anchor="middle">constraints</textPath></text>
+<text class="c-wedge"><textPath href="#w-dec" startOffset="50%" text-anchor="middle">decisions</textPath></text>
+<text class="c-wedge"><textPath href="#w-ref" startOffset="50%" text-anchor="middle">refuted</textPath></text>
+<text class="c-wedge"><textPath href="#w-not" startOffset="50%" text-anchor="middle">notes</textPath></text>
+<text class="c-wedge"><textPath href="#w-rfc" startOffset="50%" text-anchor="middle">references</textPath></text>
+<text class="c-wedge"><textPath href="#w-got" startOffset="50%" text-anchor="middle">gotchas</textPath></text>
+</g>
+<g class="c-ages"><text class="c-age" x="287" y="197">this week</text><text class="c-age" x="287" y="117">this month</text><text class="c-age" x="287" y="42">earlier</text></g>
+<g class="c-dust">
+<circle cx="343.0" cy="367.7" r="1.1"/>
+<circle cx="301.7" cy="234.8" r="0.7"/>
+<circle cx="389.1" cy="321.6" r="1.1"/>
+<circle cx="353.0" cy="323.7" r="0.9"/>
+<circle cx="326.0" cy="309.5" r="0.9"/>
+<circle cx="232.0" cy="259.0" r="0.7"/>
+<circle cx="130.5" cy="194.1" r="0.7"/>
+<circle cx="151.6" cy="377.4" r="0.7"/>
+<circle cx="311.4" cy="241.3" r="0.9"/>
+<circle cx="156.1" cy="247.6" r="1.1"/>
+<circle cx="322.3" cy="184.1" r="0.7"/>
+<circle cx="224.4" cy="253.3" r="0.7"/>
+<circle cx="167.1" cy="245.1" r="0.7"/>
+<circle cx="163.8" cy="172.2" r="0.9"/>
+<circle cx="115.7" cy="360.4" r="0.9"/>
+<circle cx="402.1" cy="216.3" r="0.9"/>
+<circle cx="308.3" cy="181.0" r="1.1"/>
+<circle cx="457.4" cy="380.2" r="0.9"/>
+<circle cx="386.4" cy="173.8" r="1.1"/>
+<circle cx="176.0" cy="195.1" r="0.7"/>
+<circle cx="223.6" cy="311.9" r="0.9"/>
+<circle cx="208.3" cy="285.0" r="0.7"/>
+<circle cx="493.8" cy="393.4" r="1.1"/>
+<circle cx="393.7" cy="167.0" r="0.9"/>
+<circle cx="214.4" cy="370.1" r="0.9"/>
+<circle cx="124.3" cy="324.0" r="0.7"/>
+<circle cx="44.8" cy="318.6" r="1.1"/>
+<circle cx="273.7" cy="226.7" r="0.9"/>
+<circle cx="455.7" cy="272.4" r="0.9"/>
+<circle cx="204.8" cy="345.6" r="1.1"/>
+</g>
+<g class="c-chats">
+<path class="c-streak" stroke="url(#sk-a)" d="M548 40 L343 271"/>
+<path class="c-streak c-streak-b" stroke="url(#sk-b)" d="M16 420 L198 469"/>
+<text class="c-chat" x="546" y="58" text-anchor="end">chat &#183; today</text>
+<text class="c-chat" x="18" y="410">chat &#183; Sept 30</text>
+</g>
+<path class="c-link" d="M426.7 311.2 Q 392 302 341.7 273.5"/>
+<g class="c-stars">
+<g class="c-st k-constraint" transform="translate(433.2 151.4)" data-k="constraint" data-n="client-ok-before-cap-changes" data-f="memory" data-d="No change to the cap or the basket goes to the other side without the client’s written OK."><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+<g class="c-st k-constraint" transform="translate(387.8 207.3)" data-k="constraint" data-n="governing-law-delaware" data-f="memory" data-d="Delaware law and courts. The client won’t trade this for anything on price."><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+<g class="c-st k-constraint" transform="translate(313.0 222.8)" data-k="constraint" data-n="no-side-letters" data-f="memory" data-d="Every term lives in the purchase agreement. No side letters."><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+<g class="c-st k-decision is-new" transform="translate(341.7 273.5)" data-k="decision" data-n="indemnity-cap-1x-fees" data-f="memory" data-d="Cap at 1x fees. The client’s general counsel confirmed by email, Oct 8."><circle class="c-ping" r="10"/><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+<g class="c-st k-decision is-was" transform="translate(426.7 311.2)" data-k="decision" data-n="indemnity-cap-2x-fees" data-f="memory" data-d="Cap at 2x fees, from the call with the client on Aug 28. Replaced today, still readable."><circle class="c-halo" r="10"/><circle class="c-hollow" r="4.4"/></g>
+<g class="c-st k-decision" transform="translate(493.4 218.8)" data-k="decision" data-n="basket-half-percent" data-f="memory" data-d="Basket at 0.5% of the price, deductible rather than tipping."><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+<g class="c-st k-refuted" transform="translate(351.6 386.1)" data-k="refuted" data-n="seller-will-drop-earnout" data-f="memory" data-d="Ruled out Sept 19: the seller’s counsel confirmed the earnout stays."><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+<g class="c-st k-note" transform="translate(202.8 471.0)" data-k="note" data-n="client-call-sept-30" data-f="notes" data-d="Notes from the Sept 30 call with the client: priorities for the next turn of the draft."><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+<g class="c-st k-note" transform="translate(214.2 370.6)" data-k="note" data-n="seller-redline-v3" data-f="notes" data-d="Summary of the seller’s third redline and what changed from v2."><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+<g class="c-st k-reference" transform="translate(101.0 298.8)" data-k="reference" data-n="escrow-agent-contacts" data-f="memory" data-d="Who to call at the escrow agent, and the documents they ask for."><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+<g class="c-st k-reference" transform="translate(62.8 217.7)" data-k="reference" data-n="closing-checklist" data-f="memory" data-d="The closing checklist the client’s board signs off on."><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+<g class="c-st k-gotcha" transform="translate(196.1 155.6)" data-k="gotcha" data-n="seller-counsel-pdf-only" data-f="memory" data-d="The seller’s counsel only reviews redlines sent as PDF; a Word file gets ignored."><circle class="c-halo" r="10"/><circle class="c-dot" r="3.8"/></g>
+</g>
+<g class="c-labels">
+<text class="c-label" x="353.7" y="271.5">indemnity-cap-1x-fees</text>
+<text class="c-sub" x="353.7" y="285.5">decision &#183; saved today</text>
+<text class="c-label" x="414.7" y="335.2" text-anchor="end">indemnity-cap-2x-fees</text>
+<text class="c-sub" x="414.7" y="349.2" text-anchor="end">replaced today &#183; still readable</text>
+<text class="c-label" x="419.2" y="147.4" text-anchor="end">client-ok-before-cap-changes</text>
+<text class="c-sub" x="419.2" y="161.4" text-anchor="end">constraint &#183; in every briefing</text>
+</g>
+<g class="c-core"><circle class="c-core-disc" cx="280" cy="280" r="26"/><use href="#i-lock" x="271" y="270" width="18" height="18"/></g>
+</svg>
+      <p class="chart-legend" aria-hidden="true"><span><i class="lg-star"></i>a star is an entry</span><span><i class="lg-streak"></i>a streak is a chat</span><span><i class="lg-was"></i>a ring was replaced</span></p>
+      <div class="sky-tip" aria-hidden="true"></div>
+    </figure>
+  </div>
+</section>
+
+<!-- ================================================================ I. AT WORK -->
+<!-- Illustrations, labelled on screen. The tool names and arguments are the
+     real Seamless MCP tools (session_start, memory_write with supersedes,
+     recall, capture_url, sealed and confidential projects); the people and
+     projects are invented. Without JS every desk shows, stacked. -->
+<section class="chapter" id="work" data-chapter="work">
+  <div class="wrap">
+    <header class="ch-head">
+      <p class="ch-mark"><em>i.</em> at work</p>
+      <h2 class="h2 rv">The same habit at five different desks.</h2>
+      <p class="lede rv">A chat in the Claude app beside what Seamless keeps for that piece of work. The people and projects are invented; the tools Claude calls, and what they do, are real.</p>
+    </header>
+    <div class="desks" data-desks>
+      <div class="desk-tabs" role="tablist" aria-label="Examples by kind of work">
+        <button class="scene-tab active" type="button" role="tab" id="tab-law" aria-controls="desk-law" aria-selected="true"><span class="sr-num">01</span>Law</button>
+        <button class="scene-tab" type="button" role="tab" id="tab-invest" aria-controls="desk-invest" aria-selected="false" tabindex="-1"><span class="sr-num">02</span>Investing</button>
+        <button class="scene-tab" type="button" role="tab" id="tab-research" aria-controls="desk-research" aria-selected="false" tabindex="-1"><span class="sr-num">03</span>Research</button>
+        <button class="scene-tab" type="button" role="tab" id="tab-writing" aria-controls="desk-writing" aria-selected="false" tabindex="-1"><span class="sr-num">04</span>Writing</button>
+        <button class="scene-tab" type="button" role="tab" id="tab-consult" aria-controls="desk-consult" aria-selected="false" tabindex="-1"><span class="sr-num">05</span>Consulting</button>
+      </div>
+
+      <div class="desk" id="desk-law" role="tabpanel" aria-labelledby="tab-law">
+        <p class="desk-name">Law</p>
+        <figure class="chat">
+          <figcaption class="chat-bar"><span>a chat in the Claude app</span><span class="tag">an illustration</span></figcaption>
+          <div class="chat-body">
+            <p class="msg me">Picking up Harbor. The client agreed to bring the indemnity cap down to 1x fees.</p>
+            <p class="call"><b>session_start</b><span>project: harbor-acquisition</span></p>
+            <p class="msg">Harbor is loaded. The record has the cap at 2x fees, from your call with the client on Aug&nbsp;28, and a rule that no cap change goes to the other side without the client&rsquo;s written OK. Do you have it in writing?</p>
+            <p class="msg me">Yes, their general counsel emailed this morning.</p>
+            <p class="call"><b>memory_write</b><span>decision &middot; indemnity-cap-1x-fees &middot; supersedes indemnity-cap-2x-fees</span></p>
+            <p class="msg">Saved. The 2x entry stays in the record, marked as replaced today. Still open on Harbor: the escrow agent&rsquo;s KYC list and the disclosure schedule for the leases.</p>
+          </div>
+        </figure>
+        <figure class="rec">
+          <figcaption class="rec-head"><span class="rec-title">harbor-acquisition</span><span class="fence"><svg aria-hidden="true"><use href="#i-lock"/></svg>sealed</span><span class="rec-count">what Seamless keeps</span></figcaption>
+          <ul class="entries">
+            <li class="entry"><span class="nm">client-ok-before-cap-changes</span><span class="kd k-constraint">constraint</span><span class="ds">No change to the cap or the basket goes to the other side without the client&rsquo;s written OK.</span></li>
+            <li class="entry is-new"><span class="nm">indemnity-cap-1x-fees<span class="new">saved today</span></span><span class="kd k-decision">decision</span><span class="ds">Cap at 1x fees. The client&rsquo;s general counsel confirmed by email, Oct&nbsp;8.</span></li>
+            <li class="entry is-was"><span class="nm">indemnity-cap-2x-fees</span><span class="kd k-decision">replaced</span><span class="ds">Cap at 2x fees, from the call with the client on Aug&nbsp;28. Still readable.</span></li>
+            <li class="entry is-task"><span class="nm">Send the client the escrow agent&rsquo;s KYC list</span><span class="st">ready</span></li>
+            <li class="entry is-task"><span class="nm">Disclosure schedule for the leases</span><span class="st is-wait">waiting on the rent roll</span></li>
+          </ul>
+        </figure>
+      </div>
+
+      <div class="desk" id="desk-invest" role="tabpanel" aria-labelledby="tab-invest">
+        <p class="desk-name">Investing</p>
+        <figure class="chat">
+          <figcaption class="chat-bar"><span>a chat in the Claude app</span><span class="tag">an illustration</span></figcaption>
+          <div class="chat-body">
+            <p class="msg me">Northwind&rsquo;s founder wants to talk again. Where did we leave it?</p>
+            <p class="call"><b>session_start</b><span>project: northwind</span></p>
+            <p class="msg">You passed on Sept&nbsp;30, with a plan to revisit once their Q1 numbers are in. The deck&rsquo;s $10B market figure is marked refuted: your bottom-up count came to about $1.2B. The reference call with their largest customer never happened, so it&rsquo;s still open.</p>
+            <p class="msg me">Save this article about their competitor&rsquo;s Series&nbsp;B to the deal.</p>
+            <p class="call"><b>capture_url</b><span>project: northwind</span></p>
+            <p class="msg">Saved as a note in Northwind, with the link to the source.</p>
+          </div>
+        </figure>
+        <figure class="rec">
+          <figcaption class="rec-head"><span class="rec-title">northwind</span><span class="fence"><svg aria-hidden="true"><use href="#i-lock"/></svg>confidential</span><span class="rec-count">what Seamless keeps</span></figcaption>
+          <ul class="entries">
+            <li class="entry"><span class="nm">pass-revisit-after-q1</span><span class="kd k-decision">decision</span><span class="ds">Pass for now. Revisit when their Q1 numbers are in. Sept&nbsp;30.</span></li>
+            <li class="entry"><span class="nm">market-size-10b</span><span class="kd k-refuted">refuted</span><span class="ds">The deck&rsquo;s $10B market. A bottom-up count of reachable buyers gives about $1.2B.</span></li>
+            <li class="entry"><span class="nm">no-contact-with-current-investors</span><span class="kd k-constraint">constraint</span><span class="ds">The founder asked us not to contact their current investors directly.</span></li>
+            <li class="entry is-new"><span class="nm">harlow-raises-a-40m-series-b<span class="new">saved today</span></span><span class="kd k-note">note</span><span class="ds">The article on their main competitor&rsquo;s round, captured with its source link.</span></li>
+            <li class="entry is-task"><span class="nm">Reference call with their largest customer</span><span class="st">ready</span></li>
+          </ul>
+        </figure>
+      </div>
+
+      <div class="desk" id="desk-research" role="tabpanel" aria-labelledby="tab-research">
+        <p class="desk-name">Research</p>
+        <figure class="chat">
+          <figcaption class="chat-bar"><span>a chat in the Claude app</span><span class="tag">an illustration</span></figcaption>
+          <div class="chat-body">
+            <p class="msg me">Reviewer 2 thinks the Site&nbsp;B effect is a batch artifact. Did we test that?</p>
+            <p class="call"><b>session_start</b><span>project: site-b-cohort</span></p>
+            <p class="call"><b>recall</b><span>batch effect at site B</span></p>
+            <p class="msg">We did. It&rsquo;s marked refuted as of Oct&nbsp;4: the re-run with randomized plates kept the effect. The analysis plan also fixed site as a random effect on Sept&nbsp;18. I can draft the reply to Reviewer&nbsp;2 from those two entries.</p>
+          </div>
+        </figure>
+        <figure class="rec">
+          <figcaption class="rec-head"><span class="rec-title">site-b-cohort</span><span class="rec-count">what Seamless keeps</span></figcaption>
+          <ul class="entries">
+            <li class="entry"><span class="nm">site-b-batch-artifact</span><span class="kd k-refuted">refuted</span><span class="ds">Batch processing doesn&rsquo;t explain the Site&nbsp;B effect. The re-run with randomized plates kept it, Oct&nbsp;4.</span></li>
+            <li class="entry"><span class="nm">site-as-random-effect</span><span class="kd k-decision">decision</span><span class="ds">Mixed-effects model with site as a random effect. Sept&nbsp;18.</span></li>
+            <li class="entry"><span class="nm">preregistered-outcomes-only</span><span class="kd k-constraint">constraint</span><span class="ds">Only the preregistered outcomes go in the main text.</span></li>
+            <li class="entry is-task"><span class="nm">Reply to Reviewer&nbsp;2</span><span class="st is-wait">due with the revision</span></li>
+          </ul>
+        </figure>
+      </div>
+
+      <div class="desk" id="desk-writing" role="tabpanel" aria-labelledby="tab-writing">
+        <p class="desk-name">Writing</p>
+        <figure class="chat">
+          <figcaption class="chat-bar"><span>a chat in the Claude app</span><span class="tag">an illustration</span></figcaption>
+          <div class="chat-body">
+            <p class="msg me">Let&rsquo;s draft chapter 14, where Mara reaches the coast.</p>
+            <p class="call"><b>session_start</b><span>project: the-salt-road</span></p>
+            <p class="msg">Two things from the book&rsquo;s record before I start. Mara still doesn&rsquo;t know her father&rsquo;s name; that waits for Part Three. And since the flood moved to chapter 4, the coast road is washed out, so she takes the ridge path, which adds a day. Here&rsquo;s a first draft.</p>
+          </div>
+        </figure>
+        <figure class="rec">
+          <figcaption class="rec-head"><span class="rec-title">the-salt-road</span><span class="rec-count">what Seamless keeps</span></figcaption>
+          <ul class="entries">
+            <li class="entry"><span class="nm">father-name-waits-for-part-three</span><span class="kd k-constraint">constraint</span><span class="ds">Mara doesn&rsquo;t learn her father&rsquo;s name until Part Three.</span></li>
+            <li class="entry"><span class="nm">flood-in-chapter-4</span><span class="kd k-decision">decision</span><span class="ds">The flood happens in chapter 4. Moved from chapter 9 on Oct&nbsp;1.</span></li>
+            <li class="entry is-was"><span class="nm">flood-in-chapter-9</span><span class="kd k-decision">replaced</span><span class="ds">The flood happens in chapter 9. Still readable.</span></li>
+            <li class="entry"><span class="nm">coast-road-geography</span><span class="kd k-reference">reference</span><span class="ds">The coast road runs below the ridge. The ridge path adds a day.</span></li>
+            <li class="entry is-task"><span class="nm">Fix the timeline gap between chapters 11 and 12</span><span class="st">ready</span></li>
+          </ul>
+        </figure>
+      </div>
+
+      <div class="desk" id="desk-consult" role="tabpanel" aria-labelledby="tab-consult">
+        <p class="desk-name">Consulting</p>
+        <figure class="chat">
+          <figcaption class="chat-bar"><span>a chat in the Claude app</span><span class="tag">an illustration</span></figcaption>
+          <div class="chat-body">
+            <p class="msg me">Draft this month&rsquo;s steering-committee update for Fenwick.</p>
+            <p class="call"><b>session_start</b><span>project: fenwick</span></p>
+            <p class="msg">Fenwick is sealed, so only its own record is in play here. Two of its rules apply: no competitor names in anything that leaves the building, and their legal team reviews every external deck, so I&rsquo;ll mark this as a draft for review. Since last month the pilot moved to two regions, and the data-access request is still open.</p>
+          </div>
+        </figure>
+        <figure class="rec">
+          <figcaption class="rec-head"><span class="rec-title">fenwick</span><span class="fence"><svg aria-hidden="true"><use href="#i-lock"/></svg>sealed</span><span class="rec-count">what Seamless keeps</span></figcaption>
+          <ul class="entries">
+            <li class="entry"><span class="nm">no-competitor-names-external</span><span class="kd k-constraint">constraint</span><span class="ds">No competitor names in anything that leaves the building.</span></li>
+            <li class="entry"><span class="nm">legal-reviews-external-decks</span><span class="kd k-constraint">constraint</span><span class="ds">Fenwick&rsquo;s legal team reviews every external deck before it goes out.</span></li>
+            <li class="entry"><span class="nm">pilot-in-two-regions</span><span class="kd k-decision">decision</span><span class="ds">Run the pilot in two regions. Sept&nbsp;22.</span></li>
+            <li class="entry is-task"><span class="nm">Data-access request with Fenwick&rsquo;s IT team</span><span class="st is-wait">waiting on Fenwick IT</span></li>
+          </ul>
+        </figure>
+      </div>
+    </div>
+    <p class="fine work-note">An illustration. Constraints, decisions, refuted findings, references, and notes are files under <code>~/.seamless</code>; open items are tasks, kept in its database and shown in the console.</p>
+  </div>
+</section>
+
+<!-- ================================================================ II. WHAT CHANGES -->
+<section class="chapter" id="changes" data-chapter="changes">
+  <div class="wrap">
+    <header class="ch-head">
+      <p class="ch-mark"><em>ii.</em> what changes</p>
+      <h2 class="h2 rv">What a chat gets when it starts from the record.</h2>
+    </header>
+    <ul class="gains">
+      <li class="gain rv"><p class="gain-claim">It&rsquo;s briefed before the first answer.</p><p class="gain-note">Name the project, or let a Claude Project&rsquo;s instructions name it, and Claude loads the project&rsquo;s rules and latest decisions before it replies.</p></li>
+      <li class="gain rv"><p class="gain-claim">Decisions keep their history.</p><p class="gain-note">A changed position is saved as a replacement. The old entry stays readable, marked with what replaced it and when, so &ldquo;what did we agree before September&nbsp;12?&rdquo; has an answer.</p></li>
+      <li class="gain rv"><p class="gain-claim">Clients stay apart.</p><p class="gain-note">Make a project confidential and chats about your other work can&rsquo;t read it. Make it sealed and nothing from outside gets in either. You can still see everything yourself.</p></li>
+      <li class="gain rv"><p class="gain-claim">Open items outlast the chat.</p><p class="gain-note">To-dos live in the project, in order when one waits on another, until someone closes them.</p></li>
+      <li class="gain rv"><p class="gain-claim">The record is a folder you can open.</p><p class="gain-note">Rules, decisions, and notes are plain text files on your computer. Read them in any text editor, search them, and back them up with everything else.</p></li>
+      <li class="gain rv"><p class="gain-claim">Your other AI tools read it too.</p><p class="gain-note">Claude Code, Codex, and other apps that connect to MCP servers read and write the same projects, so a decision made in a chat reaches the agent doing the work.</p></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================================================================ III. NEXT TO CLAUDE'S MEMORY -->
+<section class="chapter" id="memory" data-chapter="memory">
+  <div class="wrap">
+    <header class="ch-head ch-head-wide">
+      <p class="ch-mark"><em>iii.</em> next to Claude&rsquo;s memory</p>
+      <h2 class="h2 rv">Claude already remembers some things. Here&rsquo;s where Seamless differs.</h2>
+      <p class="lede rv">Claude&rsquo;s apps have a memory of their own, on by default for individual plans. Claude generates it from your chats as entries grouped by topic, keeps a separate one for each Claude Project, and lets you read, edit, and delete what it holds. For a lot of people that&rsquo;s enough. The two sit side by side without conflict: Claude&rsquo;s memory carries the general picture of you and your work, and Seamless holds the record a matter needs.</p>
+    </header>
+    <div class="vs-wrap rv" tabindex="0" role="region" aria-label="Claude's built-in memory compared with Seamless">
+      <table class="vs">
+        <thead>
+          <tr><th scope="col"><span class="sr-only">aspect</span></th><th scope="col">Claude&rsquo;s memory</th><th scope="col" class="us">Seamless</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">how it&rsquo;s written</th><td data-col="Claude&rsquo;s memory">Generated from your chats automatically</td><td class="us" data-col="Seamless">Written on purpose, when you or Claude decide something is worth keeping</td></tr>
+          <tr><th scope="row">what an entry is</th><td data-col="Claude&rsquo;s memory">An entry under a topic</td><td class="us" data-col="Seamless">A plain file per rule, decision, refuted idea, or note, with its kind, its date, and the conversation it came from</td></tr>
+          <tr><th scope="row">when something changes</th><td data-col="Claude&rsquo;s memory">You or Claude edit the entry</td><td class="us" data-col="Seamless">The new entry supersedes the old one, which stays readable with what replaced it and when</td></tr>
+          <tr><th scope="row">where it&rsquo;s kept</th><td data-col="Claude&rsquo;s memory">With your Anthropic account</td><td class="us" data-col="Seamless">In a folder on your computer</td></tr>
+          <tr><th scope="row">where it works</th><td data-col="Claude&rsquo;s memory">Claude on the web, the desktop, and your phone</td><td class="us" data-col="Seamless">Chats in the Claude desktop app, plus Claude Code, Codex, and other MCP clients</td></tr>
+          <tr><th scope="row">starting a chat with it</th><td data-col="Claude&rsquo;s memory">Automatic</td><td class="us" data-col="Seamless">When you ask, or when a Project&rsquo;s instructions say so</td></tr>
+          <tr><th scope="row">keeping work apart</th><td data-col="Claude&rsquo;s memory">Each Claude Project has its own memory</td><td class="us" data-col="Seamless">Projects you can make confidential or sealed, enforced for every tool that connects</td></tr>
+          <tr><th scope="row">open items</th><td data-col="Claude&rsquo;s memory">Not part of memory</td><td class="us" data-col="Seamless">Tasks, in order when one waits on another, that outlast the chat</td></tr>
+          <tr><th scope="row">taking it with you</th><td data-col="Claude&rsquo;s memory">Ask Claude to write it out</td><td class="us" data-col="Seamless">It&rsquo;s already plain files</td></tr>
+          <tr><th scope="row">setup</th><td data-col="Claude&rsquo;s memory">On by default on Free, Pro, and Max; an owner turns it on for Team and Enterprise</td><td class="us" data-col="Seamless">One command in a terminal, then restart the app</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="vs-after">
+      <p class="qs-try rv"><b>Use Claude&rsquo;s memory alone if</b> you work on the web or your phone as much as on the desktop, you&rsquo;d rather install nothing, and automatic memory covers what you need to carry between chats.</p>
+      <p class="fine rv">Claude&rsquo;s memory as Anthropic&rsquo;s help center describes it, checked October 2026. Anthropic doesn&rsquo;t offer it to organizations under HIPAA, public-sector, or custom data-retention agreements. Something out of date? <a href="https://github.com/0spoon/seamless/issues">Open an issue</a>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ IV. YOUR FILES -->
+<section class="chapter files" id="files" data-chapter="files">
+  <div class="wrap">
+    <header class="ch-head">
+      <p class="ch-mark"><em>iv.</em> your files</p>
+      <h2 class="h2 rv">Every entry is a file on your own computer.</h2>
+      <p class="lede rv">Seamless is a small program that runs in the background. It has no account and no cloud, sends no usage data, and only answers your own machine. This is the entry Harbor&rsquo;s chat replaced today, still on disk and marked with what replaced it.</p>
+    </header>
+    <div class="folder-grid">
+      <div class="file-cell" data-file>
+        <figure class="file">
+          <p class="file-path"><span>~/.seamless/</span>memory/harbor-acquisition/indemnity-cap-2x-fees.md</p>
+          <div class="file-body">
+<p class="fl fl-rule">---</p>
+<p class="fl"><span class="k">id:</span> 01M4D9K2QX7ZR3VWN8T5B6HJ4C</p>
+<p class="fl"><span class="k">kind:</span> decision</p>
+<p class="fl"><span class="k">name:</span> indemnity-cap-2x-fees</p>
+<p class="fl"><span class="k">description:</span> Indemnity cap at 2x fees, from the call with the client on Aug 28.</p>
+<p class="fl"><span class="k">project:</span> harbor-acquisition</p>
+<p class="fl"><span class="k">created:</span> 2026-08-28T16:12:40Z</p>
+<p class="fl" data-note="invalid"><span class="k">invalid_at:</span> 2026-10-08T09:41:05Z</p>
+<p class="fl" data-note="super"><span class="k">superseded_by:</span> 01M4ETQ8V2N7KD5XG1HZ3R9WMP</p>
+<p class="fl" data-note="source"><span class="k">source_session:</span> 01M3ZB4W7T0QH9C2X8R5D1KJNE</p>
+<p class="fl fl-rule">---</p>
+<p class="fl fl-text" data-note="body">The client wants the indemnity cap at 2x fees in the first draft, with the basket at 0.5%. Any move on either needs the client&rsquo;s written OK first.</p>
+          </div>
+          <ol class="file-notes">
+            <li data-for="invalid"><b>invalid_at</b> When it was replaced. It drops out of briefings and search, and stays on disk.</li>
+            <li data-for="super"><b>superseded_by</b> The entry that replaced it, indemnity-cap-1x-fees. Ask Claude what changed and it can show you both.</li>
+            <li data-for="source"><b>source_session</b> The chat that wrote it, so a fact can always be traced to where it came from.</li>
+            <li data-for="body"><b>the body</b> Plain text. Edit it in any editor and Seamless picks up the change.</li>
+          </ol>
+        </figure>
+      </div>
+      <div class="folder-side">
+        <ul class="points">
+          <li class="rv"><b>Your chats still go to Anthropic.</b> When Claude reads an entry into a conversation, that text becomes part of the chat and is handled like everything else you type, under your Claude plan&rsquo;s terms. Seamless doesn&rsquo;t change what Anthropic receives or keeps.</li>
+          <li class="rv"><b>Search stays on your machine unless you change it.</b> Out of the box, search is keyword-only and offline. Search by meaning is optional: with an OpenAI key, the text of your entries is sent to OpenAI to be indexed; with Ollama, it stays on your computer.</li>
+          <li class="rv"><b>The walls are between conversations.</b> A sealed project keeps one client&rsquo;s record out of another client&rsquo;s chats. It isn&rsquo;t a lock: anyone who can sign in to your computer account can open the folder.</li>
+          <li class="rv"><b>No compliance claims.</b> Whether this setup fits your professional obligations is a judgment for you, or for your firm.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ V. SET IT UP -->
+<section class="chapter install" id="setup" data-chapter="setup">
+  <div class="wrap">
+    <header class="ch-head ch-head-wide">
+      <p class="ch-mark"><em>v.</em> set it up</p>
+      <h2 class="h2 rv">About ten minutes, once.</h2>
+      <p class="lede rv">You need the Claude desktop app for Mac or Windows, and a few minutes in the terminal. Everything after that happens in Claude.</p>
+    </header>
+
+    <div class="install-grid">
+      <ol class="qs">
+        <li class="qs-step rv">
+          <div class="qs-main">
+            <h3><span class="qs-n">1</span>Open the terminal</h3>
+            <div class="os-switch" role="group" aria-label="Show the steps for">
+              <button type="button" data-os-pick="unix" aria-pressed="false">Mac</button>
+              <button type="button" data-os-pick="windows" aria-pressed="false">Windows</button>
+            </div>
+            <p class="qs-note" data-os-block="unix">Press &#8984;-Space, type <b>Terminal</b>, and press Return.</p>
+            <p class="qs-note" data-os-block="windows">Open the Start menu, type <b>PowerShell</b>, and press Enter.</p>
+          </div>
+        </li>
+        <li class="qs-step rv">
+          <div class="qs-main">
+            <h3><span class="qs-n">2</span>Paste this, then press Return</h3>
+            <p class="os-cap" data-os-block="unix">Mac</p>
+            <div class="code" data-os-block="unix"><span class="p" aria-hidden="true">$</span><span class="cmd" data-copy="curl -fsSL https://thereisnospoon.org/install | sh">curl -fsSL https://thereisnospoon.org/install | sh</span><button class="copy-btn" type="button" aria-label="Copy install command">copy</button></div>
+            <p class="os-cap" data-os-block="windows">Windows</p>
+            <div class="code" data-os-block="windows"><span class="p" aria-hidden="true">PS&gt;</span><span class="cmd" data-copy="irm https://thereisnospoon.org/install.ps1 | iex">irm https://thereisnospoon.org/install.ps1 | iex</span><button class="copy-btn" type="button" aria-label="Copy install command">copy</button></div>
+            <div class="qs-out" data-os-block="unix">
+<p class="qs-out-h">what it prints, abridged (Mac)</p>
+<p>checksum     ok</p>
+<p>warning: cosign not found -- archive verified by checksum only.</p>
+<p>installed    /Users/you/.local/bin/seamlessd, /Users/you/.local/bin/seam</p>
+<p class="qs-out-gap">&hellip;</p>
+<p>service      org.thereisnospoon.seamless (launchd)</p>
+<p>healthz      ok -- http://127.0.0.1:8081/healthz</p>
+<p class="qs-out-gap">&hellip;</p>
+<p>chat in the Claude app -- the seamless MCP tools load after an app restart</p>
+            </div>
+            <div class="qs-out" data-os-block="windows">
+<p class="qs-out-h">what it prints, abridged (Windows)</p>
+<p>checksum     ok</p>
+<p>WARNING: cosign not found -- archive verified by checksum only.</p>
+<p>installed    C:\Users\you\.local\bin\seamlessd.exe, C:\Users\you\.local\bin\seam.exe</p>
+<p class="qs-out-gap">&hellip;</p>
+<p>service      Seamless (Scheduled Task, at logon)</p>
+<p>healthz      ok -- http://127.0.0.1:8081/healthz</p>
+<p class="qs-out-gap">&hellip;</p>
+<p>chat in the Claude app -- the seamless MCP tools load after an app restart</p>
+            </div>
+            <p class="qs-note">It checks the download against its published checksum, installs Seamless for your user only, starts it in the background, and connects the Claude app. If it also finds Claude Code or Codex, it asks which to connect; pressing Return keeps what it found.</p>
+            <details class="what">
+              <summary class="what-s">Two lines that look like problems, and aren&rsquo;t</summary>
+              <p>The cosign warning means an optional signing tool isn&rsquo;t installed; the download still matched its published checksum. On a Mac it may also suggest adding a folder to your PATH, which the Claude app doesn&rsquo;t need. The installer is <a href="../install">one readable script</a> (<a href="../install.ps1">PowerShell</a>), if you&rsquo;d like to look first.</p>
+            </details>
+          </div>
+        </li>
+        <li class="qs-step rv">
+          <div class="qs-main">
+            <h3><span class="qs-n">3</span>Quit Claude and open it again</h3>
+            <p class="qs-note">Claude loads its connections when it starts. Quit it completely, not just its window, then reopen it.</p>
+          </div>
+        </li>
+        <li class="qs-step rv">
+          <div class="qs-main">
+            <h3><span class="qs-n">4</span>Start your first project</h3>
+            <p class="qs-note">In a new chat, ask in plain words:</p>
+            <div class="code say"><span class="say-label">in a chat</span><span class="cmd" data-copy="Create a sealed Seamless project called Harbor acquisition, then start a Seamless session in it.">Create a sealed Seamless project called Harbor acquisition, then start a Seamless session in it.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+            <p class="qs-note">When Claude first reaches for a Seamless tool, the app asks for your approval; allow it once or always. From then on, tell Claude what to keep as you work: &ldquo;save that as a decision&rdquo;, or &ldquo;that&rsquo;s a rule for this client&rdquo;.</p>
+          </div>
+        </li>
+        <li class="qs-step rv">
+          <div class="qs-main">
+            <h3><span class="qs-n">5</span>Make every chat start from the record <span class="opt">optional</span></h3>
+            <p class="qs-note">A chat doesn&rsquo;t load the record by itself. If you keep this work in a Claude Project, add a line to the Project&rsquo;s instructions so that each chat in it starts by loading the record:</p>
+            <div class="code say"><span class="say-label">instructions</span><span class="cmd" data-copy="At the start of every chat, call the Seamless session_start tool with project harbor-acquisition and read the briefing before answering. When we settle a rule or a decision, save it to Seamless, and when a decision changes, save the new one as superseding the old.">At the start of every chat, call the Seamless session_start tool with project harbor-acquisition and read the briefing before answering. When we settle a rule or a decision, save it to Seamless, and when a decision changes, save the new one as superseding the old.</span><button class="copy-btn" type="button" aria-label="Copy the instruction">copy</button></div>
+          </div>
+        </li>
+        <li class="qs-step rv">
+          <div class="qs-main">
+            <h3><span class="qs-n">6</span>Read what&rsquo;s been saved <span class="opt">optional</span></h3>
+            <p class="qs-note">Ask Claude what Seamless has on a project, or open the console, a private page in your browser that lists every project, entry, and open item. Run this in the terminal:</p>
+            <p class="os-cap" data-os-block="unix">Mac</p>
+            <div class="code" data-os-block="unix"><span class="p" aria-hidden="true">$</span><span class="cmd" data-copy="~/.local/bin/seamlessd console-open">~/.local/bin/seamlessd console-open</span><button class="copy-btn" type="button" aria-label="Copy the console command">copy</button></div>
+            <p class="os-cap" data-os-block="windows">Windows, in a new PowerShell window</p>
+            <div class="code" data-os-block="windows"><span class="p" aria-hidden="true">PS&gt;</span><span class="cmd" data-copy="seamlessd console-open">seamlessd console-open</span><button class="copy-btn" type="button" aria-label="Copy the console command">copy</button></div>
+            <p class="qs-note" data-os-block="unix">Or open the folder itself: in the Finder, press &#8984;-Shift-G and paste <code>~/.seamless/memory</code>.</p>
+          </div>
+        </li>
+      </ol>
+
+      <aside class="leave rv" aria-labelledby="leave-h">
+        <p class="leave-kicker">changed your mind?</p>
+        <h3 id="leave-h">Leaving takes one command.</h3>
+        <p class="os-cap" data-os-block="unix">Mac</p>
+        <div class="code" data-os-block="unix"><span class="p" aria-hidden="true">$</span><span class="cmd" data-copy="~/.local/bin/seamlessd uninstall --dry-run">~/.local/bin/seamlessd uninstall --dry-run</span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+        <p class="os-cap" data-os-block="windows">Windows</p>
+        <div class="code" data-os-block="windows"><span class="p" aria-hidden="true">PS&gt;</span><span class="cmd" data-copy="seamlessd uninstall --dry-run">seamlessd uninstall --dry-run</span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+        <p class="leave-note">Prints exactly what would be removed, and removes nothing. Drop <code>--dry-run</code> to do it.</p>
+        <ul class="leave-list">
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Stops and removes the background program</li>
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Disconnects the Claude app and leaves its other settings alone</li>
+          <li><svg aria-hidden="true"><use href="#i-check"/></svg>Deletes Seamless itself. Running it twice is harmless.</li>
+        </ul>
+        <p class="leave-keep">Your entries stay in <code>~/.seamless</code>, because removing a program shouldn&rsquo;t delete your work. Add <code>--purge</code> to remove them too.</p>
+        <p class="leave-more"><a class="lnk" href="../docs/updating/#uninstall">Uninstalling, in full <svg aria-hidden="true"><use href="#i-arrow"/></svg></a></p>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ QUESTIONS -->
+<section class="chapter faq-sec" id="questions">
+  <div class="wrap faq-grid">
+    <header class="ch-head">
+      <p class="ch-mark">fair questions</p>
+      <h2 class="h2 rv">What it doesn&rsquo;t do.</h2>
+      <p class="lede rv">Short answers, including the ones that might rule it out for you. The <a href="../docs/claude-app/">technical setup guide</a> has the rest.</p>
+    </header>
+    <div class="faq">
+      <details class="rv">
+        <summary>Does it work on claude.ai or on my phone?</summary>
+        <div class="a"><p>No. Seamless runs on your computer and connects through a setting that only the Claude desktop app reads, so Claude on the web, the phone apps, and Cowork tasks can&rsquo;t reach it.</p></div>
+      </details>
+      <details class="rv">
+        <summary>Will Claude load my project on its own?</summary>
+        <div class="a"><p>Not in a chat. Claude Code gets a briefing automatically at the start of every session, but a chat has no such hook. Claude loads a project when you ask, or when a Claude Project&rsquo;s instructions tell it to (step 5 above).</p></div>
+      </details>
+      <details class="rv">
+        <summary>Does it read my documents or my email?</summary>
+        <div class="a"><p>No. It keeps what you and Claude decide to write down, plus any web page you ask it to capture. Contracts and decks still belong in a Claude Project, a document system, or a folder.</p></div>
+      </details>
+      <details class="rv">
+        <summary>Can my team share it?</summary>
+        <div class="a"><p>It&rsquo;s set up for one person on one computer. A trusted team can <a href="../docs/guides/network-install/">share one copy over a network</a>, but there are no per-person permissions: everyone with access sees everything.</p></div>
+      </details>
+      <details class="rv">
+        <summary>Does it work on Windows?</summary>
+        <div class="a"><p>It should. The Windows app is wired the same way and the installer handles it, but the chat connection has only been checked end to end on a Mac so far. If you try it on Windows, <a href="https://github.com/0spoon/seamless/issues">tell us how it went</a>.</p></div>
+      </details>
+      <details class="rv">
+        <summary>Do I have to use the terminal?</summary>
+        <div class="a"><p>Twice: once to install, and once if you remove it. Everything in between happens in Claude, and reading the files yourself is optional.</p></div>
+      </details>
+      <details class="rv">
+        <summary>What does it cost?</summary>
+        <div class="a"><p>Nothing. Seamless is free and open source under the MIT license, and there&rsquo;s no account to create.</p></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ FINALE -->
+<section class="finale" id="try">
+  <div class="wrap finale-in">
+    <svg class="finale-mark" viewBox="0 0 120 120" aria-hidden="true">
+      <circle class="fm-ring" cx="60" cy="60" r="34" pathLength="100"/>
+      <path class="fm-cut" d="M20 100 L96 24" pathLength="100"/>
+      <circle class="fm-star" cx="98" cy="22" r="5"/>
+    </svg>
+    <h2 class="h2 finale-h" data-split>Try it on one matter this week.</h2>
+    <p class="finale-p rv">Start one project, work in it for a few chats, then open the folder and read what Claude wrote down. If it isn&rsquo;t for you, one command takes Seamless back out and leaves your files where they are.</p>
+    <div class="finale-act rv">
+      <p class="os-cap" data-os-block="unix">Mac</p>
+      <span class="install-pill" data-os-block="unix"><span class="p" aria-hidden="true">$</span><span class="cmd" data-copy="curl -fsSL https://thereisnospoon.org/install | sh">curl -fsSL https://thereisnospoon.org/install | sh</span><button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
+      <p class="os-cap" data-os-block="windows">Windows</p>
+      <span class="install-pill" data-os-block="windows"><span class="p" aria-hidden="true">PS&gt;</span><span class="cmd" data-copy="irm https://thereisnospoon.org/install.ps1 | iex">irm https://thereisnospoon.org/install.ps1 | iex</span><button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
+      <p class="finale-links">
+        <a class="lnk" href="#setup">The steps, one at a time <svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="lnk" href="../docs/claude-app/">The technical setup guide <svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap foot-grid">
+    <div class="foot-brand">
+      <a class="brand" href="../" aria-label="Seamless home">
+        <svg class="brand-mark" aria-hidden="true"><use href="#i-mark"/></svg>
+        <span class="brand-word">seamless</span>
+      </a>
+      <p class="foot-tag">No seams. No spoons.</p>
+      <p class="colophon">Set in Fraunces, Instrument Sans &amp; IBM Plex Mono, self-hosted (<a href="../static/fonts/OFL-NOTICE.txt">OFL</a>). This page loads nothing from other sites and has no trackers or cookies; it remembers only your theme and OS pick, in your own browser. Naturally, the source is <a href="https://github.com/0spoon/seamless/tree/main/docs">in the repo</a>.</p>
+    </div>
+    <nav class="foot-nav" aria-label="Footer">
+      <div>
+        <b>Project</b>
+        <a href="../">Home</a>
+        <a href="../docs/">Docs</a>
+        <a href="../compare/">Compare</a>
+        <a href="../docs/changelog/">Changelog</a>
+        <a href="https://github.com/0spoon/seamless">GitHub</a>
+      </div>
+      <div>
+        <b>Start</b>
+        <a href="#setup">Set it up</a>
+        <a href="../docs/claude-app/">Technical setup guide</a>
+        <a href="../docs/updating/#uninstall">Uninstall</a>
+        <a href="../">For developers</a>
+      </div>
+    </nav>
+  </div>
+</footer>
+
+<script src="../static/site.js?v=c88feb8d"></script>
+<script src="../static/webmcp.js?v=b8c80228"></script>
+<script>
+/* The page's motion and its few interactive pieces. home.js drives the
+   landing's own sections (its sky, the week, the orbit, the welcome-back
+   briefing) and is not loaded here; the shared behaviors below follow it:
+   the header and progress line, the chapter rail, the headline rise, the
+   copy burst. site.js still owns the theme, the OS switch, the copy buttons,
+   and the .rv reveal. Without JS the page reads complete. */
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function $(s, c) { return (c || document).querySelector(s); }
+  function $$(s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function onceVisible(el, cb, threshold) {
+    if (!("IntersectionObserver" in window)) { cb(); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { io.disconnect(); cb(); } });
+    }, { threshold: threshold || 0.25 });
+    io.observe(el);
+  }
+  var announcer = $("#announce");
+  function say(text) {
+    if (!announcer) return;
+    announcer.textContent = "";
+    setTimeout(function () { announcer.textContent = text; }, 60);
+  }
+
+  /* the headline rise and staggered reveals, as on the landing */
+  function splitWords(el) {
+    var i = 0;
+    (function walk(node) {
+      Array.prototype.slice.call(node.childNodes).forEach(function (n) {
+        if (n.nodeType === 3) {
+          var frag = document.createDocumentFragment();
+          n.textContent.split(/(\s+)/).forEach(function (part) {
+            if (!part) return;
+            if (/^\s+$/.test(part)) { frag.appendChild(document.createTextNode(part)); return; }
+            var w = document.createElement("span");
+            w.className = "w";
+            var wi = document.createElement("span");
+            wi.className = "wi";
+            wi.textContent = part;
+            wi.style.setProperty("--i", i++);
+            w.appendChild(wi);
+            frag.appendChild(w);
+          });
+          n.parentNode.replaceChild(frag, n);
+        } else if (n.nodeType === 1) {
+          walk(n);
+        }
+      });
+    })(el);
+  }
+  var groups = new Map();
+  $$(".rv").forEach(function (el) {
+    var n = groups.get(el.parentNode) || 0;
+    el.style.setProperty("--d", Math.min(n, 6) * 90 + "ms");
+    groups.set(el.parentNode, n + 1);
+  });
+  if (!reduced) {
+    $$("[data-split]").forEach(function (el) {
+      splitWords(el);
+      if (el.classList.contains("h1")) {
+        var go = function () { setTimeout(function () { el.classList.add("is-in"); }, 120); };
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(go); else go();
+        setTimeout(function () { el.classList.add("is-in"); }, 1500);
+      } else {
+        onceVisible(el, function () { el.classList.add("is-in"); }, 0.4);
+      }
+    });
+  }
+
+  /* the header, the progress line, the rail, the horizons, the starfield */
+  var head = $("[data-head]");
+  var progress = head && $(".head-progress i", head);
+  var rail = $(".rail");
+  var railLinks = rail ? $$("a[data-rail]", rail) : [];
+  var railFill = rail && $(".rail-line i", rail);
+  var chapters = $$("[data-chapter]");
+  var horizons = $$(".chapter");
+  var navLinks = $$(".head-nav a[href^='#']");
+  var starfield = $(".starfield");
+  var heroEl = $(".ca-hero");
+  var finaleEl = $(".finale");
+  function onScroll() {
+    var y = window.scrollY || window.pageYOffset;
+    var vh = window.innerHeight;
+    if (head) head.classList.toggle("is-solid", y > 24);
+    if (progress) progress.style.setProperty("--p", clamp(y / Math.max(1, root.scrollHeight - vh), 0, 1).toFixed(4));
+    var line = vh * 0.42, cur = -1, frac = 0;
+    for (var i = 0; i < chapters.length; i++) {
+      var r = chapters[i].getBoundingClientRect();
+      if (r.top <= line) { cur = i; frac = clamp((line - r.top) / Math.max(1, r.height), 0, 1); }
+    }
+    for (var c = 0; c < horizons.length; c++) horizons[c].classList.toggle("is-reached", horizons[c].getBoundingClientRect().top <= line);
+    var curId = cur >= 0 ? chapters[cur].id : "";
+    railLinks.forEach(function (a, k) {
+      a.classList.toggle("is-current", k === cur);
+      a.classList.toggle("is-past", k < cur);
+      if (k === cur) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
+    });
+    if (railFill) railFill.style.setProperty("--fill", clamp((cur + frac) / Math.max(1, chapters.length - 1), 0, 1).toFixed(4));
+    var pastHero = heroEl ? heroEl.getBoundingClientRect().bottom < vh * 0.5 : true;
+    var atEnd = finaleEl ? finaleEl.getBoundingClientRect().top < vh * 0.55 : false;
+    if (rail) rail.classList.toggle("is-on", pastHero && !atEnd && cur >= 0);
+    navLinks.forEach(function (a) { a.classList.toggle("is-current", a.getAttribute("href") === "#" + curId); });
+    if (starfield) {
+      starfield.classList.toggle("is-on", pastHero);
+      if (!reduced) starfield.style.transform = "translate3d(0," + (-y * 0.02).toFixed(1) + "px,0)";
+    }
+  }
+  var ticking = false;
+  function requestScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () { ticking = false; onScroll(); });
+  }
+  window.addEventListener("scroll", requestScroll, { passive: true });
+  window.addEventListener("resize", requestScroll);
+  onScroll();
+
+  /* the desk switcher: a WAI-ARIA tablist over the five desks */
+  var box = $("[data-desks]");
+  if (box) {
+    var tabs = $$('[role="tab"]', box);
+    var pick = function (tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute("aria-selected", on ? "true" : "false");
+        t.classList.toggle("active", on);
+        t.tabIndex = on ? 0 : -1;
+        var panel = document.getElementById(t.getAttribute("aria-controls"));
+        panel.hidden = !on;
+        panel.classList.toggle("is-shown", on);
+      });
+      if (focus) tab.focus();
+    };
+    tabs.forEach(function (t, i) {
+      t.addEventListener("click", function () { pick(t, false); });
+      t.addEventListener("keydown", function (ev) {
+        var j = ev.key === "ArrowRight" ? i + 1 : ev.key === "ArrowLeft" ? i - 1
+          : ev.key === "Home" ? 0 : ev.key === "End" ? tabs.length - 1 : null;
+        if (j === null) return;
+        ev.preventDefault();
+        pick(tabs[(j + tabs.length) % tabs.length], true);
+      });
+    });
+    tabs.forEach(function (t) { document.getElementById(t.getAttribute("aria-controls")).hidden = t !== tabs[0]; });
+  }
+
+  /* the matter chart: point at a star to read its entry */
+  var chart = $("[data-chart]");
+  if (chart) {
+    var tip = $(".sky-tip", chart);
+    var hot = null;
+    var show = function (st) {
+      if (hot) hot.classList.remove("is-hot");
+      hot = st;
+      st.classList.add("is-hot");
+      tip.textContent = "";
+      var path = document.createElement("p");
+      path.className = "tp-path";
+      path.textContent = "~/.seamless/" + st.getAttribute("data-f") + "/harbor-acquisition/" + st.getAttribute("data-n") + ".md";
+      var kind = document.createElement("span");
+      kind.className = "tp-kind";
+      kind.textContent = st.classList.contains("is-was") ? "decision \u00b7 replaced" : st.getAttribute("data-k");
+      kind.style.background = getComputedStyle(st).color;
+      var desc = document.createElement("p");
+      desc.className = "tp-desc";
+      desc.textContent = st.getAttribute("data-d");
+      tip.appendChild(path); tip.appendChild(kind); tip.appendChild(desc);
+      var cr = chart.getBoundingClientRect(), sr = st.getBoundingClientRect();
+      var x = sr.left + sr.width / 2 - cr.left, y = sr.top + sr.height / 2 - cr.top;
+      var w = tip.offsetWidth, h = tip.offsetHeight;
+      var left = clamp(x + 16, 0, cr.width - w);
+      var top = y - h - 14 < 0 ? y + 16 : y - h - 14;
+      tip.style.transform = "translate(" + left.toFixed(0) + "px," + top.toFixed(0) + "px)";
+      tip.classList.add("is-on");
+    };
+    var hide = function () {
+      if (hot) hot.classList.remove("is-hot");
+      hot = null;
+      tip.classList.remove("is-on");
+    };
+    $$(".c-st", chart).forEach(function (st) {
+      st.addEventListener("pointerenter", function () { show(st); });
+      st.addEventListener("pointerleave", hide);
+      st.addEventListener("click", function (ev) { ev.stopPropagation(); if (hot === st) hide(); else show(st); });
+    });
+    document.addEventListener("click", hide);
+  }
+
+  /* the file: point at a note to light its line */
+  $$(".file-notes li[data-for]").forEach(function (li) {
+    var line = $('.fl[data-note="' + li.getAttribute("data-for") + '"]');
+    if (!line) return;
+    var on = function () { li.classList.add("is-hot"); line.classList.add("is-hot"); };
+    var off = function () { li.classList.remove("is-hot"); line.classList.remove("is-hot"); };
+    li.addEventListener("pointerenter", on);
+    li.addEventListener("pointerleave", off);
+  });
+
+  /* copy confirmations for assistive tech, and the landing's small burst */
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".copy-btn");
+    if (!btn) return;
+    var mo = new MutationObserver(function () {
+      if (btn.classList.contains("ok")) { say("Copied to clipboard"); mo.disconnect(); }
+      else if (btn.classList.contains("sel")) { say("Text selected. Press Command C or Control C to copy it."); mo.disconnect(); }
+    });
+    mo.observe(btn, { attributes: true, attributeFilter: ["class"] });
+    setTimeout(function () { mo.disconnect(); }, 2500);
+    if (reduced) return;
+    var r = btn.getBoundingClientRect();
+    var b = document.createElement("span");
+    b.className = "burst";
+    b.style.left = (r.left + r.width / 2) + "px";
+    b.style.top = (r.top + r.height / 2) + "px";
+    for (var i = 0; i < 9; i++) {
+      var dot = document.createElement("i");
+      dot.style.setProperty("--a", (i * 40 + Math.random() * 18) + "deg");
+      dot.style.setProperty("--r", (22 + Math.random() * 18) + "px");
+      b.appendChild(dot);
+    }
+    document.body.appendChild(b);
+    setTimeout(function () { b.remove(); }, 900);
+  });
+
+  /* the phone menu closes on a tap outside it or on scroll */
+  var nav = $(".nav-menu");
+  if (nav) {
+    document.addEventListener("click", function (e) { if (nav.open && !nav.contains(e.target)) nav.open = false; });
+    window.addEventListener("scroll", function () { if (nav.open) nav.open = false; }, { passive: true });
+  }
+
+  /* the finale's mark draws itself */
+  if (finaleEl && !reduced) {
+    finaleEl.classList.add("is-armed");
+    onceVisible(finaleEl, function () { finaleEl.classList.add("is-in"); }, 0.35);
+  }
+})();
+</script>
+</body>
+</html>

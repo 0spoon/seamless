@@ -6,19 +6,24 @@
    one scene card below. On scroll into view the reel runs a tour and keeps
    looping until the visitor scrolls away:
 
-     play `without` -> hold -> flip to `with` -> hold -> next scene -> ...
-     -> wrap back to the first scene
+     play `without` -> hold -> play `with` beside it -> hold -> next scene
+     -> ... -> wrap back to the first scene
 
    The split scene (layout:"split") has no without/with; it plays once, holds,
    and advances. Scrolling the reel offscreen pauses the tour; returning resumes
-   it. Clicking a scene tab jumps the tour there; clicking the inner without|with
-   toggle or replay steers the current scene -- the tour then carries on from
-   wherever the visitor left it. prefers-reduced-motion renders transcripts
-   statically with no autoplay and no tour. Text is real, selectable DOM.
+   it where it stopped. Clicking a scene tab jumps the tour there (arrow keys,
+   Home and End move between tabs); clicking the inner without|with toggle or
+   replay steers the current scene -- the tour then carries on from wherever
+   the visitor left it. On wide screens both sides of a scene play at once, so
+   neither terminal sits idle while the other runs. prefers-reduced-motion
+   renders transcripts statically with no autoplay and no tour. Text is real,
+   selectable DOM.
 
    Curation lives in the data (scenes.js), never here: this file renders whatever
-   steps it is handed, verbatim. Two layouts: `with-without` (one terminal, a
-   without|with toggle) and `split` (two terminals on one beat-ordered timeline,
+   steps it is handed, verbatim. Two layouts: `with-without` (two terminals side
+   by side, each outcome revealed when its side finishes; one terminal behind a
+   without|with toggle on narrow screens) and `split` (two terminals on one
+   beat-ordered timeline,
    so the tasks_claim race reads as a race). The files-as-truth epilogue (comment/
    cmd/files/fm steps) is folded into scene 1's with-side ending. */
 (function () {
@@ -41,6 +46,30 @@
   };
 
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  /* both sides of a scene side by side, or one at a time behind a toggle */
+  var wideMq = window.matchMedia ? window.matchMedia("(min-width: 901px)") : null;
+  function wide() { return !wideMq || wideMq.matches; }
+
+  /* scrolling the reel away pauses whatever is typing; coming back resumes it */
+  async function gate(st) {
+    while (st.paused) await wait(120);
+  }
+
+  /* arrow keys, Home and End move between the tabs of a tablist */
+  function rovingKeys(tabs, activate) {
+    tabs.forEach(function (t, i) {
+      t.addEventListener("keydown", function (e) {
+        var j = e.key === "ArrowRight" || e.key === "ArrowDown" ? (i + 1) % tabs.length
+          : e.key === "ArrowLeft" || e.key === "ArrowUp" ? (i - 1 + tabs.length) % tabs.length
+          : e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : -1;
+        if (j < 0) return;
+        e.preventDefault();
+        tabs[j].focus();
+        activate(j);
+      });
+    });
+  }
 
   /* ---- markdown-lite for agent prose (trusted, committed data) ------------- */
   function esc(s) {
@@ -158,6 +187,7 @@
     var per = Math.min(30, 2200 / Math.max(text.length, 1));
     for (var i = 1; i <= text.length; i++) {
       if (st.token !== token) { span.textContent = text; break; }
+      await gate(st);
       span.textContent = text.slice(0, i);
       await wait(per);
     }
@@ -183,6 +213,8 @@
     var token = ++st.token;
     body.innerHTML = "";
     for (var i = 0; i < pane.steps.length; i++) {
+      if (st.token !== token) return;
+      await gate(st);
       if (st.token !== token) return;
       var step = pane.steps[i];
       var el = renderStep(step);
@@ -219,9 +251,12 @@
     return head;
   }
 
-  /* ---- controller: with/without scene (one terminal, a without|with toggle) -
-     Returns { el, segments, playSegment, showStatic, stop } for the reel to
-     drive. `events` carries the reel's callbacks for user clicks. */
+  /* ---- controller: with/without scene -------------------------------------
+     Both sides sit next to each other on wide screens and play in turn, each
+     with its outcome underneath once it finishes; narrow screens show one side
+     at a time behind a without|with toggle. Returns { segments, playSegment,
+     showStatic, stop } for the reel to drive. `events` carries the reel's
+     callbacks for user clicks. */
   function buildWithWithout(scene, events, mount) {
     var order = ["without", "with"].filter(function (k) {
       return scene.panes.some(function (p) { return p.key === k; });
@@ -231,17 +266,19 @@
 
     mount.appendChild(sceneHead(scene));
 
-    // without|with toggle
+    // without|with toggle (narrow screens; CSS hides it when both sides fit)
     var tabs = document.createElement("div");
     tabs.className = "term-tabs";
     tabs.setAttribute("role", "tablist");
-    tabs.setAttribute("aria-label", esc(scene.title) + " -- with or without Seamless");
+    tabs.setAttribute("aria-label", scene.title + " -- with or without Seamless");
     var tabEls = {};
     order.forEach(function (key) {
       var b = document.createElement("button");
       b.type = "button";
       b.className = "term-tab tab-" + key;
       b.setAttribute("role", "tab");
+      b.id = scene.id + "-tab-" + key;
+      b.setAttribute("aria-controls", scene.id + "-side-" + key);
       b.dataset.pane = key;
       b.innerHTML = '<span class="tab-dot" aria-hidden="true"></span>' + esc(byKey[key].label);
       tabs.appendChild(b);
@@ -249,66 +286,149 @@
     });
     mount.appendChild(tabs);
 
-    // terminal
-    var term = document.createElement("div");
-    term.className = "term term-scene-term";
-    var bar = document.createElement("div");
-    bar.className = "term-bar";
-    bar.innerHTML = "<i></i><i></i><i></i><span>~/code/myapp</span>";
-    term.appendChild(bar);
-    var bodies = {};
+    // one terminal per side, each with its outcome underneath
+    var duo = document.createElement("div");
+    duo.className = "ts-duo";
+    var sides = {}, bodies = {}, outcomes = {}, played = {};
     order.forEach(function (key) {
+      var side = document.createElement("div");
+      side.className = "ts-side";
+      side.id = scene.id + "-side-" + key;
+      side.dataset.side = key;
+      var label = document.createElement("p");
+      label.className = "ts-side-head";
+      label.textContent = byKey[key].label;
+      side.appendChild(label);
+      var term = document.createElement("div");
+      term.className = "term term-scene-term";
+      var bar = document.createElement("div");
+      bar.className = "term-bar";
+      bar.innerHTML = "<span>" + esc(byKey[key].label) + " · ~/code/myapp</span>";
+      term.appendChild(bar);
       var body = document.createElement("div");
       body.className = "term-body ts-pane";
       body.dataset.pane = key;
-      body.setAttribute("role", "tabpanel");
-      body.setAttribute("aria-label", esc(byKey[key].label) + " transcript");
+      body.setAttribute("aria-label", byKey[key].label + " transcript");
       term.appendChild(body);
+      side.appendChild(term);
+      var out = document.createElement("p");
+      out.className = "ts-outcome";
+      out.textContent = byKey[key].outcome;
+      side.appendChild(out);
+      duo.appendChild(side);
+      sides[key] = side;
       bodies[key] = body;
+      outcomes[key] = out;
+      played[key] = false;
     });
-    mount.appendChild(term);
+    mount.appendChild(duo);
 
-    // footer: outcome + replay
+    // footer: replay
     var foot = document.createElement("div");
     foot.className = "ts-foot";
-    foot.innerHTML = '<p class="ts-outcome"></p>' +
-      '<button class="ts-replay" type="button">' + REPLAY_SVG + "replay</button>";
+    foot.innerHTML = '<button class="ts-replay" type="button">' + REPLAY_SVG + "replay</button>";
     mount.appendChild(foot);
-    var outcomeEl = foot.querySelector(".ts-outcome");
 
     var state = {};
-    order.forEach(function (key) { state[key] = { token: 0 }; });
+    order.forEach(function (key) { state[key] = { token: 0, paused: false }; });
+
+    /* the sides are tab panels only while the toggle is what shows them */
+    function syncRoles() {
+      order.forEach(function (k) {
+        if (wide()) {
+          sides[k].removeAttribute("role");
+          sides[k].removeAttribute("aria-labelledby");
+        } else {
+          sides[k].setAttribute("role", "tabpanel");
+          sides[k].setAttribute("aria-labelledby", tabEls[k].id);
+        }
+      });
+    }
+    syncRoles();
+    if (wideMq && wideMq.addEventListener) wideMq.addEventListener("change", syncRoles);
+
+    function idle(key) {
+      bodies[key].innerHTML =
+        '<div class="ln idle"><span class="p">&gt;</span> <span class="caret"></span></div>';
+    }
 
     function showPane(key) {
       order.forEach(function (k) {
         var on = k === key;
-        bodies[k].classList.toggle("on", on);
+        sides[k].classList.toggle("is-active", on);
+        sides[k].classList.toggle("is-shown", on);
         tabEls[k].setAttribute("aria-selected", on ? "true" : "false");
         tabEls[k].classList.toggle("active", on);
         tabEls[k].tabIndex = on ? 0 : -1;
       });
-      outcomeEl.textContent = byKey[key].outcome;
     }
 
-    function stop() { order.forEach(function (k) { state[k].token++; }); }
+    function stop() { order.forEach(function (k) { state[k].token++; state[k].paused = false; }); }
+    function pause() { order.forEach(function (k) { state[k].paused = true; }); }
+    function resume() { order.forEach(function (k) { state[k].paused = false; }); }
+
+    /* wide screens: both sides at once, each outcome when its side ends */
+    function playBoth(onDone) {
+      stop();
+      showPane(order[order.length - 1]);
+      var left = order.length;
+      order.forEach(function (k) {
+        played[k] = false;
+        sides[k].classList.add("is-active");
+        sides[k].classList.remove("is-waiting");
+        outcomes[k].classList.add("is-pending");
+        playPane(byKey[k], bodies[k], state[k], function () {
+          played[k] = true;
+          outcomes[k].classList.remove("is-pending");
+          left--;
+          if (left === 0 && onDone) onDone();
+        });
+      });
+    }
 
     function playSegment(name, onDone) {
+      if (name === "both") { playBoth(onDone); return; }
       stop();
       showPane(name);
-      playPane(byKey[name], bodies[name], state[name], onDone);
+      if (name === order[0]) {
+        // a fresh run: every later side goes back to waiting its turn
+        order.forEach(function (k) {
+          if (k === name) return;
+          played[k] = false;
+          idle(k);
+          outcomes[k].classList.add("is-pending");
+        });
+      }
+      order.forEach(function (k) {
+        sides[k].classList.toggle("is-waiting", k !== name && !played[k]);
+      });
+      outcomes[name].classList.add("is-pending");
+      playPane(byKey[name], bodies[name], state[name], function () {
+        played[name] = true;
+        outcomes[name].classList.remove("is-pending");
+        if (onDone) onDone();
+      });
     }
 
     function showStatic(name) {
       name = name || order[0];
       showPane(name);
-      staticRender(byKey[name], bodies[name]);
+      order.forEach(function (k) {
+        staticRender(byKey[k], bodies[k]);
+        played[k] = true;
+        outcomes[k].classList.remove("is-pending");
+        sides[k].classList.remove("is-waiting");
+      });
     }
 
-    // initial: idle caret on the first pane
+    // initial: idle carets, outcomes held back until each side has played
     showPane(order[0]);
     if (!reduced) {
-      bodies[order[0]].innerHTML =
-        '<div class="ln idle"><span class="p">&gt;</span> <span class="caret"></span></div>';
+      order.forEach(function (k) {
+        idle(k);
+        outcomes[k].classList.add("is-pending");
+        if (k !== order[0]) sides[k].classList.add("is-waiting");
+      });
     }
 
     order.forEach(function (key) {
@@ -316,15 +436,20 @@
         if (events.onSegment) events.onSegment(key);
       });
     });
+    rovingKeys(order.map(function (k) { return tabEls[k]; }), function (j) {
+      if (events.onSegment) events.onSegment(order[j]);
+    });
     foot.querySelector(".ts-replay").addEventListener("click", function () {
       if (events.onReplay) events.onReplay();
     });
 
     return {
-      segments: order,
+      get segments() { return wide() ? ["both"] : order; },
       playSegment: playSegment,
       showStatic: showStatic,
-      stop: stop
+      stop: stop,
+      pause: pause,
+      resume: resume
     };
   }
 
@@ -372,6 +497,8 @@
     Object.keys(bodies).forEach(function (k) { bodies[k].innerHTML = ""; });
     for (var gi = 0; gi < groups.length; gi++) {
       if (st.token !== token) return;
+      await gate(st);
+      if (st.token !== token) return;
       var group = groups[gi];
       await Promise.all(group.items.map(function (it) {
         return revealSplitStep(it.step, bodies[it.pane], token, st);
@@ -405,7 +532,7 @@
       term.className = "term term-scene-term ts-split-term";
       var bar = document.createElement("div");
       bar.className = "term-bar";
-      bar.innerHTML = "<i></i><i></i><i></i><span>" + esc(p.label) + " · ~/code/myapp</span>";
+      bar.innerHTML = "<span>" + esc(p.label) + " · ~/code/myapp</span>";
       term.appendChild(bar);
       var body = document.createElement("div");
       body.className = "term-body ts-splitpane";
@@ -429,9 +556,9 @@
     mount.appendChild(foot);
 
     var timeline = buildTimeline(scene.panes);
-    var st = { token: 0 };
+    var st = { token: 0, paused: false };
 
-    function stop() { st.token++; }
+    function stop() { st.token++; st.paused = false; }
 
     function playSegment(name, onDone) {
       stop();
@@ -459,7 +586,9 @@
       segments: ["single"],
       playSegment: playSegment,
       showStatic: showStatic,
-      stop: stop
+      stop: stop,
+      pause: function () { st.paused = true; },
+      resume: function () { st.paused = false; }
     };
   }
 
@@ -488,6 +617,11 @@
       b.type = "button";
       b.className = "scene-tab";
       b.setAttribute("role", "tab");
+      b.id = "scene-tab-" + pair.scene.id;
+      b.setAttribute("aria-controls", "scene-" + pair.scene.id);
+      pair.mount.id = "scene-" + pair.scene.id;
+      pair.mount.setAttribute("role", "tabpanel");
+      pair.mount.setAttribute("aria-labelledby", b.id);
       b.dataset.i = i;
       var num = ("0" + (i + 1)).slice(-2);
       b.innerHTML = '<span class="sr-num">' + num + "</span>" +
@@ -522,7 +656,7 @@
     }
 
     /* ---- tour state --------------------------------------------------------- */
-    var cur = 0, seg = 0, holdTimer = null, inView = false, started = false;
+    var cur = 0, seg = 0, holdTimer = null, inView = false, started = false, segDone = false;
 
     function setProgress(i, frac, ms) {
       var prog = navEls[i].querySelector(".sr-prog");
@@ -549,12 +683,16 @@
 
     function playSeg() {
       clearHold();
+      segDone = false;
       navEls[cur].classList.add("playing");
       var c = controllerFor(cur);
-      c.playSegment(c.segments[seg], onSegDone);
+      var segs = c.segments;
+      if (seg > segs.length - 1) seg = segs.length - 1; // the layout changed under us
+      c.playSegment(segs[seg], onSegDone);
     }
 
     function onSegDone() {
+      segDone = true;
       if (!inView) return;
       var ms = holdMs();
       setProgress(cur, 0, ms); // telegraph the coming advance
@@ -610,6 +748,10 @@
         goScene(i);
       });
     });
+    rovingKeys(navEls, function (i) {
+      if (reduced) { pauseSwitch(i); controllerFor(i).showStatic(); return; }
+      goScene(i);
+    });
 
     /* ---- reduced motion: static, no tour ------------------------------------ */
     if (reduced) {
@@ -629,11 +771,11 @@
           inView = e.isIntersecting;
           if (e.isIntersecting) {
             if (!started) { started = true; playSeg(); }
-            else { playSeg(); } // resume the current segment from the top
+            else if (segDone) { onSegDone(); } // pick the hold back up
+            else if (controllers[cur]) { controllers[cur].resume(); } // carry on mid-transcript
           } else {
             clearHold();
-            if (controllers[cur]) controllers[cur].stop();
-            navEls[cur].classList.remove("playing");
+            if (controllers[cur]) controllers[cur].pause();
           }
         });
       }, { rootMargin: "0px 0px -12% 0px" });

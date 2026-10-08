@@ -10,6 +10,14 @@ served at thereisnospoon.org.
 
 ```
 index.html              the landing page (single file, no build step)
+claude-app/index.html   hand-written page for people who use Claude in the
+                        desktop app for work that isn't code (law, investing,
+                        research, writing, consulting). Built on the landing's
+                        home.css (same header, rail, chapters, steps, FAQ,
+                        finale, footer) plus an inline <style> for its own
+                        pieces and an inline script for the shared motion;
+                        it does not load home.js, which drives the landing's
+                        own sections
 CNAME                   custom domain: thereisnospoon.org
 .nojekyll               disable Jekyll (it would skip our _-prefixed paths)
 sitemap.xml             GENERATED (docsgen): the landing page + every docs page
@@ -35,8 +43,20 @@ auth.md                 GENERATED (docsgen): the agent-readable auth statement
                         assets
 <64-hex>.txt            the IndexNow key file (see "Ping IndexNow" below)
 scenarios/              GENERATED scenario pages -- do not edit (see below)
-static/site.css         design system, mirrored from internal/console tokens
-static/site.js          theme toggle, copy buttons, scroll reveals (no deps)
+static/home.css         the landing page's own stylesheet: the "knowledge sky"
+                        identity (night sky dark / star-atlas light), tokens,
+                        every section, motion states, reduced-motion rules
+static/home.js          the landing page's motion and interactive pieces: the
+                        hero sky canvas, word reveals, the chapter rail, the
+                        week/orbit/board/folder animations, the gardener card,
+                        console tabs, and the local-only "welcome back"
+                        briefing (localStorage key seamless.visit)
+static/scenes-player.js animates the verbatim scenes.js transcripts (landing only)
+static/site.css         shared stylesheet for the docs, /compare/ and the
+                        scenario pages (the landing page no longer loads it)
+static/site.js          theme toggle, OS switch, copy buttons, phone menu,
+                        scroll reveals (no deps; shared by landing + compare +
+                        scenario pages)
 static/webmcp.js        WebMCP tools for browser agents: search the docs, read
                         any page as markdown, list the agent endpoints; loaded
                         by every page, a no-op without a model context
@@ -44,7 +64,9 @@ static/favicon.svg      the 0spoon mark (an empty set)
 static/shots/           console screenshots, dark + light (see below)
 static/og.png           1200x630 social preview card
 static/og-source.html   source for og.png (see below)
-static/fonts/           self-hosted variable woff2 (OFL, see OFL-NOTICE.txt)
+static/fonts/           self-hosted woff2 (OFL, see OFL-NOTICE.txt): Fraunces,
+                        Instrument Sans, IBM Plex Mono (current identity) plus
+                        the previous Space Grotesk / Hanken / JetBrains Mono
 docs/                   GENERATED docs site -- do not edit (see below)
 ```
 
@@ -263,6 +285,32 @@ The canonical install command lives in one place, `INSTALL_CMD` in
 still disagrees.
 
 It does not read prose. "One binary, no ceremony" is still yours to keep true.
+
+The Claude app page (`claude-app/index.html`) teaches the same install, so
+assertions 2-6 cover it too: both install commands, real `seamlessd`
+subcommands (a command spelled with its install path, like
+`~/.local/bin/seamlessd console-open`, is folded to the bare name first),
+copy buttons that copy what they show, asset stamps, canonical, and head tags.
+Its claims about Claude's own memory and the app's surfaces are prose, dated
+"checked October 2026" on the page; recheck them when Anthropic changes the
+app.
+
+### Editing the landing page without fooling the gate
+
+- The FAQ assertion reads every bare `<summary>` on the page as a question. A
+  disclosure that is not an FAQ entry needs an attribute on its summary
+  (`<summary class="what-s">`), or the gate demands a JSON-LD question for it.
+- The copy-button assertion only sees `data-copy="X">X<`, so `data-copy` must
+  be the element's last attribute (`<span class="cmd" data-copy="...">`).
+  Put it anywhere else and the pair is silently skipped, not checked.
+- A new asset the page loads by name joins `ASSETS` in `scripts/site-stamp.sh`
+  and the `stamped "$PAGE" ...` list in `scripts/site-check.sh`, in the same
+  change.
+- Honesty rules carry over from the scenes: transcripts stay verbatim
+  (`scenes.js`, `distill.py`); every other terminal on the page is
+  illustrative, built from the seeded demo's real memories where possible,
+  and the one invented narrative (the Mon/Tue/Wed week) is labelled as an
+  illustration on screen.
 
 ## Preview locally
 

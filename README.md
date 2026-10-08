@@ -11,7 +11,9 @@ backlog and they pick the same step and build it twice. And the products that
 promise to fix this keep your project's memory in someone else's database.
 
 Seamless is a local-first memory and coordination substrate for AI coding
-agents. Works with Claude Code, Codex CLI, and any MCP client.
+agents. Works with Claude Code, Codex CLI, and any MCP client. It also works
+from chats in the Claude desktop app, for long-running work that isn't code:
+see [Seamless in the Claude app](https://thereisnospoon.org/claude-app/).
 
 It gives a fleet of agents a shared, durable memory and a way to divide work
 without colliding: memories with a supersession lifecycle, hybrid recall, a

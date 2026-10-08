@@ -13,6 +13,11 @@ differently:
   wired through `claude_desktop_config.json`. Seamless treats it as its own
   install target, named `claude-desktop`.
 
+If you came here from chat work that isn't code - a legal matter, a deal, a
+manuscript - [Seamless in the Claude app](https://thereisnospoon.org/claude-app/)
+shows what that looks like in plain terms. This page is the technical setup
+behind it.
+
 ## No hooks means no ambient layer
 
 Everything the hooks deliver on the code surface is absent in a chat. There is

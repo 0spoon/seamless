@@ -12,6 +12,10 @@ served over MCP by the local `seamlessd` daemon. The companion `seam` CLI gives
 headless agents a direct interface. There is no hosted Seamless service,
 external vector database, or account.
 
+The same store also works from chats in the Claude desktop app, for long-running
+work that isn't code: [Seamless in the Claude app](https://thereisnospoon.org/claude-app/)
+covers that side in plain terms.
+
 ## Which agent do you run?
 
 Setup is client-shaped: pick yours and that page walks install, wiring, and

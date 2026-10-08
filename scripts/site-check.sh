@@ -16,8 +16,9 @@
 #   2. every surface that teaches installing teaches the SAME two commands
 #   3. every `seamlessd <sub>` the page names in a command context is real
 #   4. each copy button copies the command it visibly shows
-#   5. each static asset on the hand-written pages (the landing page and the
-#      /compare/ hub) carries a content-hash ?v= cache-buster that matches
+#   5. each static asset on the hand-written pages (the landing page, the
+#      /compare/ hub, and the /claude-app/ page) carries a content-hash ?v=
+#      cache-buster that matches
 #   6. the head is complete and the canonicals match docs/CNAME
 #   7. exactly one JSON-LD block, braces balanced, with the required types
 #   8. the JSON-LD FAQPage mirrors the visible #faq section
@@ -36,6 +37,9 @@ set -eu
 
 PAGE=docs/index.html
 COMPARE=docs/compare/index.html
+# The Claude app page: Seamless for chat work that isn't code. It teaches the
+# install and names seamlessd subcommands, so assertions 2-6 cover it too.
+CLAUDEAPP=docs/claude-app/index.html
 MAIN=cmd/seamlessd/main.go
 
 # The canonical install commands, and the single place they are written down.
@@ -47,7 +51,7 @@ WIN_INSTALL_CMD='irm https://thereisnospoon.org/install.ps1 | iex'
 
 # Every doc whose job includes telling a new user how to install. webmcp.js is
 # here because its list_agent_resources tool teaches both commands to agents.
-SURFACES="$PAGE README.md docs-src/quickstart.md docs-src/install.md docs/static/webmcp.js"
+SURFACES="$PAGE $CLAUDEAPP README.md docs-src/quickstart.md docs-src/install.md docs/static/webmcp.js"
 
 fail=0
 err() {
@@ -81,28 +85,36 @@ done
 
 # 3. Commands the page names must exist. Scoped to command contexts -- copy
 #    buttons and <code> spans -- because prose says things like "the seamlessd
-#    binary", and the second word of a sentence is not a subcommand.
+#    binary", and the second word of a sentence is not a subcommand. A command
+#    spelled with its install path (~/.local/bin/seamlessd console-open, which
+#    the Claude app page uses because macOS does not put ~/.local/bin on PATH)
+#    is folded back to the bare name before the lookup.
 known=$(sed -n '/switch cmd {/,/^	default:/p' "$MAIN" |
 	grep -oE '"[a-z][a-z-]*"' | tr -d '"' | sort -u)
-named=$({
-	grep -oE 'data-copy="[^"]*"' "$PAGE" | sed 's/^data-copy="//; s/"$//'
-	grep -oE '<code[^>]*>[^<]*</code>' "$PAGE" | sed 's/<code[^>]*>//; s|</code>||'
-} | grep -E '^seamlessd ' | awk '{print $2}' | sort -u)
-for c in $named; do
-	printf '%s\n' "$known" | grep -qx -- "$c" ||
-		err "$PAGE names [seamlessd $c], which $MAIN does not dispatch"
+for f in "$PAGE" "$CLAUDEAPP"; do
+	named=$({
+		grep -oE 'data-copy="[^"]*"' "$f" | sed 's/^data-copy="//; s/"$//'
+		grep -oE '<code[^>]*>[^<]*</code>' "$f" | sed 's/<code[^>]*>//; s|</code>||'
+	} | sed -E 's#^[^ ]*[/\\]seamlessd(\.exe)? #seamlessd #' |
+		grep -E '^seamlessd ' | awk '{print $2}' | sort -u)
+	for c in $named; do
+		printf '%s\n' "$known" | grep -qx -- "$c" ||
+			err "$f names [seamlessd $c], which $MAIN does not dispatch"
+	done
 done
 
 # 4. A copy button reads its data-copy attribute, never the text beside it, so
 #    the two drift silently and independently: the page shows one command and
 #    the clipboard gets another. Nobody proof-reads an attribute.
-drift=$(grep -oE 'data-copy="[^"]*">[^<]*<' "$PAGE" |
-	sed 's/^data-copy="//; s/<$//' |
-	awk -F'">' '$1 != $2 { print "  shows [" $2 "] but copies [" $1 "]" }')
-if [ -n "$drift" ]; then
-	err "copy buttons do not copy what they show:"
-	printf '%s\n' "$drift" >&2
-fi
+for f in "$PAGE" "$CLAUDEAPP"; do
+	drift=$(grep -oE 'data-copy="[^"]*">[^<]*<' "$f" |
+		sed 's/^data-copy="//; s/<$//' |
+		awk -F'">' '$1 != $2 { print "  shows [" $2 "] but copies [" $1 "]" }')
+	if [ -n "$drift" ]; then
+		err "$f copy buttons do not copy what they show:"
+		printf '%s\n' "$drift" >&2
+	fi
+done
 
 # 5. The page is served through a CDN (Cloudflare) that edge-caches static/ for
 #    hours while passing the HTML through, so a deploy that changes site.css or
@@ -132,8 +144,9 @@ stamped() {
 		fi
 	done
 }
-stamped "$PAGE" site.css site.js scenes.js scenes-player.js webmcp.js
+stamped "$PAGE" home.css home.js site.js scenes.js scenes-player.js webmcp.js
 stamped "$COMPARE" site.css site.js webmcp.js
+stamped "$CLAUDEAPP" home.css site.js webmcp.js
 
 # 6. Head completeness. The docs pages get their head from docsgen and
 #    cmd/docsgen/seo_test.go gates them; the landing page head is hand-written,
@@ -144,6 +157,8 @@ grep -qF "<link rel=\"canonical\" href=\"$canon_host\">" "$PAGE" ||
 	err "$PAGE canonical does not match docs/CNAME [$canon_host]"
 grep -qF "<link rel=\"canonical\" href=\"${canon_host}compare/\">" "$COMPARE" ||
 	err "$COMPARE canonical does not match docs/CNAME [${canon_host}compare/]"
+grep -qF "<link rel=\"canonical\" href=\"${canon_host}claude-app/\">" "$CLAUDEAPP" ||
+	err "$CLAUDEAPP canonical does not match docs/CNAME [${canon_host}claude-app/]"
 for tag in \
 	'<meta name="description" content="' \
 	'<meta name="robots" content="max-image-preview:large, max-snippet:-1">' \
@@ -158,6 +173,7 @@ for tag in \
 	'<meta property="og:image:alt" content="' \
 	'<meta name="twitter:card" content="'; do
 	grep -qF "$tag" "$PAGE" || err "$PAGE head is missing $tag"
+	grep -qF "$tag" "$CLAUDEAPP" || err "$CLAUDEAPP head is missing $tag"
 done
 
 # 7. The JSON-LD block. Shell cannot validate JSON without a tool dependency

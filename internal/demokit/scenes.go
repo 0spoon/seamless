@@ -84,10 +84,11 @@ func (s *Seeder) sceneSession(name string, end time.Time, findings string) sessR
 
 // sceneMemories seeds the myapp memory set: three constraints (always pinned in
 // the briefing -- auth-cookies-samesite-lax is scene 2's briefing-catch landmine),
-// the four hero-terminal files, and two recall-beat gotchas (rate-limit and
-// persist-token) engineered to fire the mid-session <seam-recall> injection.
-// Kinds and filenames match the hero term on docs/index.html so the closing
-// `ls memory/myapp/` beat mirrors it.
+// four background files (edge cache, chroma, deploy, postgres), and two
+// recall-beat gotchas (rate-limit and persist-token) engineered to fire the
+// mid-session <seam-recall> injection. The folder chapter on docs/index.html
+// lists exactly this set (`ls ~/.seamless/memory/myapp/`) and opens
+// rate-limit-not-in-memory verbatim, so keep the two in step.
 func (s *Seeder) sceneMemories(source string) {
 	mems := []struct {
 		kind, name, desc, body string

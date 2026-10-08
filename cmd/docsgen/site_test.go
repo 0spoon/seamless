@@ -96,7 +96,7 @@ func TestRepoDocumentationContracts(t *testing.T) {
 	require.GreaterOrEqual(t, figures, 15)
 	require.Equal(t, figures, captions, "every explanatory figure has one caption")
 
-	for _, path := range []string{"README.md", "docs-src/index.md", "docs-src/install.md", "docs/index.html", "docs/compare/index.html", "server.json"} {
+	for _, path := range []string{"README.md", "docs-src/index.md", "docs-src/install.md", "docs/index.html", "docs/compare/index.html", "docs/claude-app/index.html", "server.json"} {
 		body := strings.ToLower(read(path))
 		for _, stale := range []string{"one go binary", "single go binary", "delete the database and lose nothing"} {
 			require.NotContains(t, body, stale, "%s: stale deployment/storage claim", path)
