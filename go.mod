@@ -1,8 +1,6 @@
 module github.com/0spoon/seamless
 
-go 1.25.8
-
-toolchain go1.25.13
+go 1.26.0
 
 require (
 	github.com/alecthomas/chroma/v2 v2.27.0
@@ -15,8 +13,8 @@ require (
 	github.com/yuin/goldmark v1.8.5
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	golang.org/x/net v0.57.0
-	golang.org/x/sys v0.47.0
-	golang.org/x/term v0.45.0
+	golang.org/x/sys v0.48.0
+	golang.org/x/term v0.46.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.59.0
 )
