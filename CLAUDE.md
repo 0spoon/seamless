@@ -126,7 +126,7 @@ make seambench  # the AGENT-SCENARIO benchmark: runs a real `claude` over the
 
 | Layer | Choice |
 |---|---|
-| Language | Go 1.25+ (no CGO) |
+| Language | Go 1.26+ (no CGO) |
 | Database | SQLite (`modernc.org/sqlite`, WAL, FTS5) |
 | Vectors | float32 BLOBs in SQLite + brute-force cosine (no ChromaDB) |
 | LLM/embeddings | OpenAI (default, first-class), Ollama, Anthropic |

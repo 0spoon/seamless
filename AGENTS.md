@@ -7,7 +7,7 @@ project overview, structure, and commands, see `CLAUDE.md`.
 
 ### General
 
-- Go 1.25+. No CGO. Pure-Go SQLite driver (`modernc.org/sqlite`).
+- Go 1.26+. No CGO. Pure-Go SQLite driver (`modernc.org/sqlite`).
 - Never use emojis in code or comments. Never include attribution/credit lines
   in commits, PRs, or code.
 - Format with `gofmt`. No exceptions. Prefer modern stdlib (`slices`, `maps`,

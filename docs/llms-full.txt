@@ -1084,7 +1084,7 @@ a job `seamlessd serve` refuses by design.
 ### Go install and release archives
 
 The remaining routes end up in the same place with less done for you:
-`go install github.com/0spoon/seamless/cmd/...@latest` needs Go 1.25+, and the
+`go install github.com/0spoon/seamless/cmd/...@latest` needs Go 1.26+, and the
 [GitHub releases](https://github.com/0spoon/seamless/releases) carry the same
 prebuilt archives the installer fetches. From a bare binary, `seamlessd serve`
 covers the essentials - first run seeds the config - and `seamlessd install-hooks`
@@ -10458,7 +10458,7 @@ Always go through them.
 
 ## Style essentials
 
-- **Go 1.25+, no CGO.** Pure-Go SQLite (`modernc.org/sqlite`). Prefer modern
+- **Go 1.26+, no CGO.** Pure-Go SQLite (`modernc.org/sqlite`). Prefer modern
   stdlib (`slices`, `maps`, `strings.SplitSeq`, iterators) in new code.
 - **No emojis in code or comments. No attribution lines** in commits, PRs, or
   code.

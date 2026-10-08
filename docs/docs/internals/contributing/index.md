@@ -93,7 +93,7 @@ Always go through them.
 
 ## Style essentials
 
-- **Go 1.25+, no CGO.** Pure-Go SQLite (`modernc.org/sqlite`). Prefer modern
+- **Go 1.26+, no CGO.** Pure-Go SQLite (`modernc.org/sqlite`). Prefer modern
   stdlib (`slices`, `maps`, `strings.SplitSeq`, iterators) in new code.
 - **No emojis in code or comments. No attribution lines** in commits, PRs, or
   code.

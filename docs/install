@@ -328,7 +328,7 @@ detect_platform() {
 	OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 	case $OS in
 	darwin | linux) ;;
-	*) die "unsupported OS: $OS (Seamless ships macOS and Linux builds; build from source with Go 1.25+)" ;;
+	*) die "unsupported OS: $OS (Seamless ships macOS and Linux builds; build from source with Go 1.26+)" ;;
 	esac
 
 	ARCH=$(uname -m)

@@ -1,4 +1,4 @@
-# Seamless Makefile. Go 1.25+, no CGO.
+# Seamless Makefile. Go 1.26+, no CGO.
 BINARY  := seamlessd
 CLI     := seam
 BIN_DIR := bin
