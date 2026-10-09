@@ -19,13 +19,22 @@
 # stdio proxy by default; direct HTTP remains a supported manual Codex
 # configuration. That is
 # the Windows analog of launchd / systemd --user: the whole install is per-user,
-# which is why it never elevates. Re-running it upgrades in place; the config and
-# ~\.seamless are never touched. Uninstall anytime with `seamlessd.exe uninstall`
-# (add --purge to also delete the config and data).
+# which is why it never elevates. Re-running it upgrades in place -- the task
+# restarts on the new build before the clients are rewired -- and the config and
+# ~\.seamless are never touched. A machine whose config already says `role:
+# client` stays a client of its server_url. Uninstall anytime with
+# `seamlessd.exe uninstall` (add --purge to also delete the config and data).
 #
 # Overrides (set as environment variables before running):
 #   $env:SEAMLESS_VERSION             version to install (default: latest release)
 #   $env:SEAMLESS_INSTALL_DIR         where the binaries go (default: ~\.local\bin)
+#   $env:SEAMLESS_CHECKSUMS_SHA256    pin the release's checksums.txt to this
+#                                     SHA-256 (64 hex digits) and refuse any
+#                                     other. It is for a caller that verified the
+#                                     manifest's signature itself (seamlessd's
+#                                     updater), so without cosign the signature
+#                                     step reports "verified by seamlessd"
+#                                     instead of warning.
 #   $env:SEAMLESS_CLIENT              claude|claude-desktop|codex|all, or a comma
 #                                     list of targets (default: the detected
 #                                     clients; prompts when several or none are
@@ -36,12 +45,16 @@
 #                                     running somewhere else: wire this
 #                                     machine's agent clients to that URL,
 #                                     install no service, and keep no data dir
-#                                     here. Requires SEAMLESS_MCP_API_KEY.
+#                                     here. Requires SEAMLESS_MCP_API_KEY. Wins
+#                                     over the role and server_url an existing
+#                                     config names.
 #   $env:SEAMLESS_MCP_API_KEY         the server's bearer key. Required with
 #                                     SEAMLESS_SERVER_URL; `seamlessd
 #                                     client-config` on the server prints the
 #                                     whole command.
-#   $env:SEAMLESS_NO_HOOKS=1          skip agent hooks, MCP registration, and skills
+#   $env:SEAMLESS_NO_HOOKS=1          skip agent hooks, MCP registration, and
+#                                     skills, and the client detection that
+#                                     would pick them
 #   $env:SEAMLESS_NO_ONBOARD_SKILL=1  skip the one-shot seam-onboard skill
 #   $env:SEAMLESS_NO_RESEARCH_SKILL=1 skip the recurring seam-research skill
 #   $env:SEAMLESS_NO_SERVICE=1        skip the service; install the binaries and stop
@@ -76,6 +89,10 @@ try {
 
 $Repo = 'arctop/seamless'
 $TaskName = 'Seamless'
+# The task's Description, and the Windows analog of the comment docs/install
+# writes into its plist and systemd unit: seamlessd's update check looks for it
+# to tell a task this script registered from one set up by hand.
+$TaskDescription = 'Written by https://thereisnospoon.org/install.ps1. Re-run it to update.'
 $DocsUrl = 'https://thereisnospoon.org/docs/'
 
 # Canonical paths, kept identical to the POSIX installer so the config the daemon
@@ -163,6 +180,12 @@ function Read-ClientChoice {
 }
 
 function Resolve-AgentClient {
+    # SEAMLESS_NO_HOOKS wires no client, so there is nothing to select: skip the
+    # detection and the prompt along with the wiring. Otherwise a
+    # non-interactive run (the updater's) on a machine with no agent client
+    # dies below over a choice it would never use. The empty selection also
+    # keeps the closing advice from naming a client.
+    if ($env:SEAMLESS_NO_HOOKS) { return '' }
     if ($env:SEAMLESS_CLIENT) {
         $list = ConvertTo-ClientList $env:SEAMLESS_CLIENT
         if (-not $list) { Die "invalid SEAMLESS_CLIENT=$env:SEAMLESS_CLIENT (valid values: claude, claude-desktop, codex, all, or a comma list)" }
@@ -263,11 +286,27 @@ is the usual cause on managed machines
 "@
 }
 
+# SEAMLESS_CHECKSUMS_SHA256 names the one checksums.txt this run may install
+# from. A caller that sets it has verified that manifest's signature itself
+# (seamlessd's updater does, in-process), so Get-Release refuses any other.
+# Validated before anything is fetched, so a mangled pin fails fast: exactly 64
+# hex digits in either case (Get-FileHash prints upper case, sha256sum lower).
+# Present but anything else is an error, never "no pin". Returns the pin lower-
+# cased, or '' when unset.
+function Get-ChecksumsPin {
+    $pin = $env:SEAMLESS_CHECKSUMS_SHA256
+    if (-not $pin) { return '' }
+    if ($pin -notmatch '^[0-9a-fA-F]{64}\z') {
+        Die "invalid SEAMLESS_CHECKSUMS_SHA256=$pin (want the 64 hex digits of the SHA-256 of the release's checksums.txt)"
+    }
+    return $pin.ToLowerInvariant()
+}
+
 # Download the zip and checksums.txt, and verify the SHA-256 before unpacking
 # anything. Match the filename exactly in checksums.txt -- a substring match would
 # happily verify amd64 against arm64.
 function Get-Release {
-    param([string]$Version, [string]$Arch, [string]$Tmp)
+    param([string]$Version, [string]$Arch, [string]$Tmp, [string]$ChecksumsPin)
     $base = "https://github.com/$Repo/releases/download/v$Version"
     $zip = "seamless_${Version}_windows_${Arch}.zip"
     $zipPath = Join-Path $Tmp $zip
@@ -279,6 +318,15 @@ function Get-Release {
     try { Invoke-WebRequest -UseBasicParsing "$base/checksums.txt" -OutFile $sumPath }
     catch { Die (Format-DownloadError "$base/checksums.txt" $_) }
 
+    # The pin is checked before anything is read OUT of the manifest: a
+    # checksums.txt other than the one the caller verified vouches for nothing.
+    if ($ChecksumsPin) {
+        $pinned = (Get-FileHash -Algorithm SHA256 $sumPath).Hash.ToLowerInvariant()
+        if ($pinned -ne $ChecksumsPin) {
+            Die "checksums.txt does not match SEAMLESS_CHECKSUMS_SHA256`n  expected $ChecksumsPin`n  got      $pinned`nthis is not the release manifest the caller verified; do not install"
+        }
+    }
+
     $want = Get-Content $sumPath |
         Where-Object { ($_ -split '\s+')[1] -eq $zip } |
         ForEach-Object { ($_ -split '\s+')[0] } |
@@ -288,9 +336,10 @@ function Get-Release {
     if ($want.ToLower() -ne $got.ToLower()) {
         Die "checksum mismatch for $zip`n  expected $want`n  got      $got"
     }
-    Step 'checksum' 'ok'
+    $sumNote = if ($ChecksumsPin) { 'ok (checksums.txt matches SEAMLESS_CHECKSUMS_SHA256)' } else { 'ok' }
+    Step 'checksum' $sumNote
 
-    Test-Signature -Base $base -Tmp $Tmp -SumPath $sumPath
+    Test-Signature -Base $base -Tmp $Tmp -SumPath $sumPath -ChecksumsPin $ChecksumsPin
     return $zipPath
 }
 
@@ -305,10 +354,19 @@ function Get-Release {
 # pipeline". cosign missing warns (installing a signing tool first would be real
 # friction, and a first install is trust-on-first-use over TLS regardless);
 # cosign present and failing is fatal, because that is positive evidence.
+#
+# A pinned manifest (SEAMLESS_CHECKSUMS_SHA256, matched in Get-Release) had its
+# signature checked before this script ran, by the seamlessd that pinned it, so
+# a missing cosign -- the usual case -- loses nothing and says so rather than
+# warning. A present cosign still verifies it here.
 function Test-Signature {
-    param([string]$Base, [string]$Tmp, [string]$SumPath)
+    param([string]$Base, [string]$Tmp, [string]$SumPath, [string]$ChecksumsPin)
 
     if (-not (Get-Command cosign -ErrorAction SilentlyContinue)) {
+        if ($ChecksumsPin) {
+            Step 'signature' 'verified by seamlessd'
+            return
+        }
         Warn "cosign not found -- archive verified by checksum only.`n    For signature verification: https://docs.sigstore.dev/system_config/installation/"
         return
     }
@@ -334,6 +392,61 @@ function Test-Signature {
         Die "SIGNATURE VERIFICATION FAILED for checksums.txt.`n  The release artifacts are not signed by the $Repo release workflow.`n  Do not install. Please report this at https://github.com/$Repo/security"
     }
     Step 'signature' 'ok (sigstore)'
+}
+
+# Test-CurrentUser: whether a Scheduled Task principal's UserId names the account
+# this script runs as. Task Scheduler hands one back as DOMAIN\name, a bare name,
+# or a SID depending on how the task was registered, so a spelling that matches
+# neither form directly is compared by SID. Anything unresolvable is not us.
+function Test-CurrentUser {
+    param([string]$UserId)
+    if (-not $UserId) { return $false }
+    $me = [Security.Principal.WindowsIdentity]::GetCurrent()
+    if ($UserId -eq $me.Name -or $UserId -eq $me.User.Value) { return $true }
+    try {
+        $account = New-Object -TypeName Security.Principal.NTAccount -ArgumentList $UserId
+        $sid = $account.Translate([Security.Principal.SecurityIdentifier])
+        return ($sid.Value -eq $me.User.Value)
+    } catch {
+        return $false
+    }
+}
+
+# Stop this install's daemon before swapping binaries: a live seamlessd.exe holds
+# its own image locked, and the health check must answer from the NEW binary.
+# Scoped twice over, because the task name and the process name are both
+# machine-global while the install is per-user:
+#
+#  - the Seamless task is stopped only when its principal is this user; on a
+#    shared box it can be another account's daemon, which an elevated run of
+#    this script could otherwise stop;
+#  - only `serve` processes of THIS install's seamlessd.exe are stopped, matched
+#    on the CIM command line: the exe path, then the serve subcommand. That
+#    catches a daemon from the Startup-shortcut fallback or a manual start, which
+#    the task does not control, and leaves every other seamlessd.exe alone -- the
+#    `seamlessd update` that launched this script, the updater, another user's
+#    or another install's daemon.
+#
+# Then wait for them to exit: Stop-Process returns before the image is released.
+function Stop-Daemon {
+    param([string]$InstallDir)
+    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($task -and (Test-CurrentUser $task.Principal.UserId)) {
+        Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    }
+    $exe = Join-Path $InstallDir 'seamlessd.exe'
+    $pattern = '^\s*"?' + [regex]::Escape($exe) + '"?\s+serve(\s|$)'
+    try {
+        $procs = @(Get-CimInstance -ClassName Win32_Process -Filter "Name = 'seamlessd.exe'" -ErrorAction Stop |
+            Where-Object { $_.CommandLine -and $_.CommandLine -match $pattern })
+    } catch {
+        Warn "could not list running seamlessd processes ($($_.Exception.Message)); a daemon still running from $exe keeps the old build until it restarts"
+        return
+    }
+    if ($procs.Count -eq 0) { return }
+    $ids = @($procs | ForEach-Object { [int]$_.ProcessId })
+    Stop-Process -Id $ids -Force -ErrorAction SilentlyContinue
+    try { Wait-Process -Id $ids -Timeout 15 -ErrorAction SilentlyContinue } catch {}
 }
 
 # A running .exe cannot be overwritten in place -- the image is locked -- and
@@ -374,11 +487,13 @@ function Install-Binaries {
 }
 
 # install-hooks does the config bootstrap too: it calls config.EnsureAPIKey, which
-# generates the bearer key into $Config when no config file exists. So it must run
-# BEFORE the service starts. The Push-Location is not decoration: ./seamless.yaml is
-# the last entry in the config search path, so running from a dir that had one would
-# otherwise bind the install to it. Missing claude/seam is a warning inside
-# install-hooks, not a failure, so a box without Claude Code still installs cleanly.
+# generates the bearer key into $Config when no config file exists. So on a first
+# install it must run BEFORE the service starts; once $Config exists it runs AFTER
+# the restart instead (Main says why). The Push-Location is not decoration:
+# ./seamless.yaml is the last entry in the config search path, so running from a
+# dir that had one would otherwise bind the install to it. Missing claude/seam is
+# a warning inside install-hooks, not a failure, so a box without Claude Code
+# still installs cleanly.
 function Invoke-WireHooks {
     param([string]$Tmp, [string]$InstallDir, [string]$AgentClient, [string]$Version,
         [string]$ServerUrl, [string]$ApiKey)
@@ -455,10 +570,13 @@ function Invoke-WireHooks {
         if ($probe -and $probe -match '-client' -and $probe -notmatch '-skills') {
             Warn "seamless $Version predates the bundled skills; the seam-onboard/seam-research skills will not be installed (drop SEAMLESS_VERSION to get the latest)"
         }
-        if ($ServerUrl) {
+        if ($ApiKey) {
             # The client pair: the URL to dial and the key to dial it with. The
             # binary writes role: client + server_url + mcp.api_key from these
-            # -- no data dir, because a client stores nothing locally.
+            # -- no data dir, because a client stores nothing locally. Only for
+            # SEAMLESS_SERVER_URL: a client install read back from $Config
+            # passes neither, and install-hooks wires against that file as it
+            # stands.
             $clientArgs += @('--server-url', $ServerUrl, '--api-key', $ApiKey)
         }
         & $seamlessd install-hooks @clientArgs --seam $seam
@@ -477,6 +595,20 @@ function Get-ConfiguredAddr {
     $m = Select-String -Path $Config -Pattern '^\s*addr:\s*"?([^"\s]+)' | Select-Object -First 1
     if ($m) { return $m.Matches[0].Groups[1].Value }
     return $DefaultAddr
+}
+
+# Get-ConfigValue: a top-level scalar out of the existing $Config, read the way
+# the Makefile and the sh installer read role: and server_url: -- anchored at the
+# start of the line (a nested key of the same name is not it), an optional double
+# quote, no trailing comment, and case-sensitive like YAML. '' when the file or
+# the key is absent.
+function Get-ConfigValue {
+    param([string]$Key)
+    if (-not (Test-Path $Config)) { return '' }
+    $pattern = '^' + [regex]::Escape($Key) + ':\s*"?([^"\s]*)'
+    $m = Select-String -Path $Config -Pattern $pattern -CaseSensitive | Select-Object -First 1
+    if ($m) { return $m.Matches[0].Groups[1].Value }
+    return ''
 }
 
 # The Windows service: a per-user, at-logon Scheduled Task -- the analog of a
@@ -512,7 +644,7 @@ function Register-Service {
 
     try {
         Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
-            -Principal $principal -Settings $settings -Force | Out-Null
+            -Principal $principal -Settings $settings -Description $TaskDescription -Force | Out-Null
     } catch {
         Register-ServiceFallback $seamlessd $_
         return
@@ -533,7 +665,7 @@ function Register-ServiceFallback {
     param([string]$Seamlessd, $Err)
     $owner = $null
     try { $owner = (Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop).Principal.UserId } catch {}
-    if ($owner -and $owner -ne [Security.Principal.WindowsIdentity]::GetCurrent().Name) {
+    if ($owner -and -not (Test-CurrentUser $owner)) {
         Warn ("the $TaskName Scheduled Task belongs to $owner and replacing it needs admin " +
             "(one-time fix: an elevated 'schtasks /delete /tn $TaskName /f', then re-run this installer)")
     } else {
@@ -577,30 +709,54 @@ function Invoke-HealthProbe {
     }
 }
 
+# Get-ServedVersion: the release behind a /healthz body -- its version field with
+# the build suffix stripped, since a release build serves "0.8.0+1a2b3c4"
+# (version + commit). Every release serves that field, so '' means whatever
+# answered is not a daemon this script could have installed.
+function Get-ServedVersion {
+    param($Body)
+    if ($Body -is [byte[]]) { $Body = [Text.Encoding]::UTF8.GetString($Body) }
+    if ([string]$Body -match '"version"\s*:\s*"([^"]*)"') {
+        return ($Matches[1] -replace '\+.*$', '')
+    }
+    return ''
+}
+
 # The Scheduled Task reports success as soon as it has started the process, but the
-# daemon binds its listener ~100ms later. Poll until it actually answers, so a green
-# install means it is serving rather than racing a listener that is not up.
+# daemon binds its listener ~100ms later. Poll for about 30s until it actually
+# answers -- AS the release just installed. The daemon this run replaced can still
+# be the one answering (exiting, or one this script could not stop), and a green
+# install must mean the new build is serving.
 #
 # Plaintext first, then TLS: once tls.cert_file and tls.key_file are set the
 # listener refuses http entirely, so an http-only poll reports a healthy daemon
 # as absent and fails an install that actually worked. Verification is skipped
-# because this asks only "is something serving here" -- no body is read and no
-# credential is sent, and the certificate covers the host of server_url rather
-# than the bind address being dialed. Matches wait_healthy in docs/install and
-# serverReachable in cmd/seamlessd/console.go.
+# because this asks only "what is serving here" -- the one thing read back is
+# the version, no credential is sent, and the certificate covers the host of
+# server_url rather than the bind address being dialed. Matches wait_healthy in
+# docs/install and serverReachable in cmd/seamlessd/console.go.
 function Wait-Healthy {
-    param([string]$Addr)
+    param([string]$Addr, [string]$Version)
     $urls = @("http://$Addr/healthz", "https://$Addr/healthz")
-    for ($i = 0; $i -lt 50; $i++) {
+    $seen = ''
+    for ($i = 0; $i -lt 150; $i++) {
         foreach ($u in $urls) {
             try {
                 $r = Invoke-HealthProbe $u
-                if ([int]$r.StatusCode -eq 200) { Step 'healthz' "ok -- $u"; return }
+                if ([int]$r.StatusCode -eq 200) {
+                    $served = Get-ServedVersion $r.Content
+                    if ($served -eq $Version) { Step 'healthz' "ok -- $u"; return }
+                    $seen = if ($served) { $served } else { 'no version' }
+                    break
+                }
             } catch {}
         }
         Start-Sleep -Milliseconds 200
     }
-    Die "no /healthz from $Addr over http or https after 50 attempts; check the log: $LogFile"
+    if ($seen) {
+        Die "after 30s the daemon on $Addr reports $seen rather than $Version; check the log: $LogFile"
+    }
+    Die "no /healthz from $Addr over http or https after 30s; check the log: $LogFile"
 }
 
 # The client half of Wait-Healthy. Nothing was started here, so there is no
@@ -623,6 +779,7 @@ function Test-ServerHealth {
 
 function Main {
     $InstallDir = if ($env:SEAMLESS_INSTALL_DIR) { $env:SEAMLESS_INSTALL_DIR } else { Join-Path $HOME '.local\bin' }
+    $checksumsPin = Get-ChecksumsPin
     # Client mode: no daemon here, so no Scheduled Task and no data dir. The
     # trailing slash is stripped because server_url is a base URL with no path,
     # and "http://host:8081/" is a path as far as the config validator is
@@ -635,6 +792,23 @@ SEAMLESS_SERVER_URL is set but SEAMLESS_MCP_API_KEY is not: a client needs the
 server's bearer key as well as its URL. Run  seamlessd client-config  on the
 server and use the line it prints.
 '@
+    }
+    # Without SEAMLESS_SERVER_URL, a config that already says role: client keeps
+    # this machine a client of its server_url, read the way the Makefile reads
+    # it. A re-run that does not repeat the knob -- an update -- must not hand a
+    # client the task `seamlessd serve` refuses under that role. An explicit
+    # SEAMLESS_SERVER_URL wins, as a knob the user set always does; install-hooks
+    # then refuses a config file that names a different server. The key pairs
+    # only with SEAMLESS_SERVER_URL: a client config already holds its own, which
+    # install-hooks reads there, so it never rides in argv.
+    if (-not $serverUrl) {
+        $apiKey = ''
+        if ((Get-ConfigValue 'role') -ceq 'client') {
+            $serverUrl = ([string](Get-ConfigValue 'server_url')).TrimEnd('/')
+            if (-not $serverUrl) {
+                Die "$Config says role: client but sets no server_url; add the URL of the server this machine dials (server_url: https://host:8081), then re-run"
+            }
+        }
     }
     $agentClient = Resolve-AgentClient
     # What actually got wired; Invoke-WireHooks narrows it when a pinned old
@@ -649,22 +823,24 @@ server and use the line it prints.
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ('seamless-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
     try {
-        $zip = Get-Release $version $arch $tmp
+        $zip = Get-Release $version $arch $tmp $checksumsPin
 
-        # Stop a running task before swapping binaries: a live seamlessd.exe holds
-        # its own image locked. Best-effort -- absent on a first install.
-        if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
-            Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-        }
-        # A daemon from the Startup-shortcut fallback (or a manual start) is not
-        # under the task's control; stop our own copy too, so the swap replaces a
-        # closed image and the health check answers from the NEW binary. Stopping
-        # another user's daemon is denied without admin, which is the right scope.
-        Get-Process -Name seamlessd -ErrorAction SilentlyContinue |
-            Stop-Process -Force -ErrorAction SilentlyContinue
+        # Best-effort: nothing is running on a first install.
+        Stop-Daemon $InstallDir
 
         Install-Binaries $zip $tmp $InstallDir
-        Invoke-WireHooks $tmp $InstallDir $agentClient $version $serverUrl $apiKey
+
+        # Restart the task and wait for it to answer as the new build BEFORE
+        # rewiring the clients (make install restarts first too): a wiring
+        # failure then exits non-zero with this release already serving, instead
+        # of leaving the daemon stopped. That needs $Config: on a first install
+        # install-hooks is what writes it, and the task's --config pins it, so a
+        # first install wires first. A client install and SEAMLESS_NO_SERVICE
+        # start nothing, so they keep wiring first as well.
+        $hooksFirst = [bool]($serverUrl -or $env:SEAMLESS_NO_SERVICE -or -not (Test-Path $Config))
+        if ($hooksFirst) {
+            Invoke-WireHooks $tmp $InstallDir $agentClient $version $serverUrl $apiKey
+        }
 
         if ($serverUrl) {
             # No service and no Get-ConfiguredAddr: a client starts no daemon
@@ -677,7 +853,10 @@ server and use the line it prints.
             Say "start it yourself: & `"$InstallDir\seamlessd.exe`" serve --config `"$Config`""
         } else {
             Register-Service $InstallDir
-            Wait-Healthy (Get-ConfiguredAddr)
+            Wait-Healthy (Get-ConfiguredAddr) $version
+        }
+        if (-not $hooksFirst) {
+            Invoke-WireHooks $tmp $InstallDir $agentClient $version $serverUrl $apiKey
         }
     } finally {
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue

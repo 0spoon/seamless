@@ -288,8 +288,13 @@ Claude app chat surface, and Codex, and installs that set's hooks, MCP
 registrations, and skills;</li>
 <li>installs and starts the <a href="../reference/service/">per-user service</a> - launchd
 on macOS, systemd <code>--user</code> on Linux, an at-logon Scheduled Task on
-Windows - and polls <code>/healthz</code> until the daemon actually answers.</li>
+Windows - and polls <code>/healthz</code> for about 30 seconds until the daemon
+answers as the release it just installed.</li>
 </ol>
+<p>That is the order of a first install. Once a config exists, steps 3 and 4
+swap: the service restarts on the new build and must answer before the
+clients are rewired, so a failure while wiring them still leaves the new
+release serving.</p>
 <p>Step 3 detects three install targets - <strong>Claude Code</strong>, the <strong>Claude app chat
 surface</strong> (<code>claude-desktop</code>, the app's <code>mcpServers</code> bridge; it has no hooks or
 skills), and <strong>Codex</strong> - and wires the detected set. That one selection
@@ -300,7 +305,9 @@ the run confirms the selection with a multi-select menu - answers are numbers or
 (<code>1,3</code>), defaulting to the detected set; headless, the detected set is wired
 as-is. With nothing detected, a run on a terminal warns and asks whether to
 install at all (defaulting to no), and a headless run aborts - the installer
-never silently wires a client that is not there. Set <code>SEAMLESS_CLIENT</code> to make
+never silently wires a client that is not there. <code>SEAMLESS_NO_HOOKS</code> skips the
+detection along with the wiring, so a headless run with it never stops here.
+Set <code>SEAMLESS_CLIENT</code> to make
 the choice explicit: one target, a comma list, or <code>all</code> (every target the
 platform can host - the chat surface exists only where the Claude app runs, so
 <code>all</code> never fails on Linux over it). See <a href="../codex-cli/">Codex local setup</a> for
@@ -325,7 +332,9 @@ daemon holds them open), the service restarts on the new build, and your config
 and <code>~/.seamless</code> are preserved. The selected clients are reconciled to those
 new stable paths: owned stale hooks and the Codex stdio registration are
 repaired, current definitions are untouched, foreign hooks are preserved, and
-the recurring skill is refreshed. It is <a href="https://thereisnospoon.org/install">one shell
+the recurring skill is refreshed. A machine whose config already says
+<code>role: client</code> stays a client of its <code>server_url</code> - no knobs needed, and no
+service registered. It is <a href="https://thereisnospoon.org/install">one shell
 script</a> with no dependencies to audit.</p>
 <div class="table-wrap">
 <table>
@@ -345,12 +354,16 @@ script</a> with no dependencies to audit.</p>
 <td>put the binaries somewhere else</td>
 </tr>
 <tr>
+<td><code>SEAMLESS_CHECKSUMS_SHA256=&lt;sha256&gt;</code></td>
+<td>pin the release's <code>checksums.txt</code> to this SHA-256 (64 hex digits, either case): any other manifest is refused before anything is unpacked. Meant for a caller that has verified the manifest's signature itself (seamlessd's updater), so without <code>cosign</code> the run reports the signature as verified by seamlessd instead of warning</td>
+</tr>
+<tr>
 <td><code>SEAMLESS_CLIENT=claude|claude-desktop|codex|all</code></td>
 <td>choose which target(s) to wire instead of auto-detection; comma lists work (<code>claude,claude-desktop</code>)</td>
 </tr>
 <tr>
 <td><code>SEAMLESS_SERVER_URL=http://studio.local:8081</code></td>
-<td>install as a <strong>client</strong> of a Seamless daemon running elsewhere: wire this machine's agent clients to that URL, install no service, and keep no data dir here. Requires <code>SEAMLESS_MCP_API_KEY</code>. See <a href="../guides/network-install/">Share one daemon across a LAN</a></td>
+<td>install as a <strong>client</strong> of a Seamless daemon running elsewhere: wire this machine's agent clients to that URL, install no service, and keep no data dir here. Requires <code>SEAMLESS_MCP_API_KEY</code>, and wins over the <code>role</code> and <code>server_url</code> an existing config names. See <a href="../guides/network-install/">Share one daemon across a LAN</a></td>
 </tr>
 <tr>
 <td><code>SEAMLESS_MCP_API_KEY=&lt;key&gt;</code></td>
@@ -358,7 +371,7 @@ script</a> with no dependencies to audit.</p>
 </tr>
 <tr>
 <td><code>SEAMLESS_NO_HOOKS=1</code></td>
-<td>skip agent hooks, MCP registration, and skills</td>
+<td>skip agent hooks, MCP registration, and skills, and the client detection that would choose them</td>
 </tr>
 <tr>
 <td><code>SEAMLESS_NO_ONBOARD_SKILL=1</code></td>
@@ -500,10 +513,13 @@ request to GitHub's releases API every 6 hours, carrying no identifiers.
 archive's SHA-256 against <code>checksums.txt</code>. When <code>cosign</code> is installed it also
 verifies the manifest's keyless signature against this repository's release
 workflow identity; without cosign it warns clearly and continues with checksum
-integrity only. <code>seamlessd update</code> separately verifies the fetched installer
-script's Sigstore bundle in-process before executing it. <code>curl | sh</code> still
-means trusting the bytes served by the site, so read the script first if that
-boundary is not acceptable; <code>go install</code> lands in the same place.</li>
+integrity only - unless <code>SEAMLESS_CHECKSUMS_SHA256</code> pins the manifest to one
+its caller already verified, in which case any other manifest is refused and
+the run says the signature was verified by seamlessd. <code>seamlessd update</code>
+separately verifies the fetched installer script's Sigstore bundle in-process
+before executing it. <code>curl | sh</code> still means trusting the bytes served by the
+site, so read the script first if that boundary is not acceptable;
+<code>go install</code> lands in the same place.</li>
 </ul>
 <h3 id="going-beyond-loopback-deliberately">Going beyond loopback, deliberately</h3>
 <p>A static bearer key is adequate <em>because</em> the listener is on loopback; the two
