@@ -51,23 +51,27 @@ import (
 // version is the seamlessd build version, injected from the git tag at build
 // time: goreleaser sets it via -X main.version (see .goreleaser.yaml) and so
 // does `make build`/`make install` (see the Makefile's VERSION). The git tag is
-// the single source of truth -- this default is only reached by a plain
-// `go build`/`go test` with no ldflags, so it is a non-release dev sentinel
-// (never a real version number, which would silently go stale here).
-var version = "0.0.0-dev"
+// the single source of truth -- this default is a non-release dev sentinel
+// (never a real version number, which would silently go stale here). A build
+// with no ldflags (`go install ...@vX.Y.Z`, a plain `go build`) has it replaced
+// at startup from the binary's build info (applyBuildInfo, buildinfo.go);
+// `go test` and -buildvcs=false builds keep it.
+var version = devVersion
 
 // commit and buildDate are link-time build metadata, set via
 //
 //	go build -ldflags "-X main.commit=$(git rev-parse --short HEAD) -X main.buildDate=<utc>"
 //
-// (see the Makefile and .goreleaser.yaml). They stay "unknown" for a plain
-// `go build`/`go test`.
+// (see the Makefile and .goreleaser.yaml). With no ldflags they come from the
+// build info's vcs.revision and vcs.time when the toolchain recorded them (a
+// `go build` in a git checkout), and otherwise stay "unknown" (`go test`, a
+// module-proxy `go install`).
 var (
-	commit    = "unknown"
-	buildDate = "unknown"
+	commit    = unknownBuildInfo
+	buildDate = unknownBuildInfo
 )
 
-// buildVersion is the version plus the short commit when linked in, e.g.
+// buildVersion is the version plus the short commit when known, e.g.
 // "0.0.0-dev+1a2b3c4". It is surfaced in /healthz, the MCP handshake, and the
 // startup log so a stale running daemon (older code than the working tree) is
 // visible at a glance.
@@ -79,6 +83,7 @@ func buildVersion() string {
 }
 
 func main() {
+	applyBuildInfo()
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	if len(os.Args) < 2 {
