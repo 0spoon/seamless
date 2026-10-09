@@ -3,7 +3,8 @@
 // It is read-mostly -- the writes are the owner's overrides and curation
 // actions: archiving a memory, approving a plan, force-releasing a task's claim
 // lock, asking the gardener for proposals (request/split) and resolving them
-// (apply/dismiss/retarget), and saving or resetting the briefing settings.
+// (apply/dismiss/retarget), saving or resetting the briefing settings, and
+// switching the background update check or asking it to check now.
 // Access is guarded by the same static bearer key as the MCP surface: a browser
 // trades the key for a cookie at /console/login, and the seam CLI presents the
 // key as a bearer token.
@@ -80,6 +81,12 @@ type Config struct {
 	// Version is the daemon's build version (seamlessd's buildVersion), shown
 	// on the Home health strip and in Settings -> Your setup. Empty omits it.
 	Version string
+	// Updates is the background update check (*update.Checker in the daemon):
+	// Settings -> Updates, the health strip's version fact, and the one-day
+	// "updated" banner read it, and the Updates POSTs steer it. nil means this
+	// process runs no update check (tests, tools): the section says so, its
+	// POSTs answer with an error flash, and the strip keeps the plain version.
+	Updates UpdatesView
 	// Level is the file/env console level base (config.Console.Level): how much
 	// of the console the owner sees. The effective level is this plus the
 	// store's level row, resolved live per request (see consoleLevel). Empty
@@ -238,6 +245,9 @@ func (s *Service) Register(mux *http.ServeMux) {
 	post("POST /console/settings/level/welcome", formBodySmall, s.settingsLevelWelcome)
 	post("POST /console/settings/features", formBodySmall, s.settingsFeaturesSave)
 	post("POST /console/settings/features/reset", formBodySmall, s.settingsFeaturesReset)
+	post("POST /console/settings/updates", formBodySmall, s.settingsUpdatesSave)
+	post("POST /console/settings/updates/reset", formBodySmall, s.settingsUpdatesReset)
+	post("POST /console/settings/updates/check", formBodySmall, s.settingsUpdatesCheck)
 	handle("GET /console/events", s.auth(s.sse))
 	handle("GET /console/events/{id}", s.auth(s.eventDetail))
 	// Anything under /console/ no route above claims: the styled 404 inside the

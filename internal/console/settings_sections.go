@@ -40,6 +40,8 @@ var settingsSections = []settingsSection{
 		Blurb: "Optional features, for the console and agents alike"},
 	{ID: "setup", Label: "Your setup", Icon: "server", Min: levelBasic, Anchor: "setup",
 		Blurb: "Version, files, and what is connected"},
+	{ID: "updates", Label: "Updates", Icon: "refresh-cw", Min: levelBasic, Anchor: "updates",
+		Blurb: "New releases, and whether this install checks for them"},
 	{ID: "briefing", Label: "Briefing", Icon: "brain", Min: levelStandard, Anchor: "briefing-recipe",
 		Blurb: "What every new agent session starts with"},
 	{ID: "workspaces", Label: "Workspaces", Icon: "folder-tree", Min: levelStandard, Anchor: "workspace-registry",

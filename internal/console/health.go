@@ -2,7 +2,7 @@ package console
 
 import (
 	"context"
-	"strings"
+	"time"
 
 	"github.com/arctop/seamless/internal/store"
 )
@@ -21,9 +21,10 @@ type healthFact struct {
 
 // healthFacts builds the strip: which agent clients are working with this
 // installation, whether semantic recall is on, when the last briefing went out,
-// and the version. Every fact is omitted when nothing backs it -- a fresh
-// installation says less, never a confident zero -- and a read failure costs
-// the facts it feeds, never the page.
+// and the version -- with what the update check knows about it (versionFact).
+// Every fact is omitted when nothing backs it -- a fresh installation says
+// less, never a confident zero -- and a read failure costs the facts it feeds,
+// never the page.
 func (s *Service) healthFacts(ctx context.Context) []healthFact {
 	var out []healthFact
 	facts, err := store.GetHealthFacts(ctx, s.cfg.DB)
@@ -64,8 +65,8 @@ func (s *Service) healthFacts(ctx context.Context) []healthFact {
 			Href: "/console/events/" + b.EventID, Title: ts(b.At),
 		})
 	}
-	if v := strings.TrimSpace(s.cfg.Version); v != "" {
-		out = append(out, healthFact{Icon: "info", Text: "version " + v, Href: "/console/settings?s=setup"})
+	if f, ok := s.versionFact(time.Now()); ok {
+		out = append(out, f)
 	}
 	return out
 }

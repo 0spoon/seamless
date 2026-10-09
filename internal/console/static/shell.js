@@ -311,13 +311,20 @@
   surfaceFlash();
   document.addEventListener('seam:content-updated', surfaceFlash);
 
-  /* ---- Level banner: "Got it" ---------------------------------------------- */
+  /* ---- Banners: "Got it" --------------------------------------------------- */
 
-  // A screen above the console level renders under a note offering the switch
-  // (layout.html). "Got it" hides it for this tab only -- a banner is not
-  // durable state, so sessionStorage, keyed by screen. Re-applied after every
-  // morph, which restores what the server rendered.
+  // Two notes can be set aside (layout.html): the level banner, on a screen
+  // above the console level, and the update banner, for a day after the
+  // daemon upgraded. "Got it" hides one for this tab only -- a banner is not
+  // durable state, so sessionStorage -- keyed by what it is about: the screen,
+  // or "update:" plus the version, so a newer update shows again. Re-applied
+  // after every morph, which restores what the server rendered.
   var BANNERS = 'seamless-level-banners';
+  var BANNER = '[data-level-banner], [data-update-banner]';
+  function bannerKey(b) {
+    var version = b.getAttribute('data-update-banner');
+    return version ? 'update:' + version : b.getAttribute('data-level-banner');
+  }
   function dismissed() {
     try {
       var list = JSON.parse(sessionStorage.getItem(BANNERS) || '[]');
@@ -326,16 +333,16 @@
   }
   function applyBanners() {
     var gone = dismissed();
-    document.querySelectorAll('[data-level-banner]').forEach(function (b) {
-      if (gone.indexOf(b.getAttribute('data-level-banner')) !== -1) b.hidden = true;
+    document.querySelectorAll(BANNER).forEach(function (b) {
+      if (gone.indexOf(bannerKey(b)) !== -1) b.hidden = true;
     });
   }
   document.addEventListener('click', function (e) {
-    var x = e.target.closest ? e.target.closest('[data-level-banner-dismiss]') : null;
+    var x = e.target.closest ? e.target.closest('[data-level-banner-dismiss], [data-update-banner-dismiss]') : null;
     if (!x) return;
-    var banner = x.closest('[data-level-banner]');
+    var banner = x.closest(BANNER);
     if (!banner) return;
-    var id = banner.getAttribute('data-level-banner');
+    var id = bannerKey(banner);
     var gone = dismissed();
     if (gone.indexOf(id) === -1) gone.push(id);
     try { sessionStorage.setItem(BANNERS, JSON.stringify(gone)); } catch (e2) {}
@@ -421,7 +428,8 @@
     [/^recall\.miss$/, '/console/retrieval', 'pop'],
     [/^trial\./, '/console/trials', 'ok'],
     [/^(tool\.call|hook\.prompt)$/, '/console/interactions', 'brand'],
-    [/^project\./, '/console/projects', 'violet']
+    [/^project\./, '/console/projects', 'violet'],
+    [/^update\./, '/console/settings', 'warn']
   ];
   var WRITE_HOME = { 'memory.written': '/console/memories', 'note.written': '/console/notes', 'trial.recorded': '/console/trials' };
   function routeOf(kind) {

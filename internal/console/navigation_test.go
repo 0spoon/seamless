@@ -154,6 +154,9 @@ func TestDataRefreshClients_NeverReloadDocument(t *testing.T) {
 		"navigation": string(navigationJS),
 		"library":    string(libraryJS),
 		"sky":        string(skyJS),
+		// The shell hides the level and update banners in place; a "Got it"
+		// never reloads to make one go away.
+		"shell": string(shellJS),
 	} {
 		require.NotContains(t, source, "location.reload(", "%s must keep data refreshes inside the current document", name)
 	}

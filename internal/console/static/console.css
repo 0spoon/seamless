@@ -6138,21 +6138,25 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
 /* ---- Console levels: the "hidden, not locked" banner ------------------------
    A screen above the console level renders in full under this note. It is the
    informational notice register (brand-soft), never an error: copy on the left,
-   the switch and "Got it" on the right, wrapping under the copy on phones. */
-.level-banner {
+   the switch and "Got it" on the right, wrapping under the copy on phones. The
+   one-day "Seamless updated" banner shares the shape (layout.html). */
+.level-banner, .update-banner {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 18px;
   padding: 10px 14px; border: 1px solid color-mix(in oklab, var(--brand) 26%, transparent);
   border-radius: var(--radius-md); color: var(--ink-2);
 }
-.level-banner[hidden] { display: none; }
-.level-banner-copy { display: flex; align-items: flex-start; gap: 9px; margin: 0; flex: 1 1 320px; min-width: 0; line-height: 1.45; }
-.level-banner-copy .ico { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--brand); }
-.level-banner-copy strong { color: var(--ink); font-weight: 650; }
-.level-banner-acts { display: flex; align-items: center; gap: 8px; flex: none; }
+.level-banner[hidden], .update-banner[hidden] { display: none; }
+.level-banner-copy, .update-banner-copy { display: flex; align-items: flex-start; gap: 9px; margin: 0; flex: 1 1 320px; min-width: 0; line-height: 1.45; }
+.level-banner-copy .ico, .update-banner-copy .ico { flex: none; width: 16px; height: 16px; margin-top: 2px; color: var(--brand); }
+.level-banner-copy strong, .update-banner-copy strong { color: var(--ink); font-weight: 650; }
+.level-banner-acts, .update-banner-acts { display: flex; align-items: center; gap: 8px; flex: none; }
 .level-banner-acts form { margin: 0; }
+/* The update banner is good news: the same register, in the ok hue. */
+.update-banner { background: color-mix(in oklab, var(--ok) 9%, var(--surface)); border-color: color-mix(in oklab, var(--ok) 30%, transparent); }
+.update-banner-copy .ico { color: var(--ok); }
 @media (max-width: 720px) {
-  .level-banner { padding: 10px 12px; }
-  .level-banner-acts { width: 100%; justify-content: flex-end; }
+  .level-banner, .update-banner { padding: 10px 12px; }
+  .level-banner-acts, .update-banner-acts { width: 100%; justify-content: flex-end; }
 }
 
 /* ---- Settings: one section at a time (console levels) -----------------------
@@ -6475,3 +6479,25 @@ html:not(.js) .brief-preview { display: none; }
   .brief-customize .brief-group.utility-group > p { max-width: none; margin-bottom: 5px; }
   .brief-preview-text { max-height: calc(100vh - 300px); min-height: 180px; }
 }
+
+/* ---- Settings > Updates ------------------------------------------------------
+   The Your setup facts list, plus a row of single-button forms (the check
+   switch and Check now), a note for a locked switch or a process with no
+   update check, and the danger-toned alert for a checker that stopped. */
+.updates-facts dd small { flex-basis: 100%; }
+.updates-error { display: inline-flex; align-items: flex-start; gap: 6px; color: var(--warn); font-size: var(--text-xs); }
+.updates-error .ico { flex: none; width: 14px; height: 14px; margin-top: 1px; }
+.updates-error .mono { color: var(--muted); overflow-wrap: anywhere; }
+.updates-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 2px 0; }
+.updates-actions form { margin: 0; }
+.updates-note, .updates-alert {
+  display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--ink) 3%, transparent); color: var(--muted); font-size: var(--text-xs);
+}
+.updates-note .ico, .updates-alert .ico { flex: none; width: 15px; height: 15px; margin-top: 1px; }
+.updates-alert {
+  margin: 0 0 14px; border-color: color-mix(in oklab, var(--danger) 40%, var(--border));
+  background: color-mix(in oklab, var(--danger) 8%, var(--surface-2)); color: var(--ink-2);
+}
+.updates-alert .ico { color: var(--danger); }

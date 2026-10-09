@@ -81,6 +81,18 @@
        it belongs to. Decorative: aria-hidden, and still under reduced motion. */}}
   <div class="seam" id="seam" aria-hidden="true"></div>
   <main class="main" id="main" tabindex="-1">
+    {{/* For a day after the daemon upgraded, every page says so. A banner, not
+         a toast: the tab's live stream is reconnecting right after the
+         restart. Built from parsed versions and the constant release URL only
+         (updates.go). "Got it" hides it for this browser tab, keyed by the
+         version (shell.js), so a newer update shows again. */}}
+    {{with .UpdateBanner}}<div class="section notice update-banner" id="update-banner" role="note" data-update-banner="{{.To}}">
+      <p class="update-banner-copy">{{icon "refresh-cw"}}<span><strong>Seamless updated to v{{.To}}</strong> (from v{{.From}}) <span title="{{.At}}">{{.Ago}}</span>.</span></p>
+      <div class="update-banner-acts">
+        <a class="btn small" href="{{.NotesURL}}" target="_blank" rel="noopener">Release notes</a>
+        <button class="btn small" type="button" data-update-banner-dismiss>Got it</button>
+      </div>
+    </div>{{end}}
     {{/* Hidden, not locked: a screen above the console level still renders in
          full, under this note offering the switch. Information, never an error;
          "Got it" hides it for this browser tab only (shell.js, sessionStorage). */}}
@@ -182,6 +194,7 @@
   var again = false;    // events arrived mid-fetch -> refresh once more after
   var debounce = null;
   var toastTimer = null;
+  var toastHold = 0;    // until when an event's own toast keeps the toast line
 
   function fieldFocused() { var a = document.activeElement; return !!(a && a.matches && a.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]')); }
   function selecting() { var s = window.getSelection && window.getSelection(); return !!(s && s.type === 'Range' && String(s).trim()); }
@@ -200,6 +213,10 @@
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toast.classList.remove('show'); setTimeout(function () { toast.hidden = true; }, 300); }, 2600);
   }
+  // An event that carries its own line (a first reuse, a new release) holds
+  // the toast for its full time: the live refresh the same event schedules
+  // must not replace it with the generic "Updated" a moment later.
+  function eventToast(msg) { flashToast(msg); toastHold = Date.now() + 2600; }
 
   function apply() {
     if (busy) { again = true; return; }
@@ -216,7 +233,7 @@
         if (!window.SeamConsole || !window.SeamConsole.patchPage(doc, 'live')) throw new Error('invalid console document');
         setLive(connected); // the morph may have swapped the topbar's live indicator
         n = 0; pending = false; hidePill();
-        flashToast('Updated');
+        if (Date.now() >= toastHold) flashToast('Updated');
         // strip enter/pulse markers once their animations have played (longest
         // is the count pulse at 450ms) so nothing replays on a later reveal
         setTimeout(function () {
@@ -245,7 +262,11 @@
       if ((k === 'tool.call' || k === 'hook.prompt') && !window.SEAM_LIVE_ALL_KINDS) return;
       // Momentum payoff moment: one quiet toast line, only while the console
       // happens to be open. The event's summary already carries the copy.
-      if (k === 'memory.first_reuse' && d.summary) flashToast(d.summary);
+      if (k === 'memory.first_reuse' && d.summary) eventToast(d.summary);
+      // A newer release was seen ("Seamless v0.7.3 is available ..."): the
+      // summary is built server-side from the parsed version, never from the
+      // release's own text (eventSummary).
+      if (k === 'update.available' && d.summary) eventToast(d.summary);
     } catch (e) {}
     // Pages that own their liveness (live feeds, forms, JS-built islands) opt out
     // via window.SEAM_NO_LIVE_REFRESH. Checked lazily so per-page scripts (which

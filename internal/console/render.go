@@ -99,6 +99,9 @@ type pageData struct {
 	// LevelBanner is set when this page's screen is above the current level:
 	// it still renders in full, under a note offering the switch.
 	LevelBanner *levelBanner
+	// UpdateBanner is set on every page for a day after the daemon upgraded
+	// (updates.go); nil otherwise, and whenever no update check runs here.
+	UpdateBanner *updateBanner
 	// ReturnPath is this page's own URL (flash params stripped), for forms that
 	// change presentation state and come back here -- the banner's switch.
 	ReturnPath string
@@ -178,7 +181,7 @@ func levelBannerFor(id string, current level) *levelBanner {
 
 // withChrome fills the per-request chrome every layout-wrapped page shares: the
 // effective features, the level and the screens it offers, the sidebar
-// sections and badges, and the host.
+// sections and badges, the host, and the one-day "updated" banner.
 func (s *Service) withChrome(ctx context.Context, pd pageData) pageData {
 	pd.Features = s.effectiveFeatures(ctx)
 	lvl := s.consoleLevel(ctx)
@@ -196,6 +199,7 @@ func (s *Service) withChrome(ctx context.Context, pd pageData) pageData {
 		}
 		pd.LevelBanner = levelBannerFor(id, pd.Level)
 	}
+	pd.UpdateBanner = s.updateBannerAt(time.Now())
 	pd.Host = s.host
 	pd.HostName = s.hostName
 	return pd
@@ -324,6 +328,12 @@ func evtTone(kind string) string {
 		return "ok"
 	case strings.HasPrefix(kind, "plan."), kind == "subagent.captured":
 		return "accent"
+	case kind == "update.available":
+		// The chip palette has no info tone; amber matches the health strip,
+		// which marks the same fact warn: an owner action is waiting.
+		return "warn"
+	case kind == "update.applied":
+		return "ok"
 	case strings.HasPrefix(kind, "memory.read"), strings.HasPrefix(kind, "memory.written"), strings.HasPrefix(kind, "note."):
 		return "ok"
 	default:
@@ -368,6 +378,8 @@ var eventLabels = map[string]string{
 	"milestone.reached":          "Milestone",
 	"settings.features_changed":  "Features changed",
 	"settings.level_changed":     "Console level changed",
+	"update.available":           "Update available",
+	"update.applied":             "Version changed", // a downgrade too; the summary says which
 }
 
 // evtLabel names an event kind for a reader. An unlisted kind is spelled out
@@ -424,7 +436,7 @@ func evtIcon(kind string) string {
 		return "eye"
 	case kind == "memory.archived":
 		return "archive"
-	case kind == "memory.superseded":
+	case kind == "memory.superseded", strings.HasPrefix(kind, "update."):
 		return "refresh-cw"
 	case kind == "memory.moved", kind == "repo.moved":
 		return "folder-open"

@@ -221,6 +221,10 @@ type settingsData struct {
 	CustomizeOpen bool `json:"-"`
 	// Setup is the Your setup section's plain-language facts.
 	Setup setupPanel `json:"-"`
+	// Updates is the Updates section's view of the background update check,
+	// filled only for that section. Page state like Setup: the JSON payload
+	// stays the same at every section.
+	Updates updatesPanel `json:"-"`
 	// PreviewProjects are the projects the Briefing section's preview offers
 	// (registered and live, in slug order), and PreviewProject the one it
 	// opens on: where the owner's agents worked last, else the first. Filled
@@ -396,6 +400,10 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 	if section.ID == "briefing" && !wantsJSON(r) {
 		previewProjects, previewProject = s.previewChoices(ctx, projects)
 	}
+	var updates updatesPanel
+	if section.ID == "updates" && !wantsJSON(r) {
+		updates = s.updatesPanelAt(time.Now())
+	}
 
 	lvl := s.consoleLevel(ctx)
 	pd := pageData{
@@ -432,6 +440,7 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 			BriefingPresets:        briefingPresetCards(briefing),
 			CustomizeOpen:          lvl.Level >= levelAdvanced,
 			Setup:                  s.setupData(ctx),
+			Updates:                updates,
 			PreviewProjects:        previewProjects,
 			PreviewProject:         previewProject,
 		},

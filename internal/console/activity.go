@@ -201,6 +201,10 @@ func eventSummary(e core.Event) string {
 		return "optional features changed" + featureStateSuffix(p)
 	case eventLevelChanged:
 		return levelChangeSummary(p)
+	case core.EventUpdateAvailable:
+		return updateAvailableSummary(p)
+	case core.EventUpdateApplied:
+		return updateAppliedSummary(p)
 	case core.EventTaskTransition:
 		if to := payloadStr(p, "to"); to != "" {
 			return "task -> " + to
