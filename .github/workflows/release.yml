@@ -4,7 +4,8 @@ name: Release
 # v0.3.0`. goreleaser cross-compiles seamlessd + seam (see .goreleaser.yaml)
 # and publishes the cross-platform archives (binaries plus maintained
 # Claude Code/Codex skills), signed checksums, installer bundles, and changelog
-# as a GitHub release.
+# as a GitHub release; the last step re-verifies the published checksums
+# signatures against this tag's exact signing identity.
 on:
   push:
     tags: ["v*"]
@@ -38,15 +39,19 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # goreleaser's `signs:` stage and the installer-signing step below both
-      # shell out to this binary. The version is pinned to the v2 line: the
-      # action's default (cosign v3) refuses to emit the detached .sig/.pem
-      # pair that goreleaser's `signs:` stage produces for checksums.txt and
-      # that docs/install + docs/install.ps1 verify (v3 only writes bundles).
-      # v2 also supports --new-bundle-format, so the installer-script bundles
-      # below are byte-compatible either way. Lifting this pin means moving
-      # checksums.txt signing to bundle output and teaching both installers
-      # to verify bundles first.
+      # goreleaser's `signs:` stage, the installer-signing step and the
+      # post-release verify below all shell out to this binary. The version is
+      # pinned to the v2 line: the action's default (cosign v3) deprecates the
+      # detached .sig/.pem outputs and by default writes only a bundle, so it
+      # would not produce the pair the checksum-detached entry in
+      # .goreleaser.yaml writes for checksums.txt and that docs/install +
+      # docs/install.ps1 verify. v2 writes the same bundle format v3 does when
+      # given --new-bundle-format, which is how the installer scripts and
+      # checksums.txt (the checksum-bundle entry) are signed. Lifting this pin
+      # means dropping the detached pair, and that first needs both installers
+      # to verify checksums.txt.sigstore.json instead: an installer that finds
+      # no pair falls back to checksum-only with a warning, so dropping it
+      # early would quietly weaken verification.
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: "v2.6.4"
@@ -57,9 +62,10 @@ jobs:
       # release assets (release.extra_files in .goreleaser.yaml), where
       # `seamlessd update` fetches both and verifies with its compiled-in
       # sigstore-go verifier before piping the script to a shell (audit M3).
-      # The verify-blob calls re-check each bundle against the exact identity
-      # the daemon pins (the installers accept it too), so a format or identity
-      # regression fails the release here rather than on users' machines.
+      # The verify-blob calls re-check each bundle against the identity pattern
+      # the daemon pins (a v* tag of this repository's release workflow; the
+      # installers accept it too), so a format or identity regression fails
+      # the release here rather than on users' machines.
       - name: Sign installer scripts (keyless)
         run: |
           mkdir -p sigs
@@ -84,3 +90,53 @@ jobs:
           # fine-grained PAT with contents:write on that single repo -- keep it
           # that narrow; this job builds what every user downloads.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      # Post-release verify. goreleaser signed checksums.txt twice (the two
+      # `signs:` entries in .goreleaser.yaml); fetch it and both signatures
+      # back from the published release, by the URLs and names verifiers
+      # download, and check each against THIS tag's exact signing identity
+      # (repository, workflow file and ref compared whole, unlike the v*
+      # pattern above), so a signed checksums.txt from any other release
+      # fails. It also fails on a signature missing from the release, or one
+      # over the wrong bytes: the two entries run concurrently, and each
+      # rewrites checksums.txt (same bytes) just before it signs.
+      #
+      # This runs after goreleaser has published the release (and, for a
+      # non-prerelease tag, pushed the cask), so a red result cannot stop the
+      # release. Rule out a network failure first -- the same two cosign
+      # commands give the same verdict from any machine -- then pull the
+      # release: mark it prerelease, which is the yank (the update check and
+      # /releases/latest both skip prereleases), revert the cask commit in
+      # arctop/homebrew-tap, then fix the cause and cut a new patch tag.
+      - name: Verify published checksums signatures (exact tag identity)
+        env:
+          # The ref reaches the script through env:, never as an expression
+          # inside run:, so no tag text is spliced into shell source.
+          TAG_REF: ${{ github.ref }}
+        run: |
+          case "$TAG_REF" in
+            refs/tags/v*) ;;
+            *) echo "::error::release verify needs a v* tag ref, got $TAG_REF"; exit 1 ;;
+          esac
+          # The identity is spelled out, not derived from the repository that
+          # ran this: it is the signer verifiers pin. The download base is the
+          # release this run just published.
+          identity="https://github.com/arctop/seamless/.github/workflows/release.yml@$TAG_REF"
+          issuer=https://token.actions.githubusercontent.com
+          base="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/${TAG_REF#refs/tags/}"
+          dir="$RUNNER_TEMP/published"
+          mkdir -p "$dir"
+          for asset in checksums.txt checksums.txt.sigstore.json checksums.txt.sig checksums.txt.pem; do
+            curl -fsSL --retry 5 --retry-all-errors -o "$dir/$asset" "$base/$asset"
+          done
+          cosign verify-blob \
+            --bundle "$dir/checksums.txt.sigstore.json" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" \
+            "$dir/checksums.txt"
+          cosign verify-blob \
+            --signature "$dir/checksums.txt.sig" \
+            --certificate "$dir/checksums.txt.pem" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" \
+            "$dir/checksums.txt"

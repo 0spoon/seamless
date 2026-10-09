@@ -97,19 +97,56 @@ checksum:
 # secret, rotate, or leak -- which is the whole reason to prefer it here, since
 # the alternative is a single maintainer holding a long-lived key.
 #
+# Two entries sign it -- two independent keyless signatures, one per format --
+# because two kinds of verifier read it. goreleaser uploads every file an
+# entry names in signature: or certificate: as a release asset.
+#
+#   checksum-detached: checksums.txt.sig + checksums.txt.pem, the pair
+#     docs/install and docs/install.ps1 hand to `cosign verify-blob`. Never
+#     rename either: an installer that cannot fetch the pair takes the release
+#     for one that predates signing and falls back to checksum-only with a
+#     warning instead of failing. cosign v3 deprecates these outputs and by
+#     default writes only a bundle, which is why release.yml pins v2.
+#   checksum-bundle: checksums.txt.sigstore.json, a Sigstore bundle
+#     (certificate, signature and Rekor entry in one file) for in-process
+#     sigstore-go verification against this tag's EXACT identity, so an older
+#     release's signed checksums.txt cannot pass as this one's. The certificate
+#     rides inside the bundle, so this entry sets no certificate, and its
+#     signature names the bundle file: the ${artifact}.sig default would land
+#     on the detached entry's signature. --new-bundle-format=true is
+#     load-bearing: without it cosign v2 writes its legacy bundle JSON, which
+#     sigstore-go cannot read.
+#
+# Every release from now on ships both: updating to a release, or rolling back
+# to it, needs its bundle. release.yml re-verifies both from the published
+# release once goreleaser exits.
+#
 # Requires `id-token: write` on the release job and the cosign binary; both are
 # wired in .github/workflows/release.yml. Local `make release-snapshot` passes
 # --skip=sign, because keyless signing off a CI runner would try to open a
 # browser for an interactive OIDC flow.
 signs:
-  - cmd: cosign
+  - id: checksum-detached
+    cmd: cosign
     artifacts: checksum
+    signature: "${artifact}.sig"
     certificate: "${artifact}.pem"
     output: true
     args:
       - sign-blob
       - "--output-certificate=${certificate}"
       - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+  - id: checksum-bundle
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    output: true
+    args:
+      - sign-blob
+      - "--new-bundle-format=true"
+      - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
 
@@ -126,6 +163,15 @@ release:
     - glob: docs/install.ps1
     - glob: sigs/install.sigstore.json
     - glob: sigs/install.ps1.sigstore.json
+  # A tag with a semver prerelease suffix (v0.7.0-rc.1) publishes as a GitHub
+  # prerelease; a plain vX.Y.Z publishes as a normal release. The update check
+  # skips prereleases, and GitHub's /releases/latest (what both installers
+  # resolve when no SEAMLESS_VERSION is pinned) never points at one, so a
+  # release candidate reaches only someone who pins it. The same flag is the
+  # bad-release lever: marking a published release prerelease by hand pulls it
+  # from both (the yank). The Homebrew cask is a separate push and has to be
+  # reverted in the tap.
+  prerelease: auto
 
 # Homebrew tap: `brew install arctop/tap/seamless`. Each release pushes a
 # regenerated cask to arctop/homebrew-tap, which also gives the project an
@@ -146,6 +192,9 @@ homebrew_casks:
     homepage: https://thereisnospoon.org
     description: "Local-first shared memory and task coordination for AI coding agents. One Go binary, MCP server, markdown files you own. Hooks for Claude Code and Codex CLI (and their desktop apps)."
     commit_msg_template: "seamless {{ .Tag }}"
+    # Same test as release.prerelease: auto. A prerelease tag leaves the tap
+    # alone, so `brew upgrade` never moves anyone onto a release candidate.
+    skip_upload: auto
     binaries:
       - seamlessd
       - seam
