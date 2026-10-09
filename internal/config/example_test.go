@@ -36,10 +36,23 @@ func TestExampleConfigLoads(t *testing.T) {
 	cfg, err := LoadFrom(path)
 	require.NoError(t, err)
 
-	// The update block: check_interval is spelled out at its default, and check
-	// is only a comment, so it is unset exactly as the default is.
+	// The update block: check_interval, max_defer and min_age are spelled out
+	// at their defaults, and check and auto are only comments, so each is
+	// unset exactly as its default is. Every key and its env override is
+	// written out, set or not.
 	require.Equal(t, Defaults().Update, cfg.Update)
 	require.Nil(t, cfg.Update.Check, "check is commented out in the example: unset, the build decides")
+	require.Nil(t, cfg.Update.Auto, "auto is commented out in the example: unset, which means on")
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	for _, line := range []string{
+		"  # check: false\n", "  check_interval: 6h\n", "  # auto: false\n", "  max_defer: 24h\n", "  min_age: 24h\n",
+		"  # env: SEAMLESS_UPDATE_CHECK\n", "  # env: SEAMLESS_UPDATE_CHECK_INTERVAL\n", "  # env: SEAMLESS_UPDATE_AUTO\n",
+		"  # env: SEAMLESS_UPDATE_MAX_DEFER\n", "  # env: SEAMLESS_UPDATE_MIN_AGE\n",
+	} {
+		require.Contains(t, text, line)
+	}
 
 	// Every other key is at its default too, modulo what loading legitimately
 	// does to a default: data_dir's leading ~ expands, and the example's

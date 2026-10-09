@@ -130,7 +130,7 @@ func TestGenerateConfigCoversExample(t *testing.T) {
 		"llm.provider", "llm.openai.chat_model", "llm.ollama.base_url", "llm.anthropic.chat_model",
 		"gardener.enabled", "gardener.session_idle_minutes",
 		"capture.allowed_ports", "plan_capture.enabled",
-		"update.check", "update.check_interval",
+		"update.check", "update.check_interval", "update.auto", "update.max_defer", "update.min_age",
 	} {
 		require.Contains(t, md, "| `"+key+"` |", "key %s is missing from the table", key)
 	}
@@ -142,6 +142,9 @@ func TestGenerateConfigCoversExample(t *testing.T) {
 		"an optional key's unset default is a state of its own, not a missing default")
 	require.Contains(t, md, "| `update.check_interval` | duration | `6h` |",
 		"a duration reads as it is written, not as a config.Duration of nanoseconds")
+	require.Contains(t, md, "| `update.auto` | bool, optional | unset |", "unset auto is on, which the docs prose says")
+	require.Contains(t, md, "| `update.max_defer` | duration | `24h` |")
+	require.Contains(t, md, "| `update.min_age` | duration | `24h` |")
 	require.Contains(t, md, "```yaml", "the example file ships verbatim")
 	require.NotContains(t, md, "| `sourcePath` |", "unexported bookkeeping is not a config key")
 }

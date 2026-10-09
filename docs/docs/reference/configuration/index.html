@@ -649,6 +649,21 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 <td>duration</td>
 <td><code>6h</code></td>
 </tr>
+<tr>
+<td><code>update.auto</code></td>
+<td>bool, optional</td>
+<td>unset</td>
+</tr>
+<tr>
+<td><code>update.max_defer</code></td>
+<td>duration</td>
+<td><code>24h</code></td>
+</tr>
+<tr>
+<td><code>update.min_age</code></td>
+<td>duration</td>
+<td><code>24h</code></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -959,21 +974,40 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_PLAN_CAPTURE_INJECT_RELATED</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">inject_related</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># Update check. The daemon asks GitHub&#39;s releases API whether a newer Seamless</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># release exists -- one anonymous request that carries no identifiers -- and</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># tells you when one does. Nothing is installed automatically.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># Update check and automatic updates. The daemon asks GitHub&#39;s releases API</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># whether a newer Seamless release exists -- one anonymous request that carries</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># no identifiers -- and tells you when one does. auto, max_defer and min_age</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># decide whether and when it also installs one by itself, which only an install</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># the curl or PowerShell installer made ever does: Homebrew, builds from source,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># client machines and layouts the daemon cannot vouch for are only told.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">update</span><span class="p">:</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Unset (the default) means on for release builds and off for builds from</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># source. false means zero update traffic: no request to GitHub at all. The</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># key is left commented out because seamlessd releases before this one reject</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># config keys they do not know, so setting it pins this file to this release</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># or newer.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># source. false means zero update traffic: no request to GitHub at all, and so</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># no automatic update either. The key is left commented out because seamlessd</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># releases before this one reject config keys they do not know, so setting it</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># pins this file to this release or newer.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_UPDATE_CHECK</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># check: false</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Time between checks, as a Go duration (6h, 90m, 1h30m) from 1h to 720h. A</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># bare number is refused rather than guessed at: write 6h, not 6.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_UPDATE_CHECK_INTERVAL</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">check_interval</span><span class="p">:</span><span class="w"> </span><span class="l">6h</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Whether the daemon installs a newer release by itself. Unset (the default)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># means on. false keeps the check and its notices and leaves installing to you</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># (seamlessd update); a false here or in the environment is final, and the</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># console cannot turn it back on. Commented out for the same reason as check.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_UPDATE_AUTO</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># auto: false</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># How long a pending automatic update waits for a quiet daemon -- no live</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># agent session, no request in flight -- before it takes the next lull in</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># requests instead. A Go duration from 1m to 720h.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_UPDATE_MAX_DEFER</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">max_defer</span><span class="p">:</span><span class="w"> </span><span class="l">24h</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># How long a release must have been out before an automatic update takes it,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># so a bad one can be pulled first. A Go duration from 0 (no wait) to 720h.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Installing by hand (seamlessd update) does not wait.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_UPDATE_MIN_AGE</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">min_age</span><span class="p">:</span><span class="w"> </span><span class="l">24h</span><span class="w">
 </span></span></span></code></pre></div>
 
 </article>

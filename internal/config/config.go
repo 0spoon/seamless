@@ -548,8 +548,13 @@ func Defaults() Config {
 		},
 		Capture:     Capture{AllowedPorts: defaultAllowedPorts()},
 		PlanCapture: PlanCapture{Enabled: true, AutoTask: true, InjectRelated: true},
-		// Check stays nil: unset means the build decides (internal/update).
-		Update: Update{CheckInterval: Duration(DefaultUpdateCheckInterval)},
+		// Check and Auto stay nil: unset check means the build decides, unset
+		// auto means on (internal/update).
+		Update: Update{
+			CheckInterval: Duration(DefaultUpdateCheckInterval),
+			MaxDefer:      Duration(DefaultUpdateMaxDefer),
+			MinAge:        Duration(DefaultUpdateMinAge),
+		},
 	}
 }
 
@@ -645,10 +650,10 @@ func LoadFrom(path string) (Config, error) {
 // Config key gives null a meaning: a null scalar decoded over Defaults can
 // otherwise preserve or erase a value depending on its Go type, making a
 // present value indistinguishable from absence. That includes the optional
-// pointer keys (update.check): leaving the key out is how they say "unset", so
-// a null would only be a second spelling of it. Syntax, duplicate-key, and
-// trailing-document errors are left to the strict concrete decode below so
-// diagnostics stay canonical.
+// pointer keys (update.check, update.auto): leaving the key out is how they
+// say "unset", so a null would only be a second spelling of it. Syntax,
+// duplicate-key, and trailing-document errors are left to the strict concrete
+// decode below so diagnostics stay canonical.
 func explicitNullPath(data []byte) string {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	var doc yaml.Node
@@ -923,6 +928,15 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	if err := envDuration("SEAMLESS_UPDATE_CHECK_INTERVAL", &c.Update.CheckInterval); err != nil {
+		return err
+	}
+	if err := envBoolPtr("SEAMLESS_UPDATE_AUTO", &c.Update.Auto); err != nil {
+		return err
+	}
+	if err := envDuration("SEAMLESS_UPDATE_MAX_DEFER", &c.Update.MaxDefer); err != nil {
+		return err
+	}
+	if err := envDuration("SEAMLESS_UPDATE_MIN_AGE", &c.Update.MinAge); err != nil {
 		return err
 	}
 	return nil
