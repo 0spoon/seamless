@@ -5,22 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/arctop/seamless/internal/update"
 	"github.com/stretchr/testify/require"
 )
-
-func TestRequireHTTPS(t *testing.T) {
-	require.NoError(t, requireHTTPS("https://thereisnospoon.org/install"))
-	require.NoError(t, requireHTTPS("HTTPS://thereisnospoon.org/install"))
-
-	for _, bad := range []string{
-		"http://thereisnospoon.org/install",
-		"file:///tmp/evil.sh",
-		"ftp://example.com/install",
-		"//thereisnospoon.org/install", // scheme-relative: no scheme at all
-	} {
-		require.Error(t, requireHTTPS(bad), "must refuse %s", bad)
-	}
-}
 
 // fetchInstaller feeds a shell, so it must refuse a plain-http --url outright
 // rather than trusting the operator typed it deliberately.
@@ -51,7 +38,7 @@ func TestFetchInstaller_RefusesHTTPSToHTTPDowngrade(t *testing.T) {
 	// The server's own client trusts its throwaway cert, so TLS verification
 	// cannot be what fails here -- the redirect guard has to be.
 	client := secure.Client()
-	client.CheckRedirect = httpsOnlyRedirect
+	client.CheckRedirect = update.HTTPSOnlyRedirect
 
 	body, err := fetchInstallerWith(client, secure.URL)
 	require.Error(t, err)

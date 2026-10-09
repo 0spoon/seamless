@@ -39,6 +39,7 @@ import (
 	"github.com/arctop/seamless/internal/a2a"
 	"github.com/arctop/seamless/internal/config"
 	"github.com/arctop/seamless/internal/console"
+	"github.com/arctop/seamless/internal/core"
 	"github.com/arctop/seamless/internal/events"
 	"github.com/arctop/seamless/internal/files"
 	"github.com/arctop/seamless/internal/gardener"
@@ -47,6 +48,7 @@ import (
 	"github.com/arctop/seamless/internal/mcp"
 	"github.com/arctop/seamless/internal/retrieve"
 	"github.com/arctop/seamless/internal/store"
+	"github.com/arctop/seamless/internal/update"
 )
 
 // version is the seamlessd build version, injected from the git tag at build
@@ -132,7 +134,7 @@ func main() {
 	case "status":
 		err = runServiceAction(actionStatus, args)
 	case "version", "-v", "--version":
-		fmt.Printf("seamlessd %s (commit %s, built %s)\n", version, commit, buildDate)
+		fmt.Printf("seamlessd %s (commit %s, built %s, %s build)\n", version, commit, buildDate, distribution)
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -306,6 +308,19 @@ func runServe(args []string) error {
 	rec := events.NewRecorder(db)
 	rec.SetFeatures(cfg.Features) // arms the momentum milestone layer
 
+	// One id per process, served by /healthz and kept in the update state: it
+	// tells this daemon apart from another answering on the same port, and
+	// from the one it replaced.
+	instance, err := core.NewID()
+	if err != nil {
+		return fmt.Errorf("seamlessd.serve: instance id: %w", err)
+	}
+	// The background update check (internal/update): built here, started only
+	// once the listener is bound, so a daemon that cannot bind never records
+	// itself as running. The briefing asks it for the update notice.
+	upd := newUpdateChecker(cfg, db, rec, instance, logger)
+	ret.SetUpdateNotice(upd.Notice)
+
 	// Gardener: propose-only maintenance, exposed to the gardener_apply MCP tool
 	// and run on a ticker. The chat client (for digests) is best-effort; without
 	// it the digest pass simply no-ops.
@@ -363,9 +378,12 @@ func runServe(args []string) error {
 		Features: cfg.Features,
 		// The file/env console level base, layered the same way. Presentation
 		// only: nothing an agent receives reads it.
-		Level:          cfg.Console.Level,
-		Version:        buildVersion(),
-		Embedding:      embedRT,
+		Level:     cfg.Console.Level,
+		Version:   buildVersion(),
+		Embedding: embedRT,
+		// The background update check backs Settings -> Updates, the Home
+		// version fact and the "updated" banner.
+		Updates:        upd,
 		SessionIdleTTL: time.Duration(cfg.Gardener.SessionIdleMinutes) * time.Minute,
 		// Secure only under TLS: a browser drops a Secure cookie arriving over
 		// http, so setting it unconditionally would lock the owner out of the
@@ -391,7 +409,7 @@ func runServe(args []string) error {
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/console/", http.StatusFound)
 	})
-	mux.HandleFunc("/healthz", healthzHandler(db))
+	mux.HandleFunc("/healthz", healthzHandler(db, instance, upd.Status))
 	mux.Handle("/api/mcp", mcpSrv.Handler())
 	mux.Handle("/api/a2a", a2aSrv.Handler())
 	// The agent card is public discovery metadata (RFC 8615); the endpoint it
@@ -409,19 +427,41 @@ func runServe(args []string) error {
 	if tlsOn {
 		// TLS 1.2 floor: everything below it is either broken or obsolete, and
 		// nothing that speaks to this daemon (Go, curl, a browser) needs it.
-		srv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+		// The key pair loads here, before the bind, so an unusable certificate
+		// fails the start outright instead of after the update check has
+		// recorded this process as the running daemon.
+		pair, perr := tls.LoadX509KeyPair(cfg.TLS.CertFile, cfg.TLS.KeyFile)
+		if perr != nil {
+			stop()
+			garden.Wait()
+			return fmt.Errorf("seamlessd.serve: load TLS key pair: %w", perr)
+		}
+		srv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{pair}}
 	}
 	warnNonLoopbackBind(bind, tlsOn)
 	warnAdvertisedLoopback(bind, serverURL)
+
+	// Bind first, then start the update check, then serve: the check writes
+	// "this process is the running daemon" into the update state, which must
+	// never describe a daemon that lost the port (another instance holds it).
+	ln, err := net.Listen("tcp", bind)
+	if err != nil {
+		stop() // stop background work (gardener, watcher ctx) on the error path too
+		garden.Wait()
+		return fmt.Errorf("seamlessd.serve: %w", err)
+	}
+	upd.Start(ctx)
 
 	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("seamlessd listening", "addr", bind, "url", serverURL, "tls", tlsOn,
 			"data_dir", cfg.DataDir,
-			"version", buildVersion(), "commit", commit, "built", buildDate, "mcp_tools", mcp.ToolCount)
-		serve := srv.ListenAndServe
+			"version", buildVersion(), "commit", commit, "built", buildDate, "mcp_tools", mcp.ToolCount,
+			"distribution", distribution, "instance", instance)
+		serve := func() error { return srv.Serve(ln) }
 		if tlsOn {
-			serve = func() error { return srv.ListenAndServeTLS(cfg.TLS.CertFile, cfg.TLS.KeyFile) }
+			// The certificate is already in srv.TLSConfig, so no file names.
+			serve = func() error { return srv.ServeTLS(ln, "", "") }
 		}
 		if err := serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
@@ -434,21 +474,24 @@ func runServe(args []string) error {
 	case err := <-errCh:
 		stop() // stop background work (gardener, watcher ctx) on the error path too
 		garden.Wait()
+		upd.Wait()
 		return fmt.Errorf("seamlessd.serve: %w", err)
 	}
 
-	// Drain order: cancel ctx (stops the gardener loop and unblocks long-lived
-	// request streams via the server's base context), shut the listener down,
-	// then wait for the gardener so no pass still touches the DB when the
-	// deferred mgr.Close/db.Close run.
+	// Drain order: cancel ctx (stops the gardener and update loops and
+	// unblocks long-lived request streams via the server's base context), shut
+	// the listener down, then wait for both loops so nothing still touches the
+	// DB when the deferred mgr.Close/db.Close run.
 	stop()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		garden.Wait()
+		upd.Wait()
 		return fmt.Errorf("seamlessd.serve: shutdown: %w", err)
 	}
 	garden.Wait()
+	upd.Wait()
 	slog.Info("seamlessd stopped")
 	return nil
 }
@@ -516,19 +559,24 @@ func newHTTPServer(ctx context.Context, bind string, h http.Handler) *http.Serve
 	}
 }
 
-// healthzHandler reports liveness plus a database ping.
-func healthzHandler(db *sql.DB) http.HandlerFunc {
+// healthzHandler reports liveness plus a database ping, the build, this
+// process's instance id, and -- when updates is set and its check found one --
+// the newest release (healthzBody).
+func healthzHandler(db *sql.DB, instance string, updates func() update.Status) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		status, code := "ok", http.StatusOK
 		if err := db.PingContext(r.Context()); err != nil {
 			status, code = "degraded", http.StatusServiceUnavailable
 			slog.Warn("healthz: db ping failed", "err", err)
 		}
+		var st *update.Status
+		if updates != nil {
+			s := updates()
+			st = &s
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(code)
-		if err := json.NewEncoder(w).Encode(map[string]string{
-			"status": status, "version": buildVersion(), "commit": commit, "built": buildDate,
-		}); err != nil {
+		if err := json.NewEncoder(w).Encode(healthzBody(status, instance, st)); err != nil {
 			slog.Warn("healthz: encode response", "err", err)
 		}
 	}

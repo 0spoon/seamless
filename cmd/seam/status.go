@@ -58,6 +58,9 @@ func runStatus(ctx context.Context, e *env, _ *noOpts, _ []string) error {
 	} else {
 		fmt.Fprintf(e.stdout, "server:   %s (%s)\n", str(hz["status"]), base)
 		fmt.Fprintf(e.stdout, "version:  %s\n", str(hz["version"]))
+		if line := updateAvailableLine(hz); line != "" {
+			fmt.Fprintf(e.stdout, "update:   %s\n", strings.TrimPrefix(line, "update available: "))
+		}
 	}
 	// A client install writes nothing here: no database, no corpus, no data dir.
 	// The value would still be non-empty (config.Defaults supplies ~/.seamless

@@ -151,3 +151,14 @@ func TestStatus_TakesNoArguments(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "takes no positional arguments")
 }
+
+func TestStatus_UpdateAvailableLine(t *testing.T) {
+	e, out, _ := healthzOnly(t, `{"status":"ok","version":"0.7.2+cafe123","update_available":"0.7.3"}`)
+	_ = dispatch(context.Background(), e, []string{"status"})
+	require.Contains(t, out.String(),
+		"version:  0.7.2+cafe123\nupdate:   v0.7.3 (seamlessd update --check on the daemon's machine shows how to update)\n")
+
+	e, out, _ = healthzOnly(t, `{"status":"ok","version":"0.7.2+cafe123"}`)
+	_ = dispatch(context.Background(), e, []string{"status"})
+	require.NotContains(t, out.String(), "update:")
+}

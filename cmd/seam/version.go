@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/arctop/seamless/internal/update"
 )
 
 var versionCmd = spec("version", groupObservability, "the running daemon's version",
@@ -14,7 +16,7 @@ var versionCmd = spec("version", groupObservability, "the running daemon's versi
 	withLong(`Prints the version of the daemon this CLI is configured to talk to, in
 the same form as ` + "`seamlessd version`" + `:
 
-    seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z)
+    seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z, release build)
 
 seam carries no version of its own. Both binaries ship from one tag and one
 commit, so a number stamped into seam could only repeat this one or contradict
@@ -54,9 +56,32 @@ func runVersion(_ context.Context, e *env, _ *noOpts, _ []string) error {
 		return fmt.Errorf("unreadable health response from %s: %w", base, derr)
 	}
 
-	fmt.Fprintf(e.stdout, "seamlessd %s (commit %s, built %s)\n",
-		versionOf(str(hz["version"])), str(hz["commit"]), str(hz["built"]))
+	// A daemon new enough to report its distribution gets it in the line, as
+	// `seamlessd version` prints it; an older one is printed as it always was.
+	build := ""
+	if d := str(hz["distribution"]); d == update.DistributionRelease || d == update.DistributionSource {
+		build = ", " + d + " build"
+	}
+	fmt.Fprintf(e.stdout, "seamlessd %s (commit %s, built %s%s)\n",
+		versionOf(str(hz["version"])), str(hz["commit"]), str(hz["built"]), build)
+	if line := updateAvailableLine(hz); line != "" {
+		fmt.Fprintln(e.stdout, line)
+	}
 	return nil
+}
+
+// updateAvailableLine is the one extra line version and status print when the
+// daemon's background check has seen a newer release (/healthz
+// "update_available"), or "" when it has not. The value is printed only once it
+// parses as a release version: the line is for the owner, and the daemon is
+// the one machine that knows how it was installed, so the line sends them
+// there instead of guessing a command.
+func updateAvailableLine(hz map[string]any) string {
+	v, ok := update.Parse(str(hz["update_available"]))
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("update available: v%s (seamlessd update --check on the daemon's machine shows how to update)", v)
 }
 
 // versionOf strips the "+commit" suffix from the daemon's buildVersion, since

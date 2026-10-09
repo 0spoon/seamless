@@ -59,3 +59,41 @@ func TestVersionOf(t *testing.T) {
 	require.Equal(t, "0.0.0-dev", versionOf("0.0.0-dev"))
 	require.Equal(t, "", versionOf(""))
 }
+
+// A daemon whose background check saw a newer release says so on a second
+// line; one that did not (or a value that is not a release version) adds none.
+func TestVersion_UpdateAvailableLine(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"available", `{"status":"ok","version":"0.7.2+cafe123","commit":"cafe123","built":"b","update_available":"0.7.3"}`,
+			"seamlessd 0.7.2 (commit cafe123, built b)\nupdate available: v0.7.3 (seamlessd update --check on the daemon's machine shows how to update)\n"},
+		{"absent", `{"status":"ok","version":"0.7.2+cafe123","commit":"cafe123","built":"b"}`,
+			"seamlessd 0.7.2 (commit cafe123, built b)\n"},
+		{"not a version", `{"status":"ok","version":"0.7.2+cafe123","commit":"cafe123","built":"b","update_available":"run rm -rf"}`,
+			"seamlessd 0.7.2 (commit cafe123, built b)\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e, out, _ := healthzOnly(t, tt.body)
+			require.Equal(t, 0, dispatch(context.Background(), e, []string{"version"}))
+			require.Equal(t, tt.want, out.String())
+		})
+	}
+}
+
+// The daemon's distribution joins the line the way `seamlessd version` prints
+// it; anything but the two known values is left out rather than echoed.
+func TestVersion_PrintsTheDistribution(t *testing.T) {
+	for body, want := range map[string]string{
+		`{"version":"0.7.2+c","commit":"c","built":"b","distribution":"release"}`: "seamlessd 0.7.2 (commit c, built b, release build)\n",
+		`{"version":"0.7.2+c","commit":"c","built":"b","distribution":"source"}`:  "seamlessd 0.7.2 (commit c, built b, source build)\n",
+		`{"version":"0.7.2+c","commit":"c","built":"b","distribution":"pwned"}`:   "seamlessd 0.7.2 (commit c, built b)\n",
+	} {
+		e, out, _ := healthzOnly(t, body)
+		require.Equal(t, 0, dispatch(context.Background(), e, []string{"version"}))
+		require.Equal(t, want, out.String())
+	}
+}

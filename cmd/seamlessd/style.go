@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -49,7 +50,12 @@ const fieldLabelWidth = 7
 // fieldRow prints one aligned "  label  value" row under a block header. The
 // label is padded to fieldLabelWidth so values line up across blocks.
 func fieldRow(name, value string) {
-	fmt.Printf("  %s  %s\n", dim(fmt.Sprintf("%-*s", fieldLabelWidth, name)), value)
+	fieldRowTo(os.Stdout, name, value)
+}
+
+// fieldRowTo is fieldRow to an explicit writer, for output a test captures.
+func fieldRowTo(w io.Writer, name, value string) {
+	fmt.Fprintf(w, "  %s  %s\n", dim(fmt.Sprintf("%-*s", fieldLabelWidth, name)), value)
 }
 
 // fieldCont is the width of the fieldRow prefix (2 indent + label + 2 gap), so a

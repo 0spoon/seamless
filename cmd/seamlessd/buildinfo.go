@@ -12,7 +12,19 @@ package main
 import (
 	"runtime/debug"
 	"strings"
+
+	"github.com/arctop/seamless/internal/update"
 )
+
+// distribution names the pipeline that produced this binary. Only
+// .goreleaser.yaml stamps it "release" (-X main.distribution=release, on
+// seamlessd alone); every other build -- make install, go install, go build,
+// CI, the fixtures and seambench arms -- keeps "source". The background update
+// check keys on it: a source build never asks GitHub unless its owner sets
+// update.check: true, never writes update state, and is never updated
+// unattended (constraint dev-and-fixture-daemons-never-self-update). Do not
+// stamp it anywhere else; buildinfo_test.go fails if a build script does.
+var distribution = update.DistributionSource
 
 // The in-source values of version, commit and buildDate. main.go initializes
 // the variables from these constants (which -X still overrides) so the
@@ -63,7 +75,7 @@ func applyBuildInfo() {
 //   - version is Main.Version minus the leading "v" ("v0.6.0" -> "0.6.0"); "(devel)"
 //     (go test, -buildvcs=false) and "" keep 0.0.0-dev. A pseudo-version from an
 //     untagged commit is kept: it is the toolchain's own name for that commit,
-//     and update's parseVersion rejects its "-" as not a published release. Any
+//     and update.Parse rejects its "-" as not a published release. Any
 //     "+..." build suffix is dropped, because buildVersion appends "+commit" and
 //     seam's `version` cuts the daemon's version at the first "+".
 //   - a modified checkout (vcs.modified=true) appends "-dirty" to that version,

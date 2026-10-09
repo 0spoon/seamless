@@ -21,11 +21,17 @@ builds:
     goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
+    # main.distribution=release is stamped HERE AND NOWHERE ELSE: it is what
+    # marks a binary as a published release to the background update check,
+    # which only then checks GitHub by default, keeps update state, and (in a
+    # later phase) may update itself. make install, go install, CI and the
+    # fixtures stay "source" (constraint dev-and-fixture-daemons-never-self-update).
     ldflags:
       - -s -w
       - -X main.version={{ .Version }}
       - -X main.commit={{ .ShortCommit }}
       - -X main.buildDate={{ .Date }}
+      - -X main.distribution=release
     mod_timestamp: "{{ .CommitTimestamp }}"
 
   # seam has no link-time metadata: both binaries ship from one tag and one

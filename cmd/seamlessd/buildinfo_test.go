@@ -1,9 +1,13 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"testing"
 
+	"github.com/arctop/seamless/internal/update"
 	"github.com/stretchr/testify/require"
 )
 
@@ -162,7 +166,7 @@ func TestResolveBuildMeta_UpdateCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := resolveBuildMeta(unstampedMeta, tt.info)
-			cmp, ok := compareReleases(m.version, latest)
+			cmp, ok := update.Compare(m.version, latest)
 			require.Equal(t, tt.wantOK, ok, "version %q", m.version)
 			require.Equal(t, tt.wantCmp, cmp)
 		})
@@ -176,5 +180,34 @@ func TestResolveBuildMeta_NoPlusInVersion(t *testing.T) {
 	for _, mv := range []string{"v0.6.0+dirty", "v0.6.1-0.20261009043312-2d3e1be73770+dirty", "v2.0.0+incompatible"} {
 		m := resolveBuildMeta(unstampedMeta, gitBuildInfo(mv, true))
 		require.NotContains(t, m.version, "+", mv)
+	}
+}
+
+// TestDistributionDefaultsToSource: an unstamped build (go test, go build,
+// make install) is a source build, which keeps the background update check
+// off GitHub and out of the data dir (constraint
+// dev-and-fixture-daemons-never-self-update).
+func TestDistributionDefaultsToSource(t *testing.T) {
+	require.Equal(t, update.DistributionSource, distribution)
+}
+
+// TestOnlyGoreleaserStampsRelease guards the same constraint from the other
+// side: the release pipeline is the one build that stamps
+// main.distribution, and no other script that links seamlessd may.
+func TestOnlyGoreleaserStampsRelease(t *testing.T) {
+	root := filepath.Join("..", "..")
+	gr, err := os.ReadFile(filepath.Join(root, ".goreleaser.yaml"))
+	require.NoError(t, err)
+	require.Equal(t, 1, strings.Count(string(gr), "-X main.distribution=release"))
+
+	for _, f := range []string{
+		"Makefile",
+		filepath.Join("deploy", "glama", "build.sh"),
+		filepath.Join("deploy", "glama", "Dockerfile"),
+		filepath.Join("scripts", "fixture", "harness.sh"),
+	} {
+		b, err := os.ReadFile(filepath.Join(root, f))
+		require.NoError(t, err, f)
+		require.NotContains(t, string(b), "main.distribution", "%s must not stamp the release distribution", f)
 	}
 }

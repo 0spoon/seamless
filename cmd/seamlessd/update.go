@@ -2,19 +2,21 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
-	neturl "net/url"
 	"os"
 	"os/exec"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/store"
+	"github.com/arctop/seamless/internal/update"
 )
 
 // Canonical installer delivery. The release-fetch + checksum + binary-swap +
@@ -30,11 +32,9 @@ import (
 // install logic: after verification it runs the same script a fresh install
 // runs, so there is ONE upgrade implementation to keep correct.
 const (
-	// githubRepo is where releases live; the installer scripts hardcode the same
-	// "arctop/seamless". Also used by --check to read the latest release tag.
-	githubRepo = "arctop/seamless"
-	// releaseDownloadBase resolves to the newest published release's assets.
-	releaseDownloadBase = "https://github.com/" + githubRepo + "/releases/latest/download"
+	// releaseDownloadBase resolves to GitHub's "latest" release's assets (the
+	// repository is update.Repo, which the installer scripts hardcode too).
+	releaseDownloadBase = "https://github.com/" + update.Repo + "/releases/latest/download"
 )
 
 // updatePlan is the OS-specific way to run the canonical installer: fetch URL
@@ -98,7 +98,7 @@ func installRunHint(goos, url string) string {
 // what would run without fetching or executing.
 func runUpdate(args []string) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
-	check := fs.Bool("check", false, "report installed vs latest release version and exit without changing anything")
+	check := fs.Bool("check", false, "report installed vs the newest release, and what the update check is doing, then exit without changing anything")
 	dryRun := fs.Bool("dry-run", false, "print what would run and exit without fetching or executing")
 	urlFlag := fs.String("url", "", "override the installer URL (default: the canonical thereisnospoon.org installer for this OS)")
 	if err := fs.Parse(args); err != nil {
@@ -106,7 +106,9 @@ func runUpdate(args []string) error {
 	}
 
 	if *check {
-		return reportUpdateCheck(os.Stdout)
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		return reportUpdateCheck(ctx, os.Stdout, update.NewFetcher(), runtime.GOOS, version, buildVersion(), cliUpdateView(ctx))
 	}
 
 	plan := updatePlanFor(runtime.GOOS)
@@ -181,8 +183,8 @@ func fetchInstaller(url string) (string, error) {
 // supply an httptest TLS server's client (which trusts its throwaway cert)
 // without loosening the scheme rules the real path enforces.
 func fetchInstallerWith(client *http.Client, url string) (string, error) {
-	if err := requireHTTPS(url); err != nil {
-		return "", err
+	if err := update.RequireHTTPS(url); err != nil {
+		return "", fmt.Errorf("the installer is piped to a shell: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -234,140 +236,77 @@ func missingAssetHint(err error) error {
 	return err
 }
 
-// requireHTTPS rejects a URL that would fetch shell-bound content over an
-// unauthenticated channel. Plain http means any router between here and the
-// host can rewrite the script that is about to run as this user.
-func requireHTTPS(raw string) error {
-	u, err := neturl.Parse(raw)
-	if err != nil {
-		return fmt.Errorf("invalid installer URL %q: %w", raw, err)
-	}
-	if !strings.EqualFold(u.Scheme, "https") {
-		return fmt.Errorf("refusing to fetch the installer over %q: %s is piped to a shell and must be https", u.Scheme, raw)
-	}
-	return nil
-}
-
 // httpsOnlyClient is http.DefaultClient with one difference: it refuses a
-// redirect that leaves https. Go's default follows a downgrade silently, so
-// without this the scheme check above only covers the first hop and a
-// compromised or misconfigured host could bounce the fetch to plaintext.
+// redirect that leaves https (update.HTTPSOnlyRedirect). Go's default follows a
+// downgrade silently, so without this the scheme check in fetchInstallerWith
+// only covers the first hop and a compromised or misconfigured host could
+// bounce the fetch to plaintext.
 func httpsOnlyClient() *http.Client {
-	return &http.Client{CheckRedirect: httpsOnlyRedirect}
+	return &http.Client{CheckRedirect: update.HTTPSOnlyRedirect}
 }
 
-// httpsOnlyRedirect is the CheckRedirect policy httpsOnlyClient installs, kept
-// separate so a test client can adopt the same rule.
-func httpsOnlyRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= 10 {
-		return fmt.Errorf("stopped after 10 redirects")
-	}
-	return requireHTTPS(req.URL.String())
-}
-
-// githubRelease is the sliver of the GitHub releases API that --check reads.
-type githubRelease struct {
-	TagName string `json:"tag_name"`
-}
-
-// reportUpdateCheck fetches the latest published release tag and compares it to
-// the running build, printing a one-line verdict. It changes nothing.
-func reportUpdateCheck(w io.Writer) error {
-	latest, err := latestReleaseTag(fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", githubRepo))
+// cliUpdateView is the update view `update --check` adds its mode and
+// last-check rows from, or nil when no config loads (the check itself still
+// runs). The database is opened read-only and only to read the console's
+// override: a newer CLI must never migrate a database an older daemon serves.
+func cliUpdateView(ctx context.Context) *updateView {
+	cfg, err := config.Load()
 	if err != nil {
+		return nil
+	}
+	var db *sql.DB
+	if !cfg.IsClient() {
+		if d, oerr := store.OpenExisting(cfg.DBPath()); oerr == nil {
+			db = d
+			defer func() { _ = db.Close() }()
+		}
+	}
+	v := loadUpdateView(ctx, cfg, db)
+	return &v
+}
+
+// reportUpdateCheck reads the release list and compares its newest
+// installable release for goos with the running build, printing a short
+// verdict. current is the bare version that is compared; display is what the
+// "current" row shows (it carries +commit). view, when set, adds what the
+// daemon's update check is doing (mode, last check). It changes nothing, and
+// it asks regardless of update.check: running it is the owner asking.
+//
+// "Newest" is the highest version the list holds once drafts, prereleases,
+// irregular tags and releases still uploading their assets are dropped
+// (update.Filter) -- not GitHub's "latest", which a backport can make an older
+// version (memory github-releases-latest-is-not-max-version).
+func reportUpdateCheck(ctx context.Context, w io.Writer, f *update.Fetcher, goos, current, display string, view *updateView) error {
+	page, err := f.Fetch(ctx, "")
+	if err != nil {
+		if errors.Is(err, update.ErrRateLimited) {
+			return fmt.Errorf("seamlessd.update: %w (try again later, or pin a version: SEAMLESS_VERSION=x.y.z seamlessd update)", err)
+		}
 		return fmt.Errorf("seamlessd.update: %w", err)
 	}
 
 	fmt.Fprintf(w, "\n%s %s\n", bold("Seamless"), dim("update --check"))
-	fieldRow("current", buildVersion())
-	fieldRow("latest", latest)
+	fieldRowTo(w, "current", display)
+	newest, ok := update.Newest(update.Filter(page.Releases, goos))
+	if !ok {
+		fieldRowTo(w, "newest", yellow("none")+dim(" -- no installable release for "+goos+" in the newest 20"))
+		return nil
+	}
+	fieldRowTo(w, "newest", "v"+newest.Version.String()+dim(" (published "+newest.PublishedAt.UTC().Format("2006-01-02")+")"))
 
-	// Compare on the base version; buildVersion() only adds +commit for display.
-	cmp, ok := compareReleases(version, latest)
+	cur, curOK := update.Parse(current)
 	switch {
-	case !ok:
-		fieldRow("status", yellow("development build")+dim(" -- 'seamlessd update' installs the latest release"))
-	case cmp < 0:
-		fieldRow("status", green("update available")+dim(" -- run 'seamlessd update' to upgrade"))
-	case cmp == 0:
-		fieldRow("status", dim("up to date"))
+	case !curOK:
+		fieldRowTo(w, "status", yellow("development build")+dim(" -- 'seamlessd update' installs the newest release"))
+	case cur.Compare(newest.Version) < 0:
+		fieldRowTo(w, "status", green("update available")+dim(" -- run 'seamlessd update' to upgrade"))
+	case cur.Compare(newest.Version) == 0:
+		fieldRowTo(w, "status", dim("up to date"))
 	default:
-		fieldRow("status", dim("ahead of the latest published release"))
+		fieldRowTo(w, "status", dim("ahead of the newest published release"))
+	}
+	if view != nil {
+		updateCheckRows(w, *view, time.Now())
 	}
 	return nil
-}
-
-// latestReleaseTag returns the tag_name of the repo's latest published release.
-func latestReleaseTag(url string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", fmt.Errorf("build request: %w", err)
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("query latest release: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("query latest release: unexpected status %s "+
-			"(GitHub API rate limit?); pin a version and run 'seamlessd update' instead", resp.Status)
-	}
-	var rel githubRelease
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&rel); err != nil {
-		return "", fmt.Errorf("decode latest release: %w", err)
-	}
-	tag := strings.TrimSpace(rel.TagName)
-	if tag == "" {
-		return "", fmt.Errorf("latest release has no tag_name")
-	}
-	return tag, nil
-}
-
-// compareReleases compares two versions by their numeric major.minor.patch,
-// returning -1/0/1 (a<b / a==b / a>b). ok is false when either side is not a
-// clean published release -- the 0.0.0-dev sentinel, a goreleaser snapshot, or
-// anything unparseable -- in which case the numeric result is meaningless.
-func compareReleases(a, b string) (int, bool) {
-	av, aok := parseVersion(a)
-	bv, bok := parseVersion(b)
-	if !aok || !bok {
-		return 0, false
-	}
-	for i := range 3 {
-		switch {
-		case av[i] < bv[i]:
-			return -1, true
-		case av[i] > bv[i]:
-			return 1, true
-		}
-	}
-	return 0, true
-}
-
-// parseVersion extracts [major, minor, patch] from a version string, tolerating a
-// leading "v". A pre-release ("-...") or build ("+...") suffix means this is not a
-// clean published release (the 0.0.0-dev sentinel, a 0.3.4-SNAPSHOT-<sha>
-// goreleaser build, an -rc), so it reports ok=false rather than compare a partial
-// number and call a dev build "up to date".
-func parseVersion(s string) ([3]int, bool) {
-	s = strings.TrimPrefix(strings.TrimSpace(s), "v")
-	if strings.ContainsAny(s, "+-") {
-		return [3]int{}, false
-	}
-	fields := strings.Split(s, ".")
-	if len(fields) != 3 {
-		return [3]int{}, false
-	}
-	var out [3]int
-	for i, f := range fields {
-		n, err := strconv.Atoi(f)
-		if err != nil {
-			return [3]int{}, false // zero array whenever ok is false
-		}
-		out[i] = n
-	}
-	return out, true
 }
