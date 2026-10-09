@@ -132,6 +132,8 @@ you want to see.
 
 ## Next steps
 
+- Try the [first prompts](https://thereisnospoon.org/docs/first-prompts/): plain requests that save a rule, a
+  note, or a plan, pull in what past sessions learned, and hand off at the end.
 - Run `/seam-onboard` in Claude Code or `$seam-onboard` in Codex once - it
   shows the Seamless-awareness block it can add to global or project
   instructions (`CLAUDE.md` or `AGENTS.md`) and edits only with your approval.

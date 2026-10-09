@@ -6,6 +6,7 @@
 
 - [What is Seamless?](https://thereisnospoon.org/docs/): A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one local daemon.
 - [Quickstart](https://thereisnospoon.org/docs/quickstart/): Install Seamless with one command, start Claude Code or Codex in a repo, and confirm the first briefing lands.
+- [First prompts to try](https://thereisnospoon.org/docs/first-prompts/): Requests to paste into Claude Code, Codex, or a Claude app chat right after installing - rules, notes, plans, imported history, recall, and handoffs.
 - [Claude Code setup](https://thereisnospoon.org/docs/claude-code/): Register the MCP endpoint, install the hooks that make sessions ambient, map your repos, and verify each step.
 - [Claude app chat setup](https://thereisnospoon.org/docs/claude-app/): Register the seam mcp-proxy bridge in claude_desktop_config.json, restart the app, and run the session loop explicitly - a chat has no hooks and no cwd.
 - [Codex local setup (app, CLI, and IDE)](https://thereisnospoon.org/docs/codex-cli/): Wire the shared local Codex host into Seamless - one app/CLI/IDE profile for hooks, the mcp-proxy tool bridge, skills, and reaper-driven session lifecycle.

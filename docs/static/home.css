@@ -1592,6 +1592,7 @@ svg { overflow: visible; }
 .ask-then { margin: 22px 0 10px; font-size: 15.5px; color: var(--muted); }
 .ask-note { margin: 16px 0 0; max-width: 660px; font-size: 15.5px; line-height: 1.6; color: var(--muted); }
 .ask-note code { font-size: 0.82em; }
+.asks-more { margin: 32px 0 0; }
 .term-bar .term-tag { flex: none; margin-left: auto; font-size: 11px; color: var(--term-faint); }
 .t-sep { margin: 12px 0 10px !important; padding-top: 10px; border-top: 1px dashed var(--term-line); color: var(--term-faint); }
 .t-say { color: var(--term-ink); }

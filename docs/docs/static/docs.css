@@ -420,6 +420,10 @@ a.nav-head.current { color: var(--accent); }
 .prose .code-block:not([data-lang])::before,
 .prose .code-block[data-lang="text"]::before { content: none; }
 .prose .code-block[data-lang]:not([data-lang="text"]) pre { padding-top: 34px; }
+/* `prompt` fences hold a request to paste into an agent (first-prompts.md):
+   prose, so they wrap instead of scrolling sideways like code. */
+.prose .code-block[data-lang="prompt"] pre,
+.prose .code-block[data-lang="prompt"] pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .copy-code {
   position: absolute;

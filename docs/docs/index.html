@@ -27,7 +27,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../static/site.css?v=658d0062">
-<link rel="stylesheet" href="static/docs.css?v=40daa134">
+<link rel="stylesheet" href="static/docs.css?v=761296eb">
 </head>
 <body class="docs" data-docs-root="">
 
@@ -84,6 +84,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         <li><a href="" class="current" aria-current="page">What is Seamless?</a></li>
         
         <li><a href="quickstart/">Quickstart</a></li>
+        
+        <li><a href="first-prompts/">First prompts to try</a></li>
         
         <li><a href="claude-code/">Claude Code setup</a></li>
         

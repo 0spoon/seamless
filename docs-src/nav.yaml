@@ -15,6 +15,7 @@ sections:
     pages:
       - index.md
       - quickstart.md
+      - first-prompts.md
       - claude-code.md
       - claude-app.md
       - codex-cli.md
