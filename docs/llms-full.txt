@@ -8081,8 +8081,19 @@ install` from a clone) rather than a cryptic launchctl/systemctl/schtasks error.
 `restart` is in-place and fast (on macOS `launchctl kickstart -k`, falling back
 to a fresh load if the job was unloaded). `stop` fully stops the service - on
 macOS the LaunchAgent has `KeepAlive`, so this unloads it rather than letting it
-be resurrected. Idempotent no-ops - starting a running service, stopping a
-stopped one - are reported as a note, not a failure.
+be resurrected. When the service manager refuses - starting a running service,
+stopping a stopped one - the command prints a "could not" row with the
+manager's own message and still exits 0.
+
+On Windows, `schtasks /End` returns about a second before Task Scheduler ends
+the daemon's process, so `stop` and `restart` then wait up to 15 seconds for it
+to let go of the data directory's `seamlessd.lock`. `stop` reports the service
+stopped only once that process is gone; `restart` runs `schtasks /Run` either
+way, and its new daemon waits for the data directory itself. A process still
+holding the lock after 15 seconds is not the task's own - a serve started by
+hand, or a daemon on another data directory that this shell's
+`SEAMLESS_CONFIG` or `SEAMLESS_DATA_DIR` names - so it is reported by PID and
+left running. If the config cannot be loaded, both say so and skip the wait.
 
 From a clone, `make start` / `stop` / `restart` / `status` wrap these exactly.
 

@@ -159,12 +159,12 @@ func waitLockFile(ctx context.Context, path string, wait, poll time.Duration, on
 const dataDirLockName = "seamlessd.lock"
 
 // dataDirLockWait bounds how long serve waits for a previous daemon to let go of
-// the data dir. Restarts can overlap -- on Windows, `seamlessd restart`
-// (`schtasks /End` then `/Run`) and install.ps1's Stop-Process return before the
-// old process is gone -- and an old daemon in a graceful shutdown keeps the lock
-// through runServe's 10s drain and the closes after it. 30s outlasts both and is
-// still bounded, so a second daemon started by mistake fails naming the holder
-// instead of hanging.
+// the data dir. Restarts can still overlap -- `seamlessd restart` on Windows
+// waits for the old process only when it can load the config and read the lock,
+// and for at most 15s, and install.ps1's Wait-Process gives up after 15s -- and
+// an old daemon in a graceful shutdown keeps the lock through runServe's 10s
+// drain and the closes after it. 30s outlasts both and is still bounded, so a
+// second daemon started by mistake fails naming the holder instead of hanging.
 const dataDirLockWait = 30 * time.Second
 
 // dataDirLockPoll is how often serve retries a held data dir lock.

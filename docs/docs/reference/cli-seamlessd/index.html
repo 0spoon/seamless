@@ -1114,8 +1114,18 @@ was never installed, they exit with a hint to run the installer (or <code>make i
 <p><code>restart</code> is in-place and fast (on macOS <code>launchctl kickstart -k</code>, falling back
 to a fresh load if the job was unloaded). <code>stop</code> fully stops the service - on
 macOS the LaunchAgent has <code>KeepAlive</code>, so this unloads it rather than letting it
-be resurrected. Idempotent no-ops - starting a running service, stopping a
-stopped one - are reported as a note, not a failure.</p>
+be resurrected. When the service manager refuses - starting a running service,
+stopping a stopped one - the command prints a &quot;could not&quot; row with the
+manager's own message and still exits 0.</p>
+<p>On Windows, <code>schtasks /End</code> returns about a second before Task Scheduler ends
+the daemon's process, so <code>stop</code> and <code>restart</code> then wait up to 15 seconds for it
+to let go of the data directory's <code>seamlessd.lock</code>. <code>stop</code> reports the service
+stopped only once that process is gone; <code>restart</code> runs <code>schtasks /Run</code> either
+way, and its new daemon waits for the data directory itself. A process still
+holding the lock after 15 seconds is not the task's own - a serve started by
+hand, or a daemon on another data directory that this shell's
+<code>SEAMLESS_CONFIG</code> or <code>SEAMLESS_DATA_DIR</code> names - so it is reported by PID and
+left running. If the config cannot be loaded, both say so and skip the wait.</p>
 <p>From a clone, <code>make start</code> / <code>stop</code> / <code>restart</code> / <code>status</code> wrap these exactly.</p>
 <h2 id="seamlessd_version">seamlessd version</h2>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd version
