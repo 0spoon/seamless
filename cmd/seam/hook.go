@@ -10,14 +10,17 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,13 +29,25 @@ import (
 	"github.com/arctop/seamless/internal/gitread"
 )
 
-// hookEvents pairs each event seam forwards with the endpoint it posts to. A
-// slice rather than a map: it is the canonical set behind both the validation and
-// the help text, and a map would order the events differently on every run.
+// hookEvent is one event seam forwards: the `seam hook` argument, the endpoint
+// it posts to, and how long it re-dials a daemon it cannot dial.
+type hookEvent struct {
+	event    string
+	endpoint string
+	// dialBudget is hookFullDialBudget or hookShortDialBudget: every client's,
+	// unless hookClientDialBudgets overrides it for one (see dialBudgetFor).
+	dialBudget time.Duration
+}
+
+// hookEvents is every event seam forwards. A slice rather than a map: it is the
+// canonical set behind the validation and the help text, and a map would order
+// the events differently on every run.
 //
-// internal/hooks' seamlessHooks table is what this mirrors. The CLI cannot import
-// that package -- it would drag the store, the retriever, and SQLite into a binary
-// whose job is one HTTP POST -- so hook_test.go pins this copy against it instead.
+// internal/hooks' seamlessHooks and codexHooks tables are what this mirrors. The
+// CLI cannot import that package -- it would drag the store, the retriever, and
+// SQLite into a binary whose job is one HTTP POST -- so hook_test.go pins this
+// copy against them instead: each endpoint against the one the installer wires,
+// and each client's dial budget against the timeout that client gives the hook.
 // That pin is load-bearing: because a hook fails open, drift here is a silent
 // no-op rather than an error.
 //
@@ -41,27 +56,59 @@ import (
 // on an https one profileForBaseURL turns it into a command hook so no bearer key
 // lands in settings.json. seam has always accepted the command form, so it stays
 // either way.
-var hookEvents = []struct{ event, endpoint string }{
-	{"session-start", "/api/hooks/session-start"},
-	{"user-prompt-submit", "/api/hooks/user-prompt-submit"},
-	{"session-end", "/api/hooks/session-end"},
-	{"post-tool-use", "/api/hooks/post-tool-use"},
-	{"subagent-start", "/api/hooks/subagent-start"},
-	{"subagent-stop", "/api/hooks/subagent-stop"},
-	{"permission-request", "/api/hooks/permission-request"},
+var hookEvents = []hookEvent{
+	{"session-start", "/api/hooks/session-start", hookFullDialBudget},
+	{"user-prompt-submit", "/api/hooks/user-prompt-submit", hookShortDialBudget},
+	{"session-end", "/api/hooks/session-end", hookFullDialBudget},
+	{"post-tool-use", "/api/hooks/post-tool-use", hookFullDialBudget},
+	{"subagent-start", "/api/hooks/subagent-start", hookFullDialBudget},
+	{"subagent-stop", "/api/hooks/subagent-stop", hookFullDialBudget},
+	{"permission-request", "/api/hooks/permission-request", hookFullDialBudget},
 	// Codex-only: its per-turn end signal (heartbeat + provisional harvest). Codex
 	// has no SessionEnd, so the codex install profile wires `seam hook stop`.
-	{"stop", "/api/hooks/stop"},
+	{"stop", "/api/hooks/stop", hookShortDialBudget},
 }
 
-// hookEndpoint returns the endpoint an event forwards to.
-func hookEndpoint(event string) (string, bool) {
-	for _, h := range hookEvents {
-		if h.event == event {
-			return h.endpoint, true
+// hookClientDialBudget gives one client its own dial budget for one event.
+type hookClientDialBudget struct {
+	event  string // a hookEvents event
+	client string // a hookClients value
+	budget time.Duration
+}
+
+// hookClientDialBudgets overrides an event's dial budget for one client, where
+// that client's hook does different work under the same event name. Every
+// (event, client) pair not listed here spends the event's own dialBudget.
+var hookClientDialBudgets = []hookClientDialBudget{
+	// Claude Code's SubagentStop caches a planning subagent's report, which
+	// nothing redoes; Codex's only heartbeats the parent session.
+	{"subagent-stop", hookClientCodex, hookShortDialBudget},
+}
+
+// dialBudgetFor is the dial budget the event spends for a --client value: the
+// client's override in hookClientDialBudgets, or else the event's own. An absent
+// --client ("") is Claude Code, as it is to the daemon: the Claude Code profile
+// installs every hook without one.
+func (h hookEvent) dialBudgetFor(client string) time.Duration {
+	if client == "" {
+		client = hookClientClaudeCode
+	}
+	for _, o := range hookClientDialBudgets {
+		if o.event == h.event && o.client == client {
+			return o.budget
 		}
 	}
-	return "", false
+	return h.dialBudget
+}
+
+// lookupHookEvent returns the table entry for an event.
+func lookupHookEvent(event string) (hookEvent, bool) {
+	for _, h := range hookEvents {
+		if h.event == event {
+			return h, true
+		}
+	}
+	return hookEvent{}, false
 }
 
 // hookEventNames lists the events for help and error text, in table order.
@@ -79,10 +126,16 @@ func hookEventNames() string {
 // literal "client", and the forwarding tests pin the resulting query contract.
 const clientQueryParam = "client"
 
+// The --client values, as internal/hooks names its Client constants.
+const (
+	hookClientClaudeCode = "claude-code"
+	hookClientCodex      = "codex"
+)
+
 // hookClients is the CLI's thin-binary copy of internal/hooks.HookClients. The
 // test-only hooks import pins the two sets exactly; production seam avoids the
 // SQLite dependency graph that importing internal/hooks would add.
-var hookClients = []string{"claude-code", "codex"}
+var hookClients = []string{hookClientClaudeCode, hookClientCodex}
 
 // The identity query keys, mirroring internal/hooks' unexported constants (same
 // reason as clientQueryParam: this binary must not import that package). The
@@ -100,22 +153,48 @@ var hookIdentityParams = []string{"host", "repo_root", "main_root", "origin", "a
 // hookTimeout bounds a hook's whole forward: every attempt, the waits between
 // them, and relaying the reply. It was the one attempt's whole-request deadline
 // before the dial retry existed, and it is still the hook's worst case: the
-// retry spends from it rather than adding to it.
+// retry spends from it rather than adding to it. A client may kill a hook
+// sooner -- Codex, and Claude Code on an https install, kill
+// user-prompt-submit at 5s -- which is why the dial budgets below are sized
+// against each client's timeout rather than this one.
 const hookTimeout = 10 * time.Second
 
-// hookDialBudget is how long a hook re-dials a daemon that cannot be dialed
-// (dialretry.go): long enough to span an update's restart, about 2s on macOS.
-// It sits inside hookTimeout, so an attempt that connects at its very end still
-// has 5s to be served. The price is that a daemon that is down for good delays
-// every hook by this much before it fails open.
-const hookDialBudget = 5 * time.Second
+// The dial budgets: how long a hook re-dials a daemon that cannot be dialed
+// (dialretry.go) before it fails open. Each event takes one in hookEvents, and
+// a client whose hook does different work under that name may take the other
+// (hookClientDialBudgets), by what losing the payload to an update's restart
+// (about 2s on macOS) would cost, weighed against the delay: a daemon that is
+// down for good costs every hook its whole budget.
+//
+// hookFullDialBudget spans the restart, for the hooks whose loss outlives the
+// turn: the session-start briefing, the session-end harvest, a plan capture or
+// approval, a subagent's constraints briefing, and Claude Code's subagent-stop
+// (a planning subagent's cached report, which nothing redoes).
+//
+// hookShortDialBudget rides out only a blip, for the hooks that fire often
+// enough that the delay would be paid most, and whose loss is small:
+// user-prompt-submit (one prompt's recall injection), stop (Codex's per-turn
+// heartbeat and provisional findings harvest, which the next turn's stop
+// supersedes) and Codex's subagent-stop (a heartbeat of the parent session). A
+// restart may drop one of these.
+//
+// Each budget is at most half the timeout its client gives that hook
+// (hook_test.go pins it against internal/hooks), so a hook whose dials are all
+// refused gives up well before its client kills it, and an attempt that
+// connects at the end of the budget still has the other half to be served.
+const (
+	hookFullDialBudget  = 5 * time.Second
+	hookShortDialBudget = time.Second
+)
 
 // hookOpts carries the flags for `seam hook`.
 type hookOpts struct {
 	config string // --config: abs seamless.yaml the installer bakes in (see bindHook)
 	client string // --client: canonical agent CLI discriminator; "" => absent/Claude Code
 
-	retry *dialRetry // not a flag: nil is newDialRetry(hookDialBudget); tests swap the clock
+	// retry builds the dial-retry policy for the event's budget. Not a flag: nil
+	// is newDialRetry; tests pass a fake clock's policy.
+	retry func(budget time.Duration) *dialRetry
 }
 
 // bindHook registers --config and --client. install-hooks writes --config into
@@ -139,7 +218,7 @@ func bindHook(fs *flag.FlagSet) *hookOpts {
 // that parse error at 1 too: exit 2 would block the agent session.
 var hookCmd = spec("hook", groupHooks, "forward the stdin hook payload to seamlessd",
 	atLeast(0, "EVENT"), bindHook, runHook).
-	withLong("events: " + hookEventNames() + `
+	withLong("events: " + hookEventNames() + "\ndial retry: " + hookDialBudgetsHelp() + `
 
 Your agent client (Claude Code or Codex) invokes this; it is not run by hand.
 post-tool-use is Claude Code only and fires machine-wide
@@ -148,9 +227,41 @@ the network.
 
 A runtime failure (unreadable stdin, no config, server down) is reported on
 stderr and exits 0 -- a hook must never block the session it serves. A daemon
-that cannot be dialed (restarting after an update) is retried for up to 5s
-first; a payload that may have reached it is never sent twice. An unknown
+that cannot be dialed (restarting after an update) is retried first, for the
+event's dial-retry budget above, which depends on --client where the line
+names one; a payload that may have reached it is never sent twice. An unknown
 event or client is an install/configuration bug and exits 1, never 2.`)
+
+// hookDialBudgetsHelp renders the dial budgets for the help text, longest
+// first, each followed by the events that spend it in table order. An event
+// whose budget depends on the client appears under each of its budgets, naming
+// the clients that spend it there. It asks dialBudgetFor about every event and
+// client, so the page cannot drift from what runs.
+func hookDialBudgetsHelp() string {
+	events := map[time.Duration][]string{}
+	for _, h := range hookEvents {
+		clients := map[time.Duration][]string{}
+		for _, c := range hookClients {
+			b := h.dialBudgetFor(c)
+			clients[b] = append(clients[b], c)
+		}
+		// One entry per budget for this event, so each list stays in table order
+		// whatever order the map yields its keys in.
+		for b, cs := range clients {
+			name := h.event
+			if len(cs) < len(hookClients) {
+				name += " (" + strings.Join(cs, ", ") + ")"
+			}
+			events[b] = append(events[b], name)
+		}
+	}
+	budgets := slices.SortedFunc(maps.Keys(events), func(a, b time.Duration) int { return cmp.Compare(b, a) })
+	parts := make([]string, len(budgets))
+	for i, b := range budgets {
+		parts[i] = b.String() + " for " + strings.Join(events[b], ", ")
+	}
+	return strings.Join(parts, "; ")
+}
 
 func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 	// Arity is not enforced by the spec (see hookCmd), so the handler owns the
@@ -159,10 +270,11 @@ func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 		return fmt.Errorf("missing hook event: valid values are %s", hookEventNames())
 	}
 	event := pos[0]
-	ep, ok := hookEndpoint(event)
+	h, ok := lookupHookEvent(event)
 	if !ok {
 		return fmt.Errorf("unknown hook event %q: valid values are %s", event, hookEventNames())
 	}
+	ep := h.endpoint
 
 	// A stdin failure leaves nothing to forward. Report it and exit 0: a hook
 	// must never block the agent (the same contract as every failure below).
@@ -229,12 +341,13 @@ func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 	}
 	retry := o.retry
 	if retry == nil {
-		retry = newDialRetry(hookDialBudget)
+		retry = newDialRetry
 	}
-	// Only a dial-phase failure is retried. A payload that may have reached the
-	// daemon is never sent again: session-start, a plan capture, a prompt record
-	// would each be applied twice.
-	resp, err := retry.do(client, req)
+	// Only a dial-phase failure is retried, and only for the event's budget for
+	// this client. A payload that may have reached the daemon is never sent
+	// again: session-start, a plan capture, a prompt record would each be applied
+	// twice.
+	resp, err := retry(h.dialBudgetFor(o.client)).do(client, req)
 	if err != nil {
 		fmt.Fprintln(e.stderr, "seam hook:", err)
 		return nil

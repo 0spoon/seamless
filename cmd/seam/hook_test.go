@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -147,12 +148,16 @@ func TestRunHook_NoClientFlagOmitsQueryParam(t *testing.T) {
 		"no --client => no client param, so the daemon defaults to Claude Code")
 }
 
-// hookEnvAt is a stub env whose config points seam hook at addr, with a
-// user-prompt-submit payload on stdin: an event whose identity params need no
-// git reads.
+// anyEventPayload is a hook payload every event forwards: post-tool-use's local
+// filter passes an ExitPlanMode call, and the other events forward any body.
+// Its cwd is outside any repository, so session-start's git reads find nothing.
+const anyEventPayload = `{"session_id":"s","cwd":"/w","prompt":"hi","tool_name":"ExitPlanMode"}`
+
+// hookEnvAt is a stub env whose config points seam hook at addr, with
+// anyEventPayload on stdin.
 func hookEnvAt(addr string) (*env, *bytes.Buffer, *bytes.Buffer) {
 	e, out, errb := stubEnv()
-	e.stdin = strings.NewReader(`{"session_id":"s","cwd":"/w","prompt":"hi"}`)
+	e.stdin = strings.NewReader(anyEventPayload)
 	e.loadConfig = func() (config.Config, error) {
 		cfg := config.Defaults()
 		cfg.Addr = addr
@@ -162,9 +167,9 @@ func hookEnvAt(addr string) (*env, *bytes.Buffer, *bytes.Buffer) {
 	return e, out, errb
 }
 
-// promptHooks answers the user-prompt-submit hook with a fixed reply, or hangs
-// up after reading it once hangUpAfterRead is set, counting what it read.
-func promptHooks(hits *atomic.Int32, hangUpAfterRead bool) http.Handler {
+// answerHooks answers any hook with a fixed reply, or hangs up after reading it
+// once hangUpAfterRead is set, counting what it read.
+func answerHooks(hits *atomic.Int32, hangUpAfterRead bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
 		hits.Add(1)
@@ -177,53 +182,230 @@ func promptHooks(hits *atomic.Int32, hangUpAfterRead bool) http.Handler {
 	})
 }
 
-// A hook that fires while an update restarts the daemon still lands: refused
-// while the port is closed, delivered once the new daemon listens, and read by
-// it exactly once.
-func TestRunHook_RidesOutARestart(t *testing.T) {
-	addr := deadAddr(t)
-	var hits atomic.Int32
-	clk := &fakeClock{onWait: func(n int) {
-		if n == 2 {
-			serveAt(t, addr, promptHooks(&hits, false))
-		}
-	}}
-	e, out, errb := hookEnvAt(addr)
-	require.NoError(t, runHook(context.Background(), e, &hookOpts{retry: clk.policy(hookDialBudget)}, []string{"user-prompt-submit"}))
-	require.Equal(t, `{"continue":true}`, out.String())
-	require.Empty(t, errb.String())
-	require.Equal(t, int32(1), hits.Load())
-	require.Len(t, clk.recorded(), 2)
+// A hook that fires while an update restarts the daemon lands when the daemon
+// is back within its budget: refused while the port is closed, delivered once
+// the new daemon listens, and read by it exactly once. A full restart (about 2s
+// on macOS) outlasts the short budget, so a hook on it fails open instead: the
+// accepted cost is one prompt's recall injection or one heartbeat. The client
+// matters where its hook does different work: Claude Code's subagent-stop
+// caches a planning subagent's report and rides the restart out, Codex's only
+// heartbeats and does not.
+func TestRunHook_RidesOutARestartWithinItsBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		event  string
+		client string // --client; "" is Claude Code
+		// backAt is the retry wait during which the daemon listens again. The
+		// production backoff ends wait 2 at 300ms (a blip) and wait 5 at 2.5s
+		// (the next attempt after a 2s restart).
+		backAt int
+		waits  int
+		lands  bool
+	}{
+		{"blip, full budget", "session-start", "", 2, 2, true},
+		{"blip, short budget", "user-prompt-submit", "", 2, 2, true},
+		{"restart, full budget", "session-start", "", 5, 5, true},
+		{"restart, short budget", "user-prompt-submit", "", 5, 4, false},
+		{"restart, claude code subagent-stop", "subagent-stop", "", 5, 5, true},
+		{"restart, codex subagent-stop", "subagent-stop", "codex", 5, 4, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := deadAddr(t)
+			var hits atomic.Int32
+			clk := &fakeClock{onWait: func(n int) {
+				if n == tc.backAt {
+					serveAt(t, addr, answerHooks(&hits, false))
+				}
+			}}
+			e, out, errb := hookEnvAt(addr)
+			o := &hookOpts{client: tc.client, retry: clk.policy}
+			require.NoError(t, runHook(context.Background(), e, o, []string{tc.event}))
+			require.Len(t, clk.recorded(), tc.waits)
+			if !tc.lands {
+				require.Empty(t, out.String())
+				require.Contains(t, errb.String(), "seam hook: request not sent after 5 attempts over 1s")
+				require.Zero(t, hits.Load())
+				return
+			}
+			require.Equal(t, `{"continue":true}`, out.String())
+			require.Empty(t, errb.String())
+			require.Equal(t, int32(1), hits.Load())
+		})
+	}
 }
 
-// The hook's retry budget is 5s on the production backoff: nine refused dials,
-// waits that sum to exactly the budget, and then the hook fails open -- the
-// reason on stderr, nothing on stdout, exit 0.
-func TestRunHook_DialBudgetIsFiveSeconds(t *testing.T) {
-	clk := &fakeClock{}
-	e, out, errb := hookEnvAt(deadAddr(t))
-	require.NoError(t, runHook(context.Background(), e, &hookOpts{retry: clk.policy(hookDialBudget)}, []string{"user-prompt-submit"}))
-	require.Empty(t, out.String())
-	require.Contains(t, errb.String(), "seam hook: request not sent after 9 attempts over 5s")
-	require.Equal(t, 5*time.Second, clk.waited())
-	require.Equal(t, 5*time.Second, hookDialBudget)
-	require.Less(t, hookDialBudget, hookTimeout, "an attempt that connects at the end of the budget still has time to be served")
+// A daemon that is down for good costs each hook exactly its budget for that
+// event and client on the production backoff, and then the hook fails open --
+// the reason on stderr, nothing on stdout, exit 0. The full budget is nine
+// refused dials over 5s, the short one five over 1s. Every event runs under
+// every --client value, an absent one included.
+func TestRunHook_DialBudgetFollowsTheEventAndClient(t *testing.T) {
+	ms := time.Millisecond
+	spend := map[time.Duration]struct {
+		waits []time.Duration
+		msg   string
+	}{
+		hookFullDialBudget: {
+			[]time.Duration{100 * ms, 200 * ms, 400 * ms, 800 * ms, time.Second, time.Second, time.Second, 500 * ms},
+			"seam hook: request not sent after 9 attempts over 5s",
+		},
+		hookShortDialBudget: {
+			[]time.Duration{100 * ms, 200 * ms, 400 * ms, 300 * ms},
+			"seam hook: request not sent after 5 attempts over 1s",
+		},
+	}
+	for _, client := range append([]string{""}, hookClients...) {
+		for _, h := range hookEvents {
+			name := client
+			if name == "" {
+				name = "no client"
+			}
+			t.Run(name+"/"+h.event, func(t *testing.T) {
+				budget := h.dialBudgetFor(client)
+				want, ok := spend[budget]
+				require.True(t, ok, "no expectation for a %s budget", budget)
+				clk := &fakeClock{}
+				e, out, errb := hookEnvAt(deadAddr(t))
+				o := &hookOpts{client: client, retry: clk.policy}
+				require.NoError(t, runHook(context.Background(), e, o, []string{h.event}))
+				require.Empty(t, out.String())
+				require.Contains(t, errb.String(), want.msg)
+				require.Equal(t, want.waits, clk.recorded())
+				require.Equal(t, budget, clk.waited())
+			})
+		}
+	}
 }
 
 // A payload the daemon read before the connection dropped is never sent again:
 // the hook fails open on the first failure, with nothing retried.
 func TestRunHook_NeverResendsAfterSending(t *testing.T) {
 	var hits atomic.Int32
-	srv := httptest.NewServer(promptHooks(&hits, true))
+	srv := httptest.NewServer(answerHooks(&hits, true))
 	t.Cleanup(srv.Close)
 	clk := &fakeClock{}
 	e, out, errb := hookEnvAt(strings.TrimPrefix(srv.URL, "http://"))
-	require.NoError(t, runHook(context.Background(), e, &hookOpts{retry: clk.policy(hookDialBudget)}, []string{"user-prompt-submit"}))
+	require.NoError(t, runHook(context.Background(), e, &hookOpts{retry: clk.policy}, []string{"user-prompt-submit"}))
 	require.Empty(t, out.String())
 	require.Contains(t, errb.String(), "seam hook: ")
 	require.NotContains(t, errb.String(), errNotSent.Error(), "the payload was sent")
 	require.Equal(t, int32(1), hits.Load())
 	require.Empty(t, clk.recorded())
+}
+
+// The owner's split (2026-10-09): the full budget spans an update's restart for
+// the hooks that are costly to lose, the short one only a blip for those whose
+// loss is one prompt's recall or one heartbeat. subagent-stop is split by
+// client: Claude Code's caches a planning subagent's report, Codex's only
+// heartbeats. Pinned whole, every event under every client, so no event or
+// client joins without a decision about its budget; each also leaves half of
+// hookTimeout for an attempt that connects at the end of its budget.
+func TestHookDialBudgets_ByClientAndEvent(t *testing.T) {
+	const full, short = 5 * time.Second, time.Second
+	want := map[string]map[string]time.Duration{
+		"claude-code": {
+			"session-start":      full,
+			"user-prompt-submit": short,
+			"session-end":        full,
+			"post-tool-use":      full,
+			"subagent-start":     full,
+			"subagent-stop":      full,
+			"permission-request": full,
+			"stop":               short,
+		},
+		"codex": {
+			"session-start":      full,
+			"user-prompt-submit": short,
+			"session-end":        full,
+			"post-tool-use":      full,
+			"subagent-start":     full,
+			"subagent-stop":      short,
+			"permission-request": full,
+			"stop":               short,
+		},
+	}
+	got := map[string]map[string]time.Duration{}
+	for _, client := range hookClients {
+		got[client] = map[string]time.Duration{}
+		for _, h := range hookEvents {
+			got[client][h.event] = h.dialBudgetFor(client)
+			require.LessOrEqual(t, got[client][h.event], hookTimeout/2,
+				"%s/%s: an attempt that connects at the end of the budget must still have time to be served", client, h.event)
+		}
+	}
+	require.Equal(t, want, got)
+
+	// An absent --client is Claude Code, as it is to the daemon.
+	for _, h := range hookEvents {
+		require.Equal(t, h.dialBudgetFor(hookClientClaudeCode), h.dialBudgetFor(""), "%s", h.event)
+	}
+}
+
+// Every override is live: it names an event in hookEvents and a client in
+// hookClients, once, and gives that client a budget other than the event's
+// own. dialBudgetFor skips a misspelled event or client in silence, and an
+// override equal to the default says the clients differ when they do not.
+func TestHookClientDialBudgets_AreLiveOverrides(t *testing.T) {
+	seen := map[[2]string]bool{}
+	for _, o := range hookClientDialBudgets {
+		h, ok := lookupHookEvent(o.event)
+		require.True(t, ok, "an override for unknown event %q", o.event)
+		require.Contains(t, hookClients, o.client, "an override for unknown client %q", o.client)
+		require.NotEqual(t, h.dialBudget, o.budget, "%s/%s overrides the event's budget with itself", o.event, o.client)
+		key := [2]string{o.event, o.client}
+		require.False(t, seen[key], "%s/%s is overridden twice", o.event, o.client)
+		seen[key] = true
+	}
+}
+
+// Every Claude Code hook is installed without --client, so an absent one must
+// take a Claude Code override rather than fall through to the event's own
+// budget. No such override exists today, so this plants one.
+func TestHookEvent_AbsentClientTakesClaudeCodeOverrides(t *testing.T) {
+	saved := hookClientDialBudgets
+	t.Cleanup(func() { hookClientDialBudgets = saved })
+	hookClientDialBudgets = append(slices.Clone(saved),
+		hookClientDialBudget{"session-start", hookClientClaudeCode, hookShortDialBudget})
+
+	h, ok := lookupHookEvent("session-start")
+	require.True(t, ok)
+	require.Equal(t, hookShortDialBudget, h.dialBudgetFor(""))
+	require.Equal(t, hookShortDialBudget, h.dialBudgetFor(hookClientClaudeCode))
+	require.Equal(t, hookFullDialBudget, h.dialBudgetFor(hookClientCodex))
+}
+
+// Every budget fits inside the timeout its client gives that hook with half to
+// spare, for every client and every command hook its profile wires, on either
+// transport. Past half, a daemon that is down for good runs a hook into its
+// client's kill: a timeout warning in place of a quiet fail-open, on every
+// prompt in user-prompt-submit's case. A test-only import, like the event pin
+// below.
+func TestHookDialBudgets_FitInsideEveryClientTimeout(t *testing.T) {
+	for _, client := range hooks.HookClients {
+		timeouts, err := hooks.CommandHookTimeouts(client)
+		require.NoError(t, err)
+		require.NotEmpty(t, timeouts, "%s", client)
+		for arg, timeout := range timeouts {
+			h, ok := lookupHookEvent(arg)
+			require.True(t, ok, "%s wires `seam hook %s`, which this CLI rejects", client, arg)
+			budget := h.dialBudgetFor(string(client))
+			require.LessOrEqual(t, budget, timeout/2,
+				"%s kills `seam hook %s` at %s, so its %s budget must be at most half that", client, arg, timeout, budget)
+		}
+	}
+	// An https install makes Claude Code's user-prompt-submit a command hook too
+	// (profileForBaseURL), with the same 5s timeout Codex gives it.
+	cc, err := hooks.CommandHookTimeouts(hooks.ClientClaudeCode)
+	require.NoError(t, err)
+	require.Equal(t, 5*time.Second, cc["user-prompt-submit"])
+}
+
+// The help names each budget from the table, never by hand, and marks the
+// event whose budget depends on the client with the clients that spend each.
+func TestHookCmd_HelpDerivesTheDialBudgets(t *testing.T) {
+	require.Contains(t, commandHelp(hookCmd), "\ndial retry: 5s for session-start, session-end, post-tool-use, "+
+		"subagent-start, subagent-stop (claude-code), permission-request; "+
+		"1s for user-prompt-submit, subagent-stop (codex), stop\n")
 }
 
 // The pin that keeps the CLI's copy of the event table honest against the
@@ -235,9 +417,9 @@ func TestHookEvents_MatchTheInstaller(t *testing.T) {
 	installed := hooks.CommandHookEndpoints()
 	require.NotEmpty(t, installed)
 	for arg, endpoint := range installed {
-		ep, ok := hookEndpoint(arg)
+		h, ok := lookupHookEvent(arg)
 		require.True(t, ok, "install-hooks writes `seam hook %s`, which this CLI rejects", arg)
-		require.Equal(t, endpoint, ep, "seam hook %s forwards somewhere the installer does not expect", arg)
+		require.Equal(t, endpoint, h.endpoint, "seam hook %s forwards somewhere the installer does not expect", arg)
 	}
 }
 
