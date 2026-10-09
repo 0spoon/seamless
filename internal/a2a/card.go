@@ -28,8 +28,15 @@ const ProtocolVersion = "0.3.0"
 // internal/mcp are sibling API surfaces that do not import each other.
 const AgentName = "Seamless"
 
-// siteURL is the project site, used for provider and documentation links.
+// siteURL is the project site, used for documentation links.
 const siteURL = "https://thereisnospoon.org"
+
+// The provider is the organization that publishes Seamless. A2A wants the
+// provider org's own site here, not the product's, which stays siteURL.
+const (
+	providerOrg = "Arctop"
+	providerURL = "https://arctop.com"
+)
 
 // agentDescription is the card's description. Like the MCP server card it
 // must tell a reader who only sees the card that the endpoint is per-install
@@ -118,7 +125,7 @@ func Card(version, endpoint string) AgentCard {
 		Description:        agentDescription,
 		URL:                endpoint,
 		PreferredTransport: "JSONRPC",
-		Provider:           &AgentProvider{Organization: "0spoon", URL: siteURL},
+		Provider:           &AgentProvider{Organization: providerOrg, URL: providerURL},
 		Version:            version,
 		DocumentationURL:   siteURL + "/docs/",
 		Capabilities:       AgentCapabilities{},

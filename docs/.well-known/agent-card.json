@@ -5,8 +5,8 @@
   "url": "http://127.0.0.1:8081/api/a2a",
   "preferredTransport": "JSONRPC",
   "provider": {
-    "organization": "0spoon",
-    "url": "https://thereisnospoon.org"
+    "organization": "Arctop",
+    "url": "https://arctop.com"
   },
   "version": "0.5.1",
   "documentationUrl": "https://thereisnospoon.org/docs/",

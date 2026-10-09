@@ -26,6 +26,8 @@ while the companion `seam` CLI gives headless agents a direct interface.
 &nbsp;·&nbsp; Website: [thereisnospoon.org](https://thereisnospoon.org) (source in
 [`docs/`](docs/))
 
+Developed and published by [Arctop](https://arctop.com). MIT licensed.
+
 ## Design principles
 
 - **Built for a fleet, not a lone agent.** Real coordination primitives: a

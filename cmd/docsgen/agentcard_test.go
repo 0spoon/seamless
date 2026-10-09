@@ -50,8 +50,10 @@ func TestAgentCardMirrorsTheLiveSurface(t *testing.T) {
 		require.NotEmpty(t, sk.Description)
 	}
 
-	// The provider and documentation links stay on the canonical host.
+	// The provider is the publisher, Arctop, at its own site; the
+	// documentation link stays on the canonical product host.
 	require.NotNil(t, card.Provider)
-	require.Equal(t, siteBaseURL, card.Provider.URL)
+	require.Equal(t, "Arctop", card.Provider.Organization)
+	require.Equal(t, "https://arctop.com", card.Provider.URL)
 	require.Equal(t, siteBaseURL+"/docs/", card.DocumentationURL)
 }

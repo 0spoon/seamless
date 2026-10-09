@@ -60,7 +60,7 @@ static/site.js          theme toggle, OS switch, copy buttons, phone menu,
 static/webmcp.js        WebMCP tools for browser agents: search the docs, read
                         any page as markdown, list the agent endpoints; loaded
                         by every page, a no-op without a model context
-static/favicon.svg      the 0spoon mark (an empty set)
+static/favicon.svg      the Seamless mark (an empty set)
 static/shots/           console screenshots, dark + light (see below)
 static/og.png           1200x630 social preview card
 static/og-source.html   source for og.png (see below)
