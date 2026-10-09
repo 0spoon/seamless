@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"runtime/debug"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,6 +81,38 @@ type Deps struct {
 	Fetcher ReleaseFetcher
 	Events  Recorder // nil: no events
 
+	// Automatic updates (plan 2.4). Each is optional. Without a Spawner the
+	// daemon installs nothing and never reports ModeAuto, whatever
+	// Settings.Auto says; the rest only tune when it applies.
+
+	// Spawner starts the updater for one attempt (cmd/seamlessd wires one
+	// per OS). nil: never apply.
+	Spawner Spawner
+	// LiveSessions counts the agent sessions live at cutoff: active and
+	// heartbeating on or after it (store.LiveSessionCount). The checker
+	// passes now minus SessionIdle. nil, or an error, is never idle.
+	LiveSessions func(ctx context.Context, cutoff time.Time) (int, error)
+	// SessionIdle is gardener.session_idle_minutes, the age past which a
+	// session no longer counts as live; zero falls back to config's default.
+	SessionIdle time.Duration
+	// Activity is the request tracker's snapshot: how many counted requests
+	// are in flight, and when the last one finished (the tracker's start
+	// before any has). nil: activity unknown, so only the overdue path
+	// (twice max_defer) applies.
+	Activity func() (inFlight int64, last time.Time)
+	// UpdaterRunning probes LockPath: true when an updater holds it, which
+	// a heartbeat alone cannot always tell (a stale heartbeat from a live
+	// updater, one that has not written yet). An implementation that takes
+	// the lock to probe releases it at once. nil, or an error: the
+	// heartbeat alone decides.
+	UpdaterRunning func() (bool, error)
+	// CodexHooksHash fingerprints Codex's hooks.json: a hash of its bytes,
+	// or a fixed token when the file does not exist; an error when it
+	// cannot tell. It is read at start and before each spawn, and a
+	// fingerprint that changed across a version change raises the Codex
+	// banner (Updated.CodexHooks). nil: no banner.
+	CodexHooksHash func() (string, error)
+
 	Now   func() time.Time                  // nil: time.Now
 	Ticks func() (<-chan time.Time, func()) // nil: a tickInterval ticker
 	Rand  func(n int64) int64               // uniform in [0, n); nil: math/rand/v2
@@ -103,13 +136,30 @@ type Checker struct {
 
 	// Owned by the loop goroutine (and by Start before it launches).
 	state       State
-	lastFetch   time.Time
+	lastFetch   time.Time // the last request, failed or not (CheckNow's throttle)
+	lastGood    time.Time // the last successful request (recheckFresh)
 	persistErr  string
 	overrideErr string
+
+	// Automatic updates, owned by the loop goroutine too.
+	applying   *Applying // the update under way, as the last fold found it
+	view       autoView  // what the last evaluation found, for snapshot
+	attemptErr string    // the last attempt.json read error, logged once
+	codexErr   string    // the last Codex fingerprint error, logged once
 }
 
+// commandKind is what a command asks the loop to do.
+type commandKind int
+
+const (
+	cmdRefresh  commandKind = iota // re-read the settings and republish
+	cmdCheck                       // Check now
+	cmdApplyNow                    // Update now
+	cmdResume                      // Resume automatic updates
+)
+
 type command struct {
-	check bool // true: Check now; false: just re-read settings and republish
+	kind  commandKind
 	reply chan result
 }
 
@@ -119,10 +169,21 @@ type result struct {
 }
 
 // New builds a Checker. Nothing runs until Start.
+//
+// The clock it keeps is wall time only: d.Now's readings lose their monotonic
+// part. Every deadline here is a wall-clock time (the state file holds no
+// other kind), and the monotonic clock stops while the machine sleeps
+// (mach_absolute_time on macOS, CLOCK_MONOTONIC on Linux), so a deadline set
+// in memory before a sleep would otherwise come due as late as the sleep was
+// long -- the next check, a backoff, an attempt's start window -- and a
+// release list fetched just before the lid closed would still count as fresh
+// on waking. A clock that goes back instead is clampDeadlines' job.
 func New(d Deps) *Checker {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
+	wall := d.Now
+	d.Now = func() time.Time { return wall().Round(0) }
 	if d.Ticks == nil {
 		d.Ticks = func() (<-chan time.Time, func()) {
 			t := time.NewTicker(tickInterval)
@@ -186,23 +247,23 @@ func (c *Checker) Notice(_ context.Context, host string) string {
 // previous check. A failed request comes back as its error alongside the
 // updated status (which records it).
 func (c *Checker) CheckNow(ctx context.Context) (Status, error) {
-	return c.send(ctx, true)
+	return c.send(ctx, cmdCheck)
 }
 
 // Refresh re-reads the settings and republishes the status: the console calls
 // it after saving or resetting its override, so the page it redirects to
 // already shows the new state.
 func (c *Checker) Refresh(ctx context.Context) (Status, error) {
-	return c.send(ctx, false)
+	return c.send(ctx, cmdRefresh)
 }
 
-func (c *Checker) send(ctx context.Context, check bool) (Status, error) {
+func (c *Checker) send(ctx context.Context, kind commandKind) (Status, error) {
 	if !c.started.Load() {
 		return c.Status(), ErrNotRunning
 	}
 	reply := make(chan result, 1)
 	select {
-	case c.cmds <- command{check: check, reply: reply}:
+	case c.cmds <- command{kind: kind, reply: reply}:
 	case <-c.done:
 		return c.Status(), ErrNotRunning
 	case <-ctx.Done():
@@ -218,9 +279,11 @@ func (c *Checker) send(ctx context.Context, check bool) (Status, error) {
 
 // boot is the startup step. For a release build it loads the saved state
 // (quarantining a corrupt file), clamps future timestamps, records the version
-// change since the previous daemon, notes this process as the running one and
-// saves. A source build keeps everything in memory and never touches the data
-// dir (constraint dev-and-fixture-daemons-never-self-update).
+// change since the previous daemon -- with what it means for automatic
+// updates: a hold after a deliberate downgrade, the Codex banner, a later
+// first check -- notes this process as the running one and saves. A source
+// build keeps everything in memory and never touches the data dir
+// (constraint dev-and-fixture-daemons-never-self-update).
 func (c *Checker) boot(ctx context.Context) {
 	now := c.d.Now()
 	s := c.settings(ctx)
@@ -239,39 +302,107 @@ func (c *Checker) boot(ctx context.Context) {
 		c.log.Warn("update: the update state file was corrupt and has been moved aside", "moved_to", quarantined)
 	}
 	st.Clamp(now, s.CheckInterval)
+	if st.ReleasesRev != filterRevision && (len(st.Releases) > 0 || st.ETag != "") {
+		// The cached list came from another release's Filter (an older one
+		// never recorded ChecksumsBundle): read it whole at the next check
+		// rather than let a 304 keep it.
+		st.ETag = ""
+	}
 
 	cur, _ := Parse(c.d.Version) // a release build always parses
+	c.state = st
+	codex := c.codexFingerprint()
 	var changed *Updated
-	if st.LastRunVersion != nil && *st.LastRunVersion != cur {
+	if last := st.LastRunVersion; last != nil && *last != cur {
 		dir := DirectionUpgrade
-		if cur.Compare(*st.LastRunVersion) < 0 {
+		if cur.Compare(*last) < 0 {
 			dir = DirectionDowngrade
 		}
-		changed = &Updated{From: *st.LastRunVersion, To: cur, At: now, Direction: dir}
-		st.Updated = changed
+		changed = &Updated{From: *last, To: cur, At: now, Direction: dir}
+		c.state.Updated = changed
+		c.versionChanged(now, cur, changed, codex)
 	}
-	st.LastRunVersion = &cur
-	st.Running = Running{
+	// An unreadable hooks.json keeps the fingerprint the last daemon saw.
+	if codex != "" || c.d.CodexHooksHash == nil {
+		c.state.CodexHooks = codex
+	}
+	c.state.LastRunVersion = &cur
+	c.state.Running = Running{
 		Version: cur, Distribution: c.d.Distribution, Kind: c.d.Install.Kind, Reason: c.d.Install.Reason,
-		Instance: c.d.Instance, PID: c.d.PID, StartedAt: now,
+		Instance: c.d.Instance, PID: c.d.PID, StartedAt: now, CanApply: c.d.Spawner != nil,
 	}
-	c.state = st
+	c.state.tidy(cur)
 	c.scheduleFirst(now)
 
 	// The event follows the write: if the write fails, the next start sees
 	// the same change again, so the event is better lost than doubled.
 	if c.persist() && changed != nil {
 		c.log.Info("update: running a different version than last time",
-			"from", changed.From.String(), "to", changed.To.String(), "direction", changed.Direction)
-		c.record(ctx, core.Event{
-			Kind:   core.EventUpdateApplied,
-			ItemID: changed.To.String(),
-			Payload: map[string]any{
-				"from": changed.From.String(), "to": changed.To.String(), "direction": changed.Direction,
-			},
-		})
+			"from", changed.From.String(), "to", changed.To.String(), "direction", changed.Direction,
+			"codex_hooks_changed", changed.CodexHooks)
+		payload := map[string]any{
+			"from": changed.From.String(), "to": changed.To.String(), "direction": changed.Direction,
+		}
+		if changed.CodexHooks {
+			payload["codex_hooks_changed"] = true
+		}
+		c.record(ctx, core.Event{Kind: core.EventUpdateApplied, ItemID: changed.To.String(), Payload: payload})
 	}
+	// Fold what an updater left behind (the attempt that brought this
+	// version, or one a predecessor started), so the first status says so.
+	c.step(ctx, s, false)
 	c.publish(s)
+}
+
+// versionChanged is what a version change at startup means for automatic
+// updates:
+//
+//   - a downgrade that no update attempt explains is the owner's own pin
+//     (SEAMLESS_VERSION, a manual `seamlessd update`), and sets a hold so an
+//     automatic update does not undo it; one that an attempt from cur to the
+//     version left explains is a rollback, which the fold settles instead;
+//   - codex, the fingerprint of Codex's hooks.json now, differs from the one
+//     taken before the update (at the spawn, or at the previous daemon's
+//     start): the Codex banner;
+//   - the first check, and any pre-update re-check, wait
+//     postUpdateCheckDelay (plus jitter) from now.
+func (c *Checker) versionChanged(now time.Time, cur Version, u *Updated, codex string) {
+	if u.Direction == DirectionDowngrade && !c.explainsDowngrade(cur, u.From) {
+		through := u.From
+		if newest, ok := Newest(c.state.Releases); ok && newest.Version.Compare(through) > 0 {
+			through = newest.Version
+		}
+		c.state.Hold = &Hold{Through: through, From: u.From, At: now}
+		c.log.Info("update: running an older version than last time; automatic updates skip releases up to it until resumed",
+			"from", u.From.String(), "to", cur.String(), "skip_through", through.String())
+	}
+
+	before := c.state.CodexHooks
+	if sp := c.state.Spawn; sp != nil && sp.To == cur && sp.CodexHooks != "" {
+		before = sp.CodexHooks
+	}
+	if before != "" && codex != "" && codex != before {
+		u.CodexHooks = true
+	}
+
+	first := now.Add(postUpdateCheckDelay + time.Duration(c.d.Rand(int64(firstCheckJitter))))
+	if first.After(c.state.NextCheckAt) {
+		c.state.NextCheckAt = first
+	}
+	if c.state.NextCheckAt.After(c.state.RecheckAt) {
+		c.state.RecheckAt = c.state.NextCheckAt
+	}
+}
+
+// explainsDowngrade reports whether an update attempt from cur to from -- the
+// spawn this daemon's predecessor saved, or the newest record -- accounts for
+// running cur after from: a rollback, not the owner's choice.
+func (c *Checker) explainsDowngrade(cur, from Version) bool {
+	if sp := c.state.Spawn; sp != nil && sp.From == cur && sp.To == from {
+		return true
+	}
+	a, ok := c.readAttempt()
+	return ok && a.From == cur && a.To == from
 }
 
 // scheduleFirst keeps a saved next-check time that is still ahead (a daemon
@@ -313,33 +444,57 @@ func (c *Checker) loop(ctx context.Context) {
 	}
 }
 
-// tick checks when the saved deadline has passed and checks are on.
+// tick checks when the saved deadline has passed and checks are on, then
+// takes the automatic-update step: fold the attempt record, decide, and
+// maybe start an update.
 func (c *Checker) tick(ctx context.Context) {
 	s := c.settings(ctx)
+	if c.state.clampDeadlines(c.d.Now(), s.CheckInterval) {
+		c.persist()
+	}
 	if now := c.d.Now(); s.Check && !now.Before(c.state.NextCheckAt) {
 		// A scheduled check has no caller to tell: fail() logged the error and
 		// the status carries it as CheckError.
 		_ = c.check(ctx, now, s) //nolint:errcheck // reported through the status, see above
 	}
+	c.step(ctx, s, true)
 	c.publish(s)
 }
 
-// handle serves a CheckNow or Refresh command.
+// handle serves a command.
 func (c *Checker) handle(ctx context.Context, cmd command) result {
 	s := c.settings(ctx)
-	defer c.publish(s)
-	if !cmd.check {
+	switch cmd.kind {
+	case cmdCheck:
+		return c.handleCheck(ctx, s)
+	case cmdApplyNow:
+		err := c.applyNow(ctx, s)
+		c.publish(s)
+		return result{status: c.Status(), err: err}
+	case cmdResume:
+		c.resume(ctx, s)
+		c.publish(s)
+		return result{status: c.Status()}
+	default:
+		c.step(ctx, s, false)
 		c.publish(s)
 		return result{status: c.Status()}
 	}
+}
+
+// handleCheck serves CheckNow.
+func (c *Checker) handleCheck(ctx context.Context, s Settings) result {
 	now := c.d.Now()
 	switch {
 	case !s.Check:
+		c.publish(s)
 		return result{status: c.snapshot(s), err: ErrChecksOff}
 	case !c.lastFetch.IsZero() && now.Sub(c.lastFetch) < checkNowThrottle:
+		c.publish(s)
 		return result{status: c.snapshot(s), err: ErrTooSoon}
 	}
 	err := c.check(ctx, now, s)
+	c.step(ctx, s, false)
 	c.publish(s)
 	return result{status: c.Status(), err: err}
 }
@@ -363,7 +518,7 @@ func (c *Checker) check(ctx context.Context, now time.Time, s Settings) error {
 		c.persist()
 		return err
 	}
-	c.lastFetch = now
+	c.lastFetch, c.lastGood = now, now
 
 	if c.state.CheckError != nil {
 		c.log.Info("update: the release check works again", "after_failures", c.state.CheckError.Count)
@@ -376,6 +531,7 @@ func (c *Checker) check(ctx context.Context, now time.Time, s Settings) error {
 	}
 	if !page.NotModified {
 		c.state.Releases = Filter(page.Releases, c.d.GOOS)
+		c.state.ReleasesRev = filterRevision
 	}
 	c.state.NextCheckAt = now.Add(c.jitter(s.CheckInterval))
 
@@ -538,24 +694,60 @@ func (c *Checker) snapshot(s Settings) Status {
 			st.SeenAt = c.state.Seen.At
 		}
 	}
-	return st
+
+	// Automatic updates. The state's own records come through as they are;
+	// what the last evaluation found (target, wait reason, the update under
+	// way) comes from the view.
+	st.CanApply = c.d.Spawner != nil
+	st.LastAttempt = c.state.LastAttempt
+	st.Hold = c.state.Hold
+	st.Paused = c.state.Paused
+	if cur, ok := Parse(c.d.Version); ok {
+		for _, b := range c.state.Blocks {
+			if b.Version.Compare(cur) > 0 {
+				st.Blocked = append(st.Blocked, b)
+			}
+		}
+	}
+	if b := c.state.Backoff; b != nil && c.d.Now().Before(b.Until) {
+		st.Backoff = b
+	}
+	if p := c.state.Pending; p != nil {
+		st.PendingSince = p.Since
+	}
+	st.Target = c.view.target
+	st.Applying = c.view.applying
+	st.Waiting, st.WaitCode = c.view.decision.Wait, c.view.decision.Code
+	// The clone is what keeps a reader from aliasing the loop's state.
+	return st.clone()
 }
 
-// clone deep-copies the pointer fields, so a reader can never alias the
-// loop's state.
+// clone deep-copies the pointer and slice fields, so a reader can never
+// alias the loop's state.
 func (s Status) clone() Status {
 	out := s
-	if s.Newest != nil {
-		n := *s.Newest
-		out.Newest = &n
-	}
-	if s.CheckError != nil {
-		ce := *s.CheckError
-		out.CheckError = &ce
-	}
-	if s.Updated != nil {
-		u := *s.Updated
-		out.Updated = &u
+	out.Newest = clonePtr(s.Newest)
+	out.CheckError = clonePtr(s.CheckError)
+	out.Updated = clonePtr(s.Updated)
+	out.Target = clonePtr(s.Target)
+	out.Applying = clonePtr(s.Applying)
+	out.LastAttempt = clonePtr(s.LastAttempt)
+	out.Hold = clonePtr(s.Hold)
+	out.Backoff = clonePtr(s.Backoff)
+	out.Blocked = slices.Clone(s.Blocked)
+	if s.Paused != nil {
+		p := *s.Paused
+		p.Versions = slices.Clone(p.Versions)
+		out.Paused = &p
 	}
 	return out
+}
+
+// clonePtr copies the value p points to, or returns nil.
+func clonePtr[T any](p *T) *T {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
 }

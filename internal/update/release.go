@@ -43,14 +43,35 @@ type APIAsset struct {
 type Release struct {
 	Version     Version   `json:"version"`
 	PublishedAt time.Time `json:"published_at"`
+	// ChecksumsBundle reports whether the release carries an uploaded
+	// checksums.txt.sigstore.json. The unattended updater verifies
+	// checksums.txt against it, by the exact tag, so an automatic update
+	// (Target) and Update now only take a release that has one. Telling the
+	// owner about a release does not need it: no release up to v0.6.0
+	// carries the bundle, and those stay visible.
+	ChecksumsBundle bool `json:"checksums_bundle,omitempty"`
 }
+
+// checksumsBundleAsset is the Sigstore bundle over checksums.txt that every
+// release after v0.6.0 carries (goreleaser signs it per tag; release.yml
+// re-verifies it against the tag's exact identity).
+const checksumsBundleAsset = "checksums.txt.sigstore.json"
+
+// filterRevision names what Filter records about a release. The cached list
+// in state.json is tagged with the revision that produced it; a list from
+// another revision -- an older release's, which never recorded
+// ChecksumsBundle, or a newer one's -- is re-read in full at the next check
+// (the ETag is dropped), so a 304 can never keep a list this binary would
+// misjudge.
+const filterRevision = 1
 
 // requiredAssets names the release assets an update for goos needs before the
 // release counts as installable: the checksums every installer verifies the
 // archive against, and the installer script with the Sigstore bundle
-// `seamlessd update` verifies it with. A release goes public before its
-// uploads finish, so a release missing any of these is in flight, and telling
-// someone to update to it would fail on a 404.
+// `seamlessd update` verifies it with. goreleaser publishes a release only
+// after its uploads finish (it drafts first), but a release made by hand, or
+// one whose publish failed partway, can still be public with assets missing,
+// and telling someone to update to it would fail on a 404.
 func requiredAssets(goos string) []string {
 	if goos == "windows" {
 		return []string{"checksums.txt", "install.ps1", "install.ps1.sigstore.json"}
@@ -66,6 +87,8 @@ func requiredAssets(goos string) []string {
 //   - its tag is exactly vX.Y.Z (ParseTag), and it has a published_at;
 //   - every asset requiredAssets names for goos is present and uploaded.
 //
+// Each kept release records whether it carries checksumsBundleAsset
+// (ChecksumsBundle); a release without it is still kept, for the notice.
 // Two releases with the same version keep the earlier publication.
 func Filter(api []APIRelease, goos string) []Release {
 	need := requiredAssets(goos)
@@ -78,7 +101,11 @@ func Filter(api []APIRelease, goos string) []Release {
 		if !ok || !hasAssets(r.Assets, need) {
 			continue
 		}
-		rel := Release{Version: v, PublishedAt: r.PublishedAt.UTC()}
+		rel := Release{
+			Version:         v,
+			PublishedAt:     r.PublishedAt.UTC(),
+			ChecksumsBundle: hasAssets(r.Assets, []string{checksumsBundleAsset}),
+		}
 		if i := slices.IndexFunc(out, func(o Release) bool { return o.Version == v }); i >= 0 {
 			if rel.PublishedAt.Before(out[i].PublishedAt) {
 				out[i] = rel

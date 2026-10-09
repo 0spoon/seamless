@@ -126,3 +126,26 @@ func TestNewest_Empty(t *testing.T) {
 func TestReleaseURL(t *testing.T) {
 	require.Equal(t, "https://github.com/arctop/seamless/releases/tag/v0.7.3", ReleaseURL(Version{0, 7, 3}))
 }
+
+func TestFilter_ChecksumsBundle(t *testing.T) {
+	published := at("2026-10-09T10:00:00Z")
+	bundle := func(state string) []APIAsset {
+		return append(append([]APIAsset{}, posixAssets...), APIAsset{Name: "checksums.txt.sigstore.json", State: state})
+	}
+	for _, tc := range []struct {
+		name   string
+		assets []APIAsset
+		want   bool
+	}{
+		{"uploaded", bundle("uploaded"), true},
+		{"a state the API left out", bundle(""), true},
+		{"still uploading", bundle("open"), false},
+		{"absent, as on every release up to v0.6.0", posixAssets, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Filter([]APIRelease{{TagName: "v0.7.3", PublishedAt: published, Assets: tc.assets}}, "linux")
+			require.Len(t, got, 1, "the bundle never decides whether a release is listed")
+			require.Equal(t, tc.want, got[0].ChecksumsBundle)
+		})
+	}
+}

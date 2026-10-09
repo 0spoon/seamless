@@ -597,3 +597,39 @@ func TestChecker_StatusIsACopy(t *testing.T) {
 	st.Newest.Version = Version{9, 9, 9}
 	require.Equal(t, "0.7.3", h.c.Status().Newest.Version.String())
 }
+
+// TestChecker_KeepsWallTimeOnly: the checker's clock drops the monotonic
+// reading, which stops while the machine sleeps; every deadline is wall time.
+func TestChecker_KeepsWallTimeOnly(t *testing.T) {
+	c := New(Deps{Version: "0.7.2", Distribution: DistributionRelease})
+	now := c.d.Now()
+	require.Equal(t, now.String(), now.Round(0).String(), "no monotonic reading")
+	require.WithinDuration(t, time.Now(), now, time.Minute)
+}
+
+// TestChecker_AClockThatWentBackDoesNotStallTheSchedule: a clock that jumps
+// back three days while the daemon runs leaves the next check three days out;
+// the tick pulls it in.
+func TestChecker_AClockThatWentBackDoesNotStallTheSchedule(t *testing.T) {
+	h := newHarness(t)
+	h.fetch.push(fakeResp{page: releasePage(`W/"1"`, "v0.7.3")}, fakeResp{page: Page{NotModified: true, ETag: `W/"1"`}})
+	h.start()
+	h.clock.Add(time.Hour)
+	h.tick()
+	require.Equal(t, 1, h.fetch.calls())
+
+	h.clock.Add(-72 * time.Hour)
+	h.tick()
+	require.Equal(t, 2, h.fetch.calls(), "checked at once rather than in three days")
+
+	// A rate limit's own longest wait is never mistaken for a wrong clock.
+	h.clock.Add(7 * time.Hour)
+	retry := h.clock.Now().Add(maxRetryWait)
+	h.fetch.push(fakeResp{err: &RateLimitError{RetryAt: retry, Status: "403 Forbidden"}})
+	h.tick()
+	require.Equal(t, 3, h.fetch.calls())
+	h.clock.Add(time.Minute)
+	st := h.tick()
+	require.Equal(t, retry, st.NextCheckAt)
+	require.Equal(t, 3, h.fetch.calls())
+}

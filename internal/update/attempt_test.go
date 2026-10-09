@@ -600,15 +600,22 @@ func TestSpawnRequest_Validate(t *testing.T) {
 	manual.To = manual.From
 	require.NoError(t, manual.Validate(), "a manual reinstall")
 
+	// Update now is the daemon's too, and moves forward only, like auto.
+	now := good
+	now.Why = WhyNow
+	require.NoError(t, now.Validate())
+
 	for name, mutate := range map[string]func(r *SpawnRequest){
-		"no attempt id":     func(r *SpawnRequest) { r.AttemptID = "" },
-		"an argument":       func(r *SpawnRequest) { r.AttemptID = strings.Repeat("0", 15) + " --url=evil" },
-		"no from":           func(r *SpawnRequest) { r.From = Version{} },
-		"no to":             func(r *SpawnRequest) { r.To = Version{} },
-		"no why":            func(r *SpawnRequest) { r.Why = "" },
-		"an unknown why":    func(r *SpawnRequest) { r.Why = "cron" },
-		"an auto downgrade": func(r *SpawnRequest) { r.From, r.To = r.To, r.From },
-		"an auto reinstall": func(r *SpawnRequest) { r.To = r.From },
+		"an Update now downgrade": func(r *SpawnRequest) { r.Why = WhyNow; r.From, r.To = r.To, r.From },
+		"an Update now reinstall": func(r *SpawnRequest) { r.Why = WhyNow; r.To = r.From },
+		"no attempt id":           func(r *SpawnRequest) { r.AttemptID = "" },
+		"an argument":             func(r *SpawnRequest) { r.AttemptID = strings.Repeat("0", 15) + " --url=evil" },
+		"no from":                 func(r *SpawnRequest) { r.From = Version{} },
+		"no to":                   func(r *SpawnRequest) { r.To = Version{} },
+		"no why":                  func(r *SpawnRequest) { r.Why = "" },
+		"an unknown why":          func(r *SpawnRequest) { r.Why = "cron" },
+		"an auto downgrade":       func(r *SpawnRequest) { r.From, r.To = r.To, r.From },
+		"an auto reinstall":       func(r *SpawnRequest) { r.To = r.From },
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := good

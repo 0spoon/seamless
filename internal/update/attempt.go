@@ -76,10 +76,16 @@ const (
 	// daemon never spawns one, so no pending spawn ever matches it, and it may
 	// move in either direction: an owner may pin an older release.
 	WhyManual = "manual"
+	// WhyNow is an attempt the daemon's checker started because the owner
+	// asked for it from the daemon (the console's "Update now",
+	// Checker.ApplyNow): the newest release, at once, without the soak, the
+	// idle wait or blocks, and whatever update.auto says. The daemon spawns
+	// it like WhyAuto, and like WhyAuto it only moves forward.
+	WhyNow = "now"
 )
 
 // whys lists every why this release writes.
-var whys = []string{WhyAuto, WhyManual}
+var whys = []string{WhyAuto, WhyManual, WhyNow}
 
 // Stage is the step of plan 2.2 an attempt is in, or stopped in. A finished
 // attempt's stage is where it stopped: StageDone for a success and only then,
@@ -165,7 +171,7 @@ type Attempt struct {
 	// release it installs.
 	From Version `json:"from"`
 	To   Version `json:"to"`
-	// Why the attempt runs: WhyAuto or WhyManual.
+	// Why the attempt runs: WhyAuto, WhyNow or WhyManual.
 	Why string `json:"why"`
 	// StartedAt is when the updater took the lock, HeartbeatAt its latest
 	// write, and FinishedAt when it recorded the outcome (zero while it runs).
@@ -476,15 +482,15 @@ type SpawnRequest struct {
 	AttemptID string  // ValidAttemptID
 	From      Version // the version the daemon runs
 	To        Version // the release to install
-	Why       string  // a why this release knows; the checker spawns WhyAuto
+	Why       string  // a why this release knows; the checker spawns WhyAuto, or WhyNow for Update now
 }
 
 // Validate refuses a request no updater should start for. The attempt id
 // must have the shape core.NewID mints, since a spawner puts it on a command
 // line (on Windows inside a scheduled task's one argument string) and the
 // updater names files after it; both versions must be set; Why must be a word
-// this release knows; and an automatic attempt only moves forward, because an
-// update never auto-downgrades.
+// this release knows; and an attempt the daemon starts (WhyAuto, WhyNow) only
+// moves forward, because an update never auto-downgrades.
 func (r SpawnRequest) Validate() error {
 	var problem string
 	switch {
@@ -494,8 +500,8 @@ func (r SpawnRequest) Validate() error {
 		problem = "from and to are required"
 	case !slices.Contains(whys, r.Why):
 		problem = fmt.Sprintf("why %q: valid values are %s", r.Why, strings.Join(whys, ", "))
-	case r.Why == WhyAuto && r.To.Compare(r.From) <= 0:
-		problem = fmt.Sprintf("an automatic update only moves forward, not from %s to %s", r.From, r.To)
+	case (r.Why == WhyAuto || r.Why == WhyNow) && r.To.Compare(r.From) <= 0:
+		problem = fmt.Sprintf("an update the daemon starts only moves forward, not from %s to %s", r.From, r.To)
 	default:
 		return nil
 	}
