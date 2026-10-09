@@ -25,8 +25,8 @@ func IsReleaseBuild(distribution, version string) bool {
 }
 
 // InstallerMarker is the comment the curl and PowerShell installers write into
-// the service definition they own (the launchd plist and the systemd unit
-// today, the Scheduled Task's description later). `make install` renders its
+// the service definition they own (the launchd plist, the systemd unit, and the
+// Scheduled Task's description). `make install` renders its
 // own plist without it, which is what keeps a developer's deploy from being
 // mistaken for an installer install. The ".ps1" installer's marker shares
 // this prefix.
