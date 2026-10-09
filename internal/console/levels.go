@@ -26,8 +26,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // level is a console experience level. Its value is the index into

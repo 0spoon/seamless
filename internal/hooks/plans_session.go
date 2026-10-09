@@ -9,8 +9,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // planCaptureMeta mirrors core.Session.Metadata["plan_capture"]: the session's

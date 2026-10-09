@@ -15,7 +15,7 @@ import (
 	"io"
 	"net/url"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // Provider-agnostic sentinel errors. Callers (e.g. recall) use errors.Is to

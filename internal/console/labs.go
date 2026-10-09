@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // labTrialLimit caps the trial history a lab reader lists; the count of the

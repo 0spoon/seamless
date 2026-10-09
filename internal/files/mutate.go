@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // ErrNoChange is returned by a MutateMemory/MutateNote callback that decided the

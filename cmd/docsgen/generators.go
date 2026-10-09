@@ -11,10 +11,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/console"
-	"github.com/0spoon/seamless/internal/features"
-	seamlessmcp "github.com/0spoon/seamless/internal/mcp"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/console"
+	"github.com/arctop/seamless/internal/features"
+	seamlessmcp "github.com/arctop/seamless/internal/mcp"
 )
 
 // A generator emits markdown that renderPages appends to a page's authored body,

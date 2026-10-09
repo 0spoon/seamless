@@ -5,7 +5,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // The description carries the totals decision on purpose. usage_summary answers

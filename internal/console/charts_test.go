@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // The .area-line draw-on animation rides on pathLength="1": the CSS sets

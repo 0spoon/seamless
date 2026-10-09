@@ -7,11 +7,11 @@ import (
 	"slices"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/lifecycle"
-	"github.com/0spoon/seamless/internal/plans"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/lifecycle"
+	"github.com/arctop/seamless/internal/plans"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // Decision names one way to resolve a pending proposal. This is the canonical

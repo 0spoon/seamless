@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // runMapRepo upserts an entry in the repo_project_map setting so an agent whose

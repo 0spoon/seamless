@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // coveredSessionOn seeds a session created at noon (local) of the day `offset`

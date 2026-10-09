@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // The corpus deliberately contains a name that is a prefix of another

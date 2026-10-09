@@ -18,7 +18,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // harnessPath is the shared fixture entry point, relative to this package.

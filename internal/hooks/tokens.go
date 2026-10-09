@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // maxTokenScanLine caps a single transcript line the token parsers accept, matching

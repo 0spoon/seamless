@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // Archive marks a memory inactive without a replacement: it sets invalid_at = now

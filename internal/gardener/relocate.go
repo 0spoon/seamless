@@ -18,8 +18,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // ErrNotIsolated is returned by ProposeIsolationRelocations for a project that

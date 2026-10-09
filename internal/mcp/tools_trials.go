@@ -7,8 +7,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // trialContextLimit is how many recent trials lab_open returns as context.

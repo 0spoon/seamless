@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // scanTasksWithDeps drains task rows and populates each task's DependsOn ids

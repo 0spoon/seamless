@@ -30,9 +30,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/features"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/features"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // featuresConfig resolves the optional-feature config for this request -- the

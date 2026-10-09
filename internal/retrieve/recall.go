@@ -8,9 +8,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/llm"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/llm"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // rrfK is the Reciprocal Rank Fusion constant. Fusing by rank (not raw score)

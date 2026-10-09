@@ -28,11 +28,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/events"
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/plans"
-	"github.com/0spoon/seamless/internal/retrieve"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/events"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/plans"
+	"github.com/arctop/seamless/internal/retrieve"
 )
 
 // maxAgentTitleRunes caps the prompt-derived part of an agent-cache note title.

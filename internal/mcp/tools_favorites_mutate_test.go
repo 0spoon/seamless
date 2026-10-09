@@ -17,8 +17,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/files"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/files"
 )
 
 // Starring a memory another writer is appending to used to erase the append: the

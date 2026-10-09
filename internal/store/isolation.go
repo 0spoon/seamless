@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // ErrProjectNotFound is returned when a slug has no projects-table row.

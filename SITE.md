@@ -331,7 +331,7 @@ then open http://127.0.0.1:8899/.
 1. GitHub repo Settings -> Pages -> Source: `main` branch, `/docs` folder.
 2. DNS for thereisnospoon.org: apex A records to GitHub Pages IPs
    (185.199.108.153 .. 185.199.111.153) + AAAA if desired; `www` CNAME to
-   `0spoon.github.io` (optional). The `CNAME` file here is already in place.
+   `arctop.github.io` (optional). The `CNAME` file here is already in place.
 3. In Pages settings, set the custom domain and enable Enforce HTTPS once the
    cert is issued.
 

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/gardener"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/gardener"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // errNoGardener is returned when a gardener action is requested but the console

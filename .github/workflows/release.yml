@@ -58,8 +58,8 @@ jobs:
       # `seamlessd update` fetches both and verifies with its compiled-in
       # sigstore-go verifier before piping the script to a shell (audit M3).
       # The verify-blob calls re-check each bundle against the exact identity
-      # the daemon and the installers pin, so a format or identity regression
-      # fails the release here rather than on users' machines.
+      # the daemon pins (the installers accept it too), so a format or identity
+      # regression fails the release here rather than on users' machines.
       - name: Sign installer scripts (keyless)
         run: |
           mkdir -p sigs
@@ -68,7 +68,7 @@ jobs:
               --bundle "sigs/${script}.sigstore.json" "docs/${script}"
             cosign verify-blob \
               --bundle "sigs/${script}.sigstore.json" \
-              --certificate-identity-regexp '^https://github.com/0spoon/seamless/\.github/workflows/release\.yml@refs/tags/v' \
+              --certificate-identity-regexp '^https://github.com/arctop/seamless/\.github/workflows/release\.yml@refs/tags/v' \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com \
               "docs/${script}"
           done
@@ -79,7 +79,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pushes the Homebrew cask to 0spoon/homebrew-tap (`homebrew_casks:`
+          # Pushes the Homebrew cask to arctop/homebrew-tap (`homebrew_casks:`
           # in .goreleaser.yaml). GITHUB_TOKEN cannot cross repos, so this is a
           # fine-grained PAT with contents:write on that single repo -- keep it
           # that narrow; this job builds what every user downloads.

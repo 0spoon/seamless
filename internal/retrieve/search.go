@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // searchSourceDepth is how many candidates each leg contributes before fusion.

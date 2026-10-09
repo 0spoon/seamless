@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // contextScopeKeys are the strict scope enum for /console/context. The all view

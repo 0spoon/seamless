@@ -13,9 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/store"
-	"github.com/0spoon/seamless/internal/validate"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/store"
+	"github.com/arctop/seamless/internal/validate"
 )
 
 const (

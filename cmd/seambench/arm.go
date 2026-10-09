@@ -20,7 +20,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/bench"
+	"github.com/arctop/seamless/internal/bench"
 )
 
 // arm is one condition arm the runner can seed, serve, and run an agent in.

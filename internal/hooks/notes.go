@@ -5,8 +5,8 @@ package hooks
 import (
 	"context"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // resolveProject maps a hook payload's (host, cwd) to a project slug

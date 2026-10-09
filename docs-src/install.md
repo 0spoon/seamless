@@ -134,10 +134,10 @@ The other routes end up in the same place with more of the steps left to you.
 ### Homebrew
 
 ```bash
-brew install 0spoon/tap/seamless
+brew install arctop/tap/seamless
 ```
 
-Every release publishes a cask to the `0spoon/homebrew-tap` tap, on macOS and
+Every release publishes a cask to the `arctop/homebrew-tap` tap, on macOS and
 Linux alike. It delivers the **binaries only** - `seamlessd` and `seam` on your
 PATH, with the Gatekeeper quarantine attribute stripped on macOS (the release
 binaries are unsigned). It does not wire clients or register a service, so
@@ -147,6 +147,17 @@ finish with the two commands the cask's caveats print:
 seamlessd install-hooks   # bearer key on first run, hooks, MCP, skills
 seamlessd serve           # or set up the service yourself
 ```
+
+Installed from the old `0spoon/tap`? `brew update` will not move you (Homebrew
+does not re-home a cask to a third-party tap on its own), so switch once:
+
+```bash
+brew uninstall --cask seamless
+brew untap 0spoon/tap
+brew install arctop/tap/seamless
+```
+
+From then on `brew upgrade` follows `arctop/tap`.
 
 `brew upgrade` moves you to the latest release. The hooks keep working - they
 resolve `seam` through brew's stable bin path - but restart the daemon
@@ -184,8 +195,8 @@ a job `seamlessd serve` refuses by design.
 ### Go install and release archives
 
 The remaining routes end up in the same place with less done for you:
-`go install github.com/0spoon/seamless/cmd/...@latest` needs Go 1.26+, and the
-[GitHub releases](https://github.com/0spoon/seamless/releases) carry the same
+`go install github.com/arctop/seamless/cmd/...@latest` needs Go 1.26+, and the
+[GitHub releases](https://github.com/arctop/seamless/releases) carry the same
 prebuilt archives the installer fetches. From a bare binary, `seamlessd serve`
 covers the essentials - first run seeds the config - and `seamlessd install-hooks`
 wires the detected Claude Code/Codex clients; what you take on yourself is the

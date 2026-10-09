@@ -23,14 +23,14 @@ import (
 	mcptransport "github.com/mark3labs/mcp-go/client/transport"
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/features"
-	"github.com/0spoon/seamless/internal/hooks"
-	"github.com/0spoon/seamless/internal/llm"
-	"github.com/0spoon/seamless/internal/mcp"
-	agentskills "github.com/0spoon/seamless/internal/skills"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/features"
+	"github.com/arctop/seamless/internal/hooks"
+	"github.com/arctop/seamless/internal/llm"
+	"github.com/arctop/seamless/internal/mcp"
+	agentskills "github.com/arctop/seamless/internal/skills"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // checkStatus is the outcome of a single doctor check.

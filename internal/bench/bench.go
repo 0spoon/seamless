@@ -19,7 +19,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/0spoon/seamless/internal/demokit"
+	"github.com/arctop/seamless/internal/demokit"
 )
 
 // SeedFunc builds a scenario's fixture state inside a fresh throwaway

@@ -17,11 +17,11 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/features"
-	"github.com/0spoon/seamless/internal/hooks"
-	agentskills "github.com/0spoon/seamless/internal/skills"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/features"
+	"github.com/arctop/seamless/internal/hooks"
+	agentskills "github.com/arctop/seamless/internal/skills"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // runInstallHooks wires an agent client to Seamless in one command: it installs
@@ -115,7 +115,7 @@ func runInstallHooks(args []string) error {
 	seamBin := resolveSeamBin(*seamFlag)
 	if _, lookErr := exec.LookPath(seamBin); lookErr != nil {
 		fmt.Printf("%s seam CLI not found (%q); command hooks fail until it is installed\n%s%s\n",
-			yellow("warning:"), seamBin, fieldCont, dim("go install github.com/0spoon/seamless/cmd/seam@latest"))
+			yellow("warning:"), seamBin, fieldCont, dim("go install github.com/arctop/seamless/cmd/seam@latest"))
 	}
 	configPath := absConfigPath(cfg.SourcePath())
 

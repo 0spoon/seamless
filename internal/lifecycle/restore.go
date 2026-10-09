@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // Unarchive is the inverse of Archive: it clears invalid_at, strips the archive

@@ -13,9 +13,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // mergeTables is the order the row pass copies tables in, and the whole

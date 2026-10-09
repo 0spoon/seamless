@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 const digestSystemPrompt = "You are a concise technical writer. Summarize an AI agent's recent work sessions into a short monthly digest: the themes worked on, what was decided or learned, and anything left open. Use compact markdown bullet points. Do not invent details beyond the findings provided."

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // ClientSeen is one agent client (the session's external_client: claude-code,

@@ -25,7 +25,7 @@ import (
 	"database/sql"
 	"slices"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // ProposalScope is every project scope one proposal touches: the projects its

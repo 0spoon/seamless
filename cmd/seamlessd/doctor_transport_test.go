@@ -20,10 +20,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/events"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/events"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // writeCertPair writes a self-signed certificate/key pair covering hosts, valid

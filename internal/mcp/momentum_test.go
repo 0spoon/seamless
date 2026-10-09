@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
-	mcpserver "github.com/0spoon/seamless/internal/mcp"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
+	mcpserver "github.com/arctop/seamless/internal/mcp"
 )
 
 // firstReuseEvents counts the memory.first_reuse marks for one memory id.

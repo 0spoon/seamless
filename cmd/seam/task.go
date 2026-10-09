@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // --- task list ---

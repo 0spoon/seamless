@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/bench"
+	"github.com/arctop/seamless/internal/bench"
 )
 
 // e2ePort is well clear of the live 8081 and of the harness default (8099), so

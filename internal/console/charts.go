@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // anyCoverage reports whether any bucket in the window had at least one session.

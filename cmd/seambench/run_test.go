@@ -14,9 +14,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/bench"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/demokit"
+	"github.com/arctop/seamless/internal/bench"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/demokit"
 )
 
 // fakeScenario is a cheap stand-in for a real bench scenario: the seed exercises

@@ -3,8 +3,8 @@ package retrieve
 import (
 	"context"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // expandLinks scans the top fused memory hits for [[name]] links and adds each

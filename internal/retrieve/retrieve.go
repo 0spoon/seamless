@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/llm"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/llm"
 )
 
 // Service assembles briefings, prompt recall, and fused recall over one store.

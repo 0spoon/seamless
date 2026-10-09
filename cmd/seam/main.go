@@ -16,8 +16,8 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/agentproc"
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/agentproc"
+	"github.com/arctop/seamless/internal/config"
 )
 
 func main() {

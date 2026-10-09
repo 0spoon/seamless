@@ -35,8 +35,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/agentproc"
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/agentproc"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // headerSessionID is the streamable-HTTP session header (mcp-go's

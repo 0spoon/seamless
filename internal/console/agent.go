@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // Harness + model attribution: every session records the client that ran it

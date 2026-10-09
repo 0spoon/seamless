@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/agentproc"
+	"github.com/arctop/seamless/internal/agentproc"
 )
 
 // Codex's hook payloads differ from Claude Code's in a few field names (captured

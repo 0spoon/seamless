@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // WindowVitals is a bounded window's comparable rollup: reach, injection volume,

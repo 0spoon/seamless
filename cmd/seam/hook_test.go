@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/hooks"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/hooks"
 )
 
 // The whole reason hook is exempt from the usage exit code: Claude Code reads

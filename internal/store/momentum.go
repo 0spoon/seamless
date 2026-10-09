@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // SettingCaptureStreak is the settings key caching the momentum capture

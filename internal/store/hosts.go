@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // HostActivity is one machine's session count over a window.

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // The knowledge sky: the Overview's star chart of everything the fleet knows,

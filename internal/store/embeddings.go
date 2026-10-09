@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // SearchHit is one result of a cosine similarity search.

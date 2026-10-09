@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // Snippet marks wrap the matched terms inside a SnippetHit.Snippet. They are

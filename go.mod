@@ -1,4 +1,4 @@
-module github.com/0spoon/seamless
+module github.com/arctop/seamless
 
 go 1.26.0
 

@@ -12,11 +12,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/features"
-	"github.com/0spoon/seamless/internal/hooks"
-	agentskills "github.com/0spoon/seamless/internal/skills"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/features"
+	"github.com/arctop/seamless/internal/hooks"
+	agentskills "github.com/arctop/seamless/internal/skills"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // The skills step is an optional convenience layer: an unwritable skill root

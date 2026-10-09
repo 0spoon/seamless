@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // consoleLoginTmpl is a one-shot, self-submitting login page. Opened from a

@@ -11,12 +11,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/0spoon/seamless/internal/agentguide"
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/features"
-	"github.com/0spoon/seamless/internal/plans"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/agentguide"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/features"
+	"github.com/arctop/seamless/internal/plans"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // BriefingInput carries the SessionStart hook fields the briefing depends on.

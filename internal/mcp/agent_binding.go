@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // Process binding: how a connection reaches the session its own agent's hook

@@ -21,9 +21,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/agentproc"
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/gitread"
+	"github.com/arctop/seamless/internal/agentproc"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/gitread"
 )
 
 // hookEvents pairs each event seam forwards with the endpoint it posts to. A

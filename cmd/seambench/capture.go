@@ -26,10 +26,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/bench"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/events"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/bench"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/events"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // maxDumpedEvents caps the event dump. A single scenario run produces tens to

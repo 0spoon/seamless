@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 func TestSettingsGetSet(t *testing.T) {

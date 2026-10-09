@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/0spoon/seamless/internal/markdown"
+	"github.com/arctop/seamless/internal/markdown"
 )
 
 // searchTextRunes caps each page's indexed body text. The index is fetched whole

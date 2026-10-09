@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // healthFact is one statement on the Home health strip -- the Basic owner's

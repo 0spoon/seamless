@@ -3,8 +3,8 @@ package gardener
 import (
 	"context"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // referencedNames scans every active memory's body for [[name]] links and

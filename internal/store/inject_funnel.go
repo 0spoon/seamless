@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // InjectionSurfaces are the briefing injection surfaces the read-after-inject

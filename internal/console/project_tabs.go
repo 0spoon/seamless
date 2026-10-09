@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/markdown"
-	"github.com/0spoon/seamless/internal/plans"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/markdown"
+	"github.com/arctop/seamless/internal/plans"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // Plans & tasks tab tuning. A closed block shorter than doneRunFold is not

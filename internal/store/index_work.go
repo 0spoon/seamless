@@ -26,7 +26,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // ftsExecutor is the write subset shared by *sql.DB and *sql.Tx, so a work-record

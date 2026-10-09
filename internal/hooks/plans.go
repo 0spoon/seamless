@@ -23,8 +23,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/plans"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/plans"
 )
 
 // postToolUse captures plan-file iterations (Write/Edit/MultiEdit under the

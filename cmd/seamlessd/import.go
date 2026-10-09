@@ -13,12 +13,12 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/0spoon/seamless/internal/archive"
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/importer"
-	"github.com/0spoon/seamless/internal/llm"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/archive"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/importer"
+	"github.com/arctop/seamless/internal/llm"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // importSource is which of the two things --from names. They are different

@@ -6,9 +6,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/features"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/features"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // errResearchDisabled is the refusal for an exposed tool that reaches data owned

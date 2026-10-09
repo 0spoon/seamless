@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/plans"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/plans"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // favoriteListPages maps a favorite kind to its library page, the redirect

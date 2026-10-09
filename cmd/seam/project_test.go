@@ -11,8 +11,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // The promise sentences the console serves, quoted here so the assertions read

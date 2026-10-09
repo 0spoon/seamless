@@ -15,8 +15,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/files"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/files"
 )
 
 // callToolAsync is CallTool without any testing.T interaction, so it is safe to

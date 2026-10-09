@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/a2a"
-	"github.com/0spoon/seamless/internal/config"
-	seamlessmcp "github.com/0spoon/seamless/internal/mcp"
+	"github.com/arctop/seamless/internal/a2a"
+	"github.com/arctop/seamless/internal/config"
+	seamlessmcp "github.com/arctop/seamless/internal/mcp"
 )
 
 // TestAgentCardMirrorsTheLiveSurface: the site twin must be exactly what a

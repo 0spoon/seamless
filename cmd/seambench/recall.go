@@ -32,7 +32,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/bench"
+	"github.com/arctop/seamless/internal/bench"
 )
 
 // recallMarker is the opening tag of the prompt-recall injection.

@@ -6,9 +6,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/events"
-	"github.com/0spoon/seamless/internal/retrieve"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/events"
+	"github.com/arctop/seamless/internal/retrieve"
 )
 
 // recallMissQueryMax bounds the query text stored on a recall.miss event; the

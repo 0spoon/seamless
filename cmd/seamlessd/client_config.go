@@ -24,7 +24,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // minClientVersion is the oldest seamlessd a paired client may run: it is the

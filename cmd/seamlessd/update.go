@@ -31,8 +31,8 @@ import (
 // runs, so there is ONE upgrade implementation to keep correct.
 const (
 	// githubRepo is where releases live; the installer scripts hardcode the same
-	// "0spoon/seamless". Also used by --check to read the latest release tag.
-	githubRepo = "0spoon/seamless"
+	// "arctop/seamless". Also used by --check to read the latest release tag.
+	githubRepo = "arctop/seamless"
 	// releaseDownloadBase resolves to the newest published release's assets.
 	releaseDownloadBase = "https://github.com/" + githubRepo + "/releases/latest/download"
 )

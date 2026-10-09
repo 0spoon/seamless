@@ -13,7 +13,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/0spoon/seamless/internal/demokit"
+	"github.com/arctop/seamless/internal/demokit"
 )
 
 func main() {

@@ -12,8 +12,8 @@ import (
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/files"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/files"
 )
 
 // noteFileBytes reads a note's markdown file exactly as it sits on disk. The

@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // SettingGamificationRecords is the settings key holding the personal-records

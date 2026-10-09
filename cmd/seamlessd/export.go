@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/0spoon/seamless/internal/archive"
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/archive"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // exportTmpSuffix is appended to the destination while the archive is being

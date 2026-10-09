@@ -34,10 +34,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/gitread"
-	"github.com/0spoon/seamless/internal/plans"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/gitread"
+	"github.com/arctop/seamless/internal/plans"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // maxShipCommits caps how many matching commits a ship proposal's payload

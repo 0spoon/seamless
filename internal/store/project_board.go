@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // ProjectBoardRow is one project's health roll-up for the project board: the

@@ -1,6 +1,6 @@
 package retrieve
 
-import "github.com/0spoon/seamless/internal/core"
+import "github.com/arctop/seamless/internal/core"
 
 // clipWords caps a briefing fragment at maxRunes runes, cutting at the last
 // word boundary before the cap and appending an ellipsis, so a clipped line

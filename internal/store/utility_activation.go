@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // SettingUtilityActivation is the settings key holding the per-project

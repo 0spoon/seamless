@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/markdown"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/markdown"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // The detail handlers here serve a single entity four ways: JSON for the CLI,

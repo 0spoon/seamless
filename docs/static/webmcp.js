@@ -178,7 +178,7 @@
           { url: root + ".well-known/api-catalog", what: "RFC 9727 API catalog (linkset)" },
           { url: root + "install", what: "macOS/Linux install: curl -fsSL https://thereisnospoon.org/install | sh" },
           { url: root + "install.ps1", what: "Windows install: irm https://thereisnospoon.org/install.ps1 | iex" },
-          { url: "https://github.com/0spoon/seamless", what: "the repository" }
+          { url: "https://github.com/arctop/seamless", what: "the repository" }
         ];
         return Promise.resolve(result(JSON.stringify(r, null, 2)));
       }

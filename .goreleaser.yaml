@@ -121,8 +121,8 @@ release:
     - glob: sigs/install.sigstore.json
     - glob: sigs/install.ps1.sigstore.json
 
-# Homebrew tap: `brew install 0spoon/tap/seamless`. Each release pushes a
-# regenerated cask to 0spoon/homebrew-tap, which also gives the project an
+# Homebrew tap: `brew install arctop/tap/seamless`. Each release pushes a
+# regenerated cask to arctop/homebrew-tap, which also gives the project an
 # indexed third-party page carrying the name and description. A cask, not a
 # formula: goreleaser deprecated `brews` for pre-compiled binaries, and the
 # generated cask carries on_macos and on_linux stanzas, so Linux brew is
@@ -134,7 +134,7 @@ release:
 homebrew_casks:
   - name: seamless
     repository:
-      owner: 0spoon
+      owner: arctop
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://thereisnospoon.org
@@ -144,7 +144,7 @@ homebrew_casks:
       - seamlessd
       - seam
     url:
-      verified: github.com/0spoon/seamless
+      verified: github.com/arctop/seamless
     caveats: |
       Connect your agent clients (hooks, MCP registration, skills):
         seamlessd install-hooks

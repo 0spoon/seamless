@@ -11,8 +11,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/validate"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/validate"
 )
 
 // ErrTreeEscape is returned when an item's computed file path would land

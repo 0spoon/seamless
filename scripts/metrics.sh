@@ -9,7 +9,7 @@
 
 set -eu
 
-REPO="0spoon/seamless"
+REPO="arctop/seamless"
 
 command -v gh >/dev/null || { echo "ERROR: gh not found (brew install gh)" >&2; exit 1; }
 

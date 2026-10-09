@@ -40,8 +40,8 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/bench"
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/bench"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // trialLab is the research lab every seambench result lands in.

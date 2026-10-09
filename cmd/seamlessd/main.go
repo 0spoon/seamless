@@ -35,17 +35,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/0spoon/seamless/internal/a2a"
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/console"
-	"github.com/0spoon/seamless/internal/events"
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/gardener"
-	"github.com/0spoon/seamless/internal/hooks"
-	"github.com/0spoon/seamless/internal/llm"
-	"github.com/0spoon/seamless/internal/mcp"
-	"github.com/0spoon/seamless/internal/retrieve"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/a2a"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/console"
+	"github.com/arctop/seamless/internal/events"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/gardener"
+	"github.com/arctop/seamless/internal/hooks"
+	"github.com/arctop/seamless/internal/llm"
+	"github.com/arctop/seamless/internal/mcp"
+	"github.com/arctop/seamless/internal/retrieve"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // version is the seamlessd build version, injected from the git tag at build

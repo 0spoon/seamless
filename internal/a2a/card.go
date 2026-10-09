@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/retrieve"
+	"github.com/arctop/seamless/internal/retrieve"
 )
 
 // ProtocolVersion is the A2A generation the endpoint speaks: the v0.3

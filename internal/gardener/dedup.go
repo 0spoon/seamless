@@ -3,7 +3,7 @@ package gardener
 import (
 	"context"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // proposeMerges scans every pair of active memories embedded under the current

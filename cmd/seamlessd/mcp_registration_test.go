@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 	"github.com/stretchr/testify/require"
 )
 

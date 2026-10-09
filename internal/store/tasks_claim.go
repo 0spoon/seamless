@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // ErrTaskClaimConflict is returned when a claim loses the compare-and-set race

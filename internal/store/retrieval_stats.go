@@ -9,7 +9,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // Utility scoring constants. Utility is a time-decayed sum of QUERY-GATED demand

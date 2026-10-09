@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/features"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/features"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // nowFresh* are the presentation thresholds for an agent card's heartbeat

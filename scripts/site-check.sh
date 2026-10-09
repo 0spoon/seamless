@@ -7,7 +7,7 @@
 # whole gate green. That is not hypothetical. The curl|sh installer landed in
 # d1e926b with README.md, docs-src/, and the regenerated docs/docs/ all correct
 # and `make check` green, while the hero pill went on telling every visitor to
-# run `go install github.com/0spoon/seamless/cmd/...@latest`. The front door
+# run `go install github.com/arctop/seamless/cmd/...@latest`. The front door
 # advertised the old front door for a day.
 #
 # Thirteen assertions, each one a thing a machine can actually verify:

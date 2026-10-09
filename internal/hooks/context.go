@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/0spoon/seamless/internal/retrieve"
+	"github.com/arctop/seamless/internal/retrieve"
 )
 
 // codexContextMaxTokens stays below Codex's approximately 2,500-token hook

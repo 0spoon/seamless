@@ -10,8 +10,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/features"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/features"
 )
 
 // optionalTools is how many MCP tools all optional features own together -- the

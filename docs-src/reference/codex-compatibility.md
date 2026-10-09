@@ -58,7 +58,7 @@ definition is trusted.
 
 Never overwrite an old version directory. The reproducible harness and the
 sanitization checklist live in
-[`internal/hooks/testdata/codex/`](https://github.com/0spoon/seamless/tree/main/internal/hooks/testdata/codex).
+[`internal/hooks/testdata/codex/`](https://github.com/arctop/seamless/tree/main/internal/hooks/testdata/codex).
 For each new release:
 
 1. Install the exact Codex release binary and record its version, release tag,

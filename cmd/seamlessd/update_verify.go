@@ -37,17 +37,15 @@ const (
 	// else. A signature from any other repo, workflow file, or ref (a branch,
 	// a PR) fails the policy even though it chains to the same Fulcio root.
 	//
-	// The (0spoon|arctop) alternation is a TRANSITION for the repository's
-	// move from github.com/0spoon/seamless to github.com/arctop/seamless
-	// (plan:move-to-arctop). Releases signed before the move carry the 0spoon
-	// identity; the first release cut from arctop carries the arctop one, and
-	// this binary (signed under 0spoon) must accept it or `seamlessd update`
-	// could never cross the move. Once releases come from arctop the module
-	// rename narrows this back to arctop only, while docs/install and
-	// docs/install.ps1 -- which today pin the 0spoon identity alone when they
-	// verify checksums.txt -- learn to accept both permanently, so a pinned
-	// pre-move SEAMLESS_VERSION keeps verifying.
-	signingIdentityRegexp = `^https://github\.com/(0spoon|arctop)/seamless/\.github/workflows/release\.yml@refs/tags/v`
+	// One org only. update always verifies the LATEST release's installer
+	// (releaseDownloadBase in update.go); a pinned SEAMLESS_VERSION is handled
+	// by that installer, never by this check. So the only signer this binary
+	// ever needs to accept is the one cutting releases now. The installers are
+	// different: docs/install and docs/install.ps1 verify the checksums.txt of
+	// whatever version they are asked for, which can predate the repository's
+	// move to arctop (plan:move-to-arctop), so they accept the pre-move signer
+	// as well.
+	signingIdentityRegexp = `^https://github\.com/arctop/seamless/\.github/workflows/release\.yml@refs/tags/v`
 )
 
 // sigstoreTrustedRoot parses the embedded trusted-root snapshot.

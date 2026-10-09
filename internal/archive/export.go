@@ -21,7 +21,7 @@ import (
 	// driver is how a later refactor turns this into a runtime panic.
 	_ "modernc.org/sqlite"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // ExportOptions configures one export. Only DataDir and Out are required.

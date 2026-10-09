@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // MemoryBodyReader reads a full memory (including its body) from a data-dir-

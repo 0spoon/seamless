@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/files"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/files"
 )
 
 // memory_write updates in place, and an update must not quietly discard the

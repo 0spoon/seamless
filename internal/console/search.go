@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/retrieve"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/retrieve"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // searchScopes are the ?scope values in selector order: "all", the two

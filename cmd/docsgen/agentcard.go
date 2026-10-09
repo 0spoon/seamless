@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/0spoon/seamless/internal/a2a"
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/a2a"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // agentCardPath is where the A2A Agent Card publishes, relative to the site

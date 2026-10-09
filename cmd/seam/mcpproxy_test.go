@@ -15,7 +15,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/agentguide"
+	"github.com/arctop/seamless/internal/agentguide"
 )
 
 // jsonRPCID pulls the id out of one relayed frame, so a test can assert the

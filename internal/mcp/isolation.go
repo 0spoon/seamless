@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/gardener"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/gardener"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // Project isolation at the tool surface. The policy itself lives in

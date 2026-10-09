@@ -16,7 +16,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/bench"
+	"github.com/arctop/seamless/internal/bench"
 )
 
 // armFixture is one fake arm on disk.

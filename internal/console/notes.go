@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // noteSortKeys are the accepted ?sort values on the notes list.

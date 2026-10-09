@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/demokit"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/demokit"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // A seeded arm is only worth anything if the agent's session BINDS to the

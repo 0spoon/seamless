@@ -17,7 +17,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/files"
+	"github.com/arctop/seamless/internal/files"
 )
 
 const (

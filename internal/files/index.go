@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // Item kinds, as stored in the fts.kind and embeddings.kind columns. Aliases

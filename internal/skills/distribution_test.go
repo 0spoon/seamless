@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/0spoon/seamless/internal/agentguide"
+	"github.com/arctop/seamless/internal/agentguide"
 )
 
 func TestSkillFrontmatterAndCodexMetadata(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // PlanRollup is the per-plan aggregate the briefing surfaces: Total step tasks,

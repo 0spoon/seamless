@@ -24,7 +24,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/0spoon/seamless/internal/bench"
+	"github.com/arctop/seamless/internal/bench"
 )
 
 // agentOpts is the agent invocation, minus the per-run parts.

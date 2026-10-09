@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // ToolCountVerdict judges the tool count a server exposes and renders the

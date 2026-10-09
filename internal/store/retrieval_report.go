@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // RetrievalWindowKeys are the selectable trailing windows for the retrieval-health

@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/store"
-	"github.com/0spoon/seamless/internal/validate"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/store"
+	"github.com/arctop/seamless/internal/validate"
 )
 
 // runFamily manages the project_families setting: named groupings whose members

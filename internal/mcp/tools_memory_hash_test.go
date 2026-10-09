@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/files"
+	"github.com/arctop/seamless/internal/files"
 )
 
 // content_hash is the ETag half of the expect_hash precondition: an agent can

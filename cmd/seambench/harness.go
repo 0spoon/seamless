@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/bench"
+	"github.com/arctop/seamless/internal/bench"
 )
 
 // harnessScript is the fixture harness, relative to the repo root.

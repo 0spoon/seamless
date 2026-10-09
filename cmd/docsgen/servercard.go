@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/0spoon/seamless/internal/config"
-	seamlessmcp "github.com/0spoon/seamless/internal/mcp"
+	"github.com/arctop/seamless/internal/config"
+	seamlessmcp "github.com/arctop/seamless/internal/mcp"
 )
 
 // serverJSONPath is the MCP registry listing at the repo root -- the one

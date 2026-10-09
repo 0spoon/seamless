@@ -3,8 +3,8 @@ package mcp
 import (
 	"context"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/features"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/features"
 )
 
 // markFirstReuse records the momentum "first reuse" moment: the first time a

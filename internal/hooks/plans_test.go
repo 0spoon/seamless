@@ -11,13 +11,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/events"
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/plans"
-	"github.com/0spoon/seamless/internal/retrieve"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/events"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/plans"
+	"github.com/arctop/seamless/internal/retrieve"
+	"github.com/arctop/seamless/internal/store"
 )
 
 const testSID = "abcdef12-3456"

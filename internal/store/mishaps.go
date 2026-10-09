@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // mishapPayload is the slice of an agent.mishap event payload this package

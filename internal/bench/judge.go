@@ -27,8 +27,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/llm"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/llm"
 )
 
 // judgeTranscriptMaxRunes caps how much transcript is sent. The tail is what

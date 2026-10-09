@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // Proposal statuses. A rejection has two strengths: ProposalDismissed is the

@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // proposeStaleStages proposes archiving stage memories with no live gate and no

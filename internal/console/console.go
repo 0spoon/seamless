@@ -27,14 +27,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/events"
-	"github.com/0spoon/seamless/internal/features"
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/gardener"
-	"github.com/0spoon/seamless/internal/retrieve"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/events"
+	"github.com/arctop/seamless/internal/features"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/gardener"
+	"github.com/arctop/seamless/internal/retrieve"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // cookieName holds the console session token (a hash of the static key, never

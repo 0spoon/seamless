@@ -26,7 +26,7 @@
 set -eu
 
 OUT="docs-src/changelog.md"
-REPO_URL="https://github.com/0spoon/seamless"
+REPO_URL="https://github.com/arctop/seamless"
 MODE="write"
 case "${1:-}" in
 	"") ;;
@@ -77,7 +77,7 @@ description: Every Seamless release, newest first - what shipped and when, regen
      write better commit subjects. -->
 
 Every release, newest first. The entries mirror the notes on
-[GitHub Releases](https://github.com/0spoon/seamless/releases) - the same
+[GitHub Releases](https://github.com/arctop/seamless/releases) - the same
 commit subjects, grouped the same way, with housekeeping (docs, CI, dependency
 bumps) filtered out. Each heading links the release's downloads and checksums.
 

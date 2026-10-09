@@ -43,7 +43,7 @@
 #   SEAMLESS_ALLOW_ROOT=1       permit running as root (containers)
 set -eu
 
-REPO=0spoon/seamless
+REPO=arctop/seamless
 LABEL=org.thereisnospoon.seamless
 DOCS=https://thereisnospoon.org/docs/
 
@@ -407,10 +407,13 @@ verify_signature() {
 		warn "this release predates artifact signing -- checksum only"
 		return 0
 	}
+	# 0spoon = releases before the 2026 move to arctop (plan:move-to-arctop).
+	# A pinned SEAMLESS_VERSION from before the move carries that signer, so
+	# both orgs stay accepted for good; anything else is still foreign.
 	cosign verify-blob "$TMP/checksums.txt" \
 		--signature "$TMP/checksums.txt.sig" \
 		--certificate "$TMP/checksums.txt.pem" \
-		--certificate-identity-regexp "^https://github.com/$REPO/\.github/workflows/release\.yml@refs/tags/v" \
+		--certificate-identity-regexp '^https://github.com/(0spoon|arctop)/seamless/\.github/workflows/release\.yml@refs/tags/v' \
 		--certificate-oidc-issuer https://token.actions.githubusercontent.com \
 		>/dev/null 2>&1 ||
 		die "SIGNATURE VERIFICATION FAILED for checksums.txt.

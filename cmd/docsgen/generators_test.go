@@ -9,10 +9,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/console"
-	"github.com/0spoon/seamless/internal/features"
-	seamlessmcp "github.com/0spoon/seamless/internal/mcp"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/console"
+	"github.com/arctop/seamless/internal/features"
+	seamlessmcp "github.com/arctop/seamless/internal/mcp"
 )
 
 // repoRoot points the test at the repository root, the cwd docsgen requires:

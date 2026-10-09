@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/files"
+	"github.com/arctop/seamless/internal/files"
 )
 
 // claudeDesktopConfigPathFor is the pure per-OS resolver behind

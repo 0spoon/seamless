@@ -12,9 +12,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/llm"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/llm"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // Mode is what an import into a given destination turns out to be. It is a

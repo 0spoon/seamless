@@ -113,7 +113,7 @@ type Page struct {
 	// to the site root (docs/, holding the shared landing-page assets) and to the
 	// docs root (docs/docs/). Every href in every template is built from one of
 	// them, so the site works at thereisnospoon.org/docs/, at the
-	// 0spoon.github.io/seamless/docs/ fallback, and under `make docs-serve`
+	// arctop.github.io/seamless/docs/ fallback, and under `make docs-serve`
 	// without a base URL setting anywhere.
 	Root     string
 	DocsRoot string

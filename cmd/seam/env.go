@@ -17,7 +17,7 @@ import (
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // env is the world a handler is given.

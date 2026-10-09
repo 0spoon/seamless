@@ -14,8 +14,8 @@ package console
 import (
 	"slices"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/features"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/features"
 )
 
 // screen is one console screen.

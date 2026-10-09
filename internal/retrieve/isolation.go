@@ -3,8 +3,8 @@ package retrieve
 import (
 	"context"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // Project isolation as the retrieval surfaces see it. Every decision here

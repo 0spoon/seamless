@@ -76,7 +76,7 @@ Seed the fixture from the repo - the `myapp` project with this constraint and
 the rest of its memory set:
 
 ```sh
-git clone https://github.com/0spoon/seamless && cd seamless
+git clone https://github.com/arctop/seamless && cd seamless
 go run ./cmd/demoseed -scenes -data /tmp/seamless-demo -repo /path/to/your/test/repo
 SEAMLESS_DATA_DIR=/tmp/seamless-demo go run ./cmd/seamlessd serve
 ```

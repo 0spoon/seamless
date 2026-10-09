@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/agentguide"
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/agentguide"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // The subagent footer renders whenever the briefing renders, immediately

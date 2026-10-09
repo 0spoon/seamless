@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // ErrSlugExists is returned by CreateProject when the slug is already taken.

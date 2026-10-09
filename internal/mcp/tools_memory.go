@@ -9,12 +9,12 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/agentguide"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/lifecycle"
-	"github.com/0spoon/seamless/internal/store"
-	"github.com/0spoon/seamless/internal/validate"
+	"github.com/arctop/seamless/internal/agentguide"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/lifecycle"
+	"github.com/arctop/seamless/internal/store"
+	"github.com/arctop/seamless/internal/validate"
 )
 
 const maxDescriptionRunes = 150

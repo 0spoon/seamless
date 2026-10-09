@@ -6,8 +6,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // staleWindowDays is how long an active memory can go without being updated,

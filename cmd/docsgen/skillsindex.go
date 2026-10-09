@@ -9,7 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/0spoon/seamless/internal/skills"
+	"github.com/arctop/seamless/internal/skills"
 )
 
 // agentSkillsDir is the discovery root, relative to the site root:

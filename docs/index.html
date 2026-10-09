@@ -47,8 +47,8 @@
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "macOS, Linux, Windows",
       "url": "https://thereisnospoon.org/",
-      "downloadUrl": "https://github.com/0spoon/seamless/releases",
-      "license": "https://github.com/0spoon/seamless/blob/main/LICENSE",
+      "downloadUrl": "https://github.com/arctop/seamless/releases",
+      "license": "https://github.com/arctop/seamless/blob/main/LICENSE",
       "isAccessibleForFree": true,
       "offers": {
         "@type": "Offer",
@@ -216,7 +216,7 @@
         <a href="#faq">FAQ</a>
         <a href="claude-app/">Claude app</a>
         <a href="docs/">Docs</a>
-        <a href="https://github.com/0spoon/seamless">GitHub</a>
+        <a href="https://github.com/arctop/seamless">GitHub</a>
       </nav>
     </details>
     <nav class="head-nav" aria-label="Site">
@@ -233,7 +233,7 @@
         <svg class="icon-moon" aria-hidden="true"><use href="#i-moon"/></svg>
         <svg class="icon-sun" aria-hidden="true"><use href="#i-sun"/></svg>
       </button>
-      <a class="gh-link" href="https://github.com/0spoon/seamless" aria-label="Seamless on GitHub">
+      <a class="gh-link" href="https://github.com/arctop/seamless" aria-label="Seamless on GitHub">
         <svg aria-hidden="true"><use href="#i-gh"/></svg>
       </a>
       <a class="head-cta" href="#quickstart">Install</a>
@@ -775,7 +775,7 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
               <summary class="what-s">What this does</summary>
               <p data-os-block="unix">Fetches the checksum-verified release for your platform, installs <code>seamlessd</code> and <code>seam</code> into <code>~/.local/bin</code>, generates the API key, wires the clients it detects (Claude Code, the Claude app's chat surface, and Codex: hooks, MCP, and skills), and starts the daemon as a per-user service on <code>127.0.0.1:8081</code> with data in <code>~/.seamless</code>. Needs <code>curl</code> and <code>tar</code>. No Go, no CGO, no database, and no LLM key: recall is full-text only until you add OpenAI or Ollama for embeddings.</p>
               <p data-os-block="windows">Fetches the checksum-verified release for your platform, installs <code>seamlessd.exe</code> and <code>seam.exe</code> into <code>~\.local\bin</code>, generates the API key, wires the clients it detects (Claude Code, the Claude app's chat surface, and Codex: hooks, MCP, and skills), and starts the daemon as a per-user Scheduled Task (at logon, as you, no admin) on <code>127.0.0.1:8081</code> with data in <code>~\.seamless</code>. Needs nothing beyond Windows itself; PowerShell 5.1 and 7 both work. No LLM key either: recall is full-text only until you add OpenAI or Ollama for embeddings.</p>
-              <p>It is <a href="install">one shell script</a> (<a href="install.ps1">one PowerShell script</a> on Windows), and piping a stranger's script into a shell deserves a read first. Prefer a toolchain, or the pieces one at a time? <code>go install</code>, a <a href="https://github.com/0spoon/seamless/releases">prebuilt archive</a>, and <code>make install</code> all land in the same place; see <a href="docs/install/">Install &amp; deploy</a>.</p>
+              <p>It is <a href="install">one shell script</a> (<a href="install.ps1">one PowerShell script</a> on Windows), and piping a stranger's script into a shell deserves a read first. Prefer a toolchain, or the pieces one at a time? <code>go install</code>, a <a href="https://github.com/arctop/seamless/releases">prebuilt archive</a>, and <code>make install</code> all land in the same place; see <a href="docs/install/">Install &amp; deploy</a>.</p>
             </details>
           </div>
         </li>
@@ -846,7 +846,7 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
       </details>
       <details class="rv">
         <summary>Where are the benchmarks?</summary>
-        <div class="a"><p>Memory benchmarks in this category are mostly self-refereed, and every vendor publishes one where they win. The repo ships its scenario harness instead: <a href="https://github.com/0spoon/seamless/tree/main/cmd/seambench">cmd/seambench</a> runs real Claude Code sessions over a seeded repo with and without Seamless, grades what the agent did, and reports the difference, so you can measure it with your own model. Or start smaller: watch the <a href="#scenes">side-by-side sessions</a> above, then read what your agents wrote.</p></div>
+        <div class="a"><p>Memory benchmarks in this category are mostly self-refereed, and every vendor publishes one where they win. The repo ships its scenario harness instead: <a href="https://github.com/arctop/seamless/tree/main/cmd/seambench">cmd/seambench</a> runs real Claude Code sessions over a seeded repo with and without Seamless, grades what the agent did, and reports the difference, so you can measure it with your own model. Or start smaller: watch the <a href="#scenes">side-by-side sessions</a> above, then read what your agents wrote.</p></div>
       </details>
       <p class="faq-stem">Why not just use&hellip;</p>
       <details class="rv">
@@ -893,7 +893,7 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
       <p class="os-cap" data-os-block="windows">Windows</p>
       <span class="install-pill" data-os-block="windows"><span class="p" aria-hidden="true">PS&gt;</span><span class="cmd" data-copy="irm https://thereisnospoon.org/install.ps1 | iex">irm https://thereisnospoon.org/install.ps1 | iex</span><button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
       <p class="finale-links">
-        <a class="lnk" href="https://github.com/0spoon/seamless"><svg aria-hidden="true"><use href="#i-gh"/></svg> Star it on GitHub</a>
+        <a class="lnk" href="https://github.com/arctop/seamless"><svg aria-hidden="true"><use href="#i-gh"/></svg> Star it on GitHub</a>
         <a class="lnk" href="docs/">Read the docs first <svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
       </p>
     </div>
@@ -910,7 +910,7 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
         <span class="brand-word">seamless</span>
       </a>
       <p class="foot-tag">No seams. No spoons.</p>
-      <p class="colophon">Set in Fraunces, Instrument Sans &amp; IBM Plex Mono, self-hosted (<a href="static/fonts/OFL-NOTICE.txt">OFL</a>). This page loads nothing from other sites and has no trackers or cookies. What it remembers (theme, OS, how far you read) stays in your browser; <button class="forget-link" type="button" data-forget>forget your visit</button>. Naturally, the source is <a href="https://github.com/0spoon/seamless/tree/main/docs">in the repo</a>.</p>
+      <p class="colophon">Set in Fraunces, Instrument Sans &amp; IBM Plex Mono, self-hosted (<a href="static/fonts/OFL-NOTICE.txt">OFL</a>). This page loads nothing from other sites and has no trackers or cookies. What it remembers (theme, OS, how far you read) stays in your browser; <button class="forget-link" type="button" data-forget>forget your visit</button>. Naturally, the source is <a href="https://github.com/arctop/seamless/tree/main/docs">in the repo</a>.</p>
     </div>
     <nav class="foot-nav" aria-label="Footer">
       <div>
@@ -918,8 +918,8 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
         <a href="docs/">Docs</a>
         <a href="compare/">Compare</a>
         <a href="docs/changelog/">Changelog</a>
-        <a href="https://github.com/0spoon/seamless">GitHub</a>
-        <a href="https://github.com/0spoon/seamless/issues">Issues</a>
+        <a href="https://github.com/arctop/seamless">GitHub</a>
+        <a href="https://github.com/arctop/seamless/issues">Issues</a>
       </div>
       <div>
         <b>Start</b>
@@ -937,6 +937,6 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
 <script src="static/scenes-player.js?v=7074d146"></script>
 <script src="static/site.js?v=c88feb8d"></script>
 <script src="static/home.js?v=743d508c"></script>
-<script src="static/webmcp.js?v=b8c80228"></script>
+<script src="static/webmcp.js?v=c9b44136"></script>
 </body>
 </html>

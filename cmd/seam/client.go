@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // consoleTimeout bounds a console JSON request. The console renders from local

@@ -127,14 +127,14 @@ func TestOriginURL(t *testing.T) {
 	fetch = +refs/heads/*:refs/remotes/upstream/*
 ; a comment
 [remote "origin"]
-	url = git@github.com:0spoon/seamless.git
+	url = git@github.com:arctop/seamless.git
 	fetch = +refs/heads/*:refs/remotes/origin/*
 [branch "main"]
 	remote = origin
 `
 	repo := t.TempDir()
 	writeFile(t, filepath.Join(repo, ".git", "config"), config)
-	require.Equal(t, "git@github.com:0spoon/seamless.git", OriginURL(repo))
+	require.Equal(t, "git@github.com:arctop/seamless.git", OriginURL(repo))
 
 	t.Run("a linked worktree reads the shared config", func(t *testing.T) {
 		base := t.TempDir()
@@ -142,7 +142,7 @@ func TestOriginURL(t *testing.T) {
 		writeFile(t, filepath.Join(main, ".git", "config"), config)
 		wt := filepath.Join(base, "backend-hotfix")
 		mkLinkedWorktree(t, main, wt, "backend-hotfix", false)
-		require.Equal(t, "git@github.com:0spoon/seamless.git", OriginURL(wt))
+		require.Equal(t, "git@github.com:arctop/seamless.git", OriginURL(wt))
 	})
 
 	t.Run("no origin is empty, not another remote", func(t *testing.T) {

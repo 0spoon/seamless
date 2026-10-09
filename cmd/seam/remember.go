@@ -9,7 +9,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // The required flags are named in the summary because the synopsis cannot say it:

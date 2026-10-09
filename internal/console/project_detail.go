@@ -17,9 +17,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/store"
-	"github.com/0spoon/seamless/internal/validate"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/store"
+	"github.com/arctop/seamless/internal/validate"
 )
 
 // projectTabKeys are the workspace tabs in bar order. A ?tab= deep-link outside

@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // harvestFallback is the finding recorded when no assistant text can be

@@ -1,7 +1,7 @@
 # Seamless
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/0spoon/seamless.svg)](https://pkg.go.dev/github.com/0spoon/seamless)
-[![Latest release](https://img.shields.io/github/v/release/0spoon/seamless)](https://github.com/0spoon/seamless/releases/latest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/arctop/seamless.svg)](https://pkg.go.dev/github.com/arctop/seamless)
+[![Latest release](https://img.shields.io/github/v/release/arctop/seamless)](https://github.com/arctop/seamless/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-6f42c1)](https://thereisnospoon.org/docs/reference/mcp/)
 

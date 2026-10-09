@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 const sessionCols = `id, name, project_slug, status, findings, claude_session_id,

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/files"
+	"github.com/arctop/seamless/internal/files"
 )
 
 // managedMarker tags a hook entry as owned by Seamless, so re-installs replace it

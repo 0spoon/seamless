@@ -14,10 +14,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/agentproc"
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/hooks"
-	"github.com/0spoon/seamless/internal/mcp"
+	"github.com/arctop/seamless/internal/agentproc"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/hooks"
+	"github.com/arctop/seamless/internal/mcp"
 )
 
 // mkRepo makes a git checkout with an origin remote and returns its root.

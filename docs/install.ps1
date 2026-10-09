@@ -74,7 +74,7 @@ try {
         [System.Net.CredentialCache]::DefaultNetworkCredentials
 } catch {}
 
-$Repo = '0spoon/seamless'
+$Repo = 'arctop/seamless'
 $TaskName = 'Seamless'
 $DocsUrl = 'https://thereisnospoon.org/docs/'
 
@@ -321,7 +321,10 @@ function Test-Signature {
         Warn 'this release predates artifact signing -- checksum only'
         return
     }
-    $idRegex = "^https://github.com/$Repo/\.github/workflows/release\.yml@refs/tags/v"
+    # 0spoon = releases before the 2026 move to arctop (plan:move-to-arctop).
+    # A pinned SEAMLESS_VERSION from before the move carries that signer, so
+    # both orgs stay accepted for good; anything else is still foreign.
+    $idRegex = '^https://github.com/(0spoon|arctop)/seamless/\.github/workflows/release\.yml@refs/tags/v'
     & cosign verify-blob $SumPath `
         --signature $sig `
         --certificate $cert `

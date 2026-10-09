@@ -20,8 +20,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
 )
 
 var projectIsolationCmd = spec("project isolation", groupObservability,

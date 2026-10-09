@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // SettingRepoProjectMap is the settings key holding the cwd->project-slug map: a

@@ -21,7 +21,7 @@ package features
 import (
 	"slices"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // Key identifies an optional feature. It is the stable identifier used by the

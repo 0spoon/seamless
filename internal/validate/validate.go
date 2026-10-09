@@ -17,7 +17,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 var (

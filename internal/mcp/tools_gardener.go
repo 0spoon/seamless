@@ -8,8 +8,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/gardener"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/gardener"
+	"github.com/arctop/seamless/internal/store"
 )
 
 func gardenerProposalsTool() mcp.Tool {

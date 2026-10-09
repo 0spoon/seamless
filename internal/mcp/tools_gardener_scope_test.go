@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/gardener"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/gardener"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // TestGardenerRequestScope pins the token-to-scope mapping at the boundary.

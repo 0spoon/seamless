@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/validate"
+	"github.com/arctop/seamless/internal/validate"
 )
 
 // planFilePath validates that a tool-input path is a .md file directly under

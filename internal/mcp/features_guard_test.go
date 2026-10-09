@@ -15,11 +15,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/agentguide"
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/features"
-	mcpserver "github.com/0spoon/seamless/internal/mcp"
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/agentguide"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/features"
+	mcpserver "github.com/arctop/seamless/internal/mcp"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // featuresAll builds a config with every registered feature switched the same

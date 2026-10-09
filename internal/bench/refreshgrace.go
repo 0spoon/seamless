@@ -18,8 +18,8 @@
 package bench
 
 import (
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/demokit"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/demokit"
 )
 
 const (

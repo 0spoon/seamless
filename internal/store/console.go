@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // NavCounts are the cheap roll-up counts the console shows in its sidebar. It is

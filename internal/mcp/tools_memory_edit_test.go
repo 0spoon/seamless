@@ -12,9 +12,9 @@ import (
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/agentguide"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/files"
+	"github.com/arctop/seamless/internal/agentguide"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/files"
 )
 
 // memoryFileBytes reads a memory's markdown file exactly as it sits on disk.

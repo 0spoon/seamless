@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/llm"
-	"github.com/0spoon/seamless/internal/store"
-	"github.com/0spoon/seamless/internal/validate"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/llm"
+	"github.com/arctop/seamless/internal/store"
+	"github.com/arctop/seamless/internal/validate"
 )
 
 // ErrPathOccupied is returned when a write would land on a file owned by a

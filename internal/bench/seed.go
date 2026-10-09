@@ -14,8 +14,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/demokit"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/demokit"
 )
 
 // benchProject is the demo project every scenario seeds; the demo repo maps

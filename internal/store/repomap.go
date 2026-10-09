@@ -32,8 +32,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/gitread"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/gitread"
 )
 
 // SettingLocalHost is the settings key holding the host name this daemon

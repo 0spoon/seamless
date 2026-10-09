@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/files"
+	"github.com/arctop/seamless/internal/files"
 )
 
 func TestRoot_ClientHomes(t *testing.T) {

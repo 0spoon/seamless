@@ -8,7 +8,7 @@ description: Every Seamless release, newest first - what shipped and when, regen
      write better commit subjects. -->
 
 Every release, newest first. The entries mirror the notes on
-[GitHub Releases](https://github.com/0spoon/seamless/releases) - the same
+[GitHub Releases](https://github.com/arctop/seamless/releases) - the same
 commit subjects, grouped the same way, with housekeeping (docs, CI, dependency
 bumps) filtered out. Each heading links the release's downloads and checksums.
 
@@ -17,7 +17,7 @@ install in place with `seamlessd update`.
 
 ## v0.5.4 {#v0-5-4}
 
-Released 2026-10-08 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.4)
+Released 2026-10-08 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.5.4)
 
 ### Features
 
@@ -31,7 +31,7 @@ Released 2026-10-08 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.5.3 {#v0-5-3}
 
-Released 2026-09-28 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.3)
+Released 2026-09-28 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.5.3)
 
 ### Features
 
@@ -53,7 +53,7 @@ Released 2026-09-28 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.5.2 {#v0-5-2}
 
-Released 2026-09-27 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.2)
+Released 2026-09-27 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.5.2)
 
 ### Features
 
@@ -66,7 +66,7 @@ Released 2026-09-27 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.5.1 {#v0-5-1}
 
-Released 2026-09-24 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.1)
+Released 2026-09-24 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.5.1)
 
 ### Fixes
 
@@ -79,7 +79,7 @@ Released 2026-09-24 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.5.0 {#v0-5-0}
 
-Released 2026-09-24 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.0)
+Released 2026-09-24 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.5.0)
 
 ### Features
 
@@ -105,7 +105,7 @@ Released 2026-09-24 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.11 {#v0-4-11}
 
-Released 2026-08-11 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.11)
+Released 2026-08-11 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.11)
 
 ### Features
 
@@ -116,7 +116,7 @@ Released 2026-08-11 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.10 {#v0-4-10}
 
-Released 2026-08-08 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.10)
+Released 2026-08-08 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.10)
 
 ### Features
 
@@ -148,7 +148,7 @@ Released 2026-08-08 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.9 {#v0-4-9}
 
-Released 2026-07-31 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.9)
+Released 2026-07-31 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.9)
 
 ### Features
 
@@ -163,7 +163,7 @@ Released 2026-07-31 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.8 {#v0-4-8}
 
-Released 2026-07-30 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.8)
+Released 2026-07-30 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.8)
 
 ### Fixes
 
@@ -174,7 +174,7 @@ Released 2026-07-30 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.7 {#v0-4-7}
 
-Released 2026-07-29 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.7)
+Released 2026-07-29 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.7)
 
 ### Fixes
 
@@ -183,7 +183,7 @@ Released 2026-07-29 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.6 {#v0-4-6}
 
-Released 2026-07-29 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.6)
+Released 2026-07-29 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.6)
 
 ### Features
 
@@ -229,7 +229,7 @@ Released 2026-07-29 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.5 {#v0-4-5}
 
-Released 2026-07-26 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.5)
+Released 2026-07-26 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.5)
 
 ### Features
 
@@ -243,7 +243,7 @@ Released 2026-07-26 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.4 {#v0-4-4}
 
-Released 2026-07-24 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.4)
+Released 2026-07-24 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.4)
 
 ### Features
 
@@ -284,7 +284,7 @@ Released 2026-07-24 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.3 {#v0-4-3}
 
-Released 2026-07-22 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.3)
+Released 2026-07-22 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.3)
 
 ### Features
 
@@ -296,7 +296,7 @@ Released 2026-07-22 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.2 {#v0-4-2}
 
-Released 2026-07-22 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.2)
+Released 2026-07-22 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.2)
 
 ### Features
 
@@ -310,7 +310,7 @@ Released 2026-07-22 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.1 {#v0-4-1}
 
-Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.1)
+Released 2026-07-21 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.1)
 
 ### Features
 
@@ -324,7 +324,7 @@ Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.4.0 {#v0-4-0}
 
-Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.0)
+Released 2026-07-21 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.4.0)
 
 ### Features
 
@@ -343,7 +343,7 @@ Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.3.9 {#v0-3-9}
 
-Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.9)
+Released 2026-07-21 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.3.9)
 
 ### Features
 
@@ -372,7 +372,7 @@ Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.3.8 {#v0-3-8}
 
-Released 2026-07-20 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.8)
+Released 2026-07-20 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.3.8)
 
 ### Features
 
@@ -384,7 +384,7 @@ Released 2026-07-20 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.3.7 {#v0-3-7}
 
-Released 2026-07-20 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.7)
+Released 2026-07-20 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.3.7)
 
 ### Features
 
@@ -422,7 +422,7 @@ Released 2026-07-20 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.3.6 {#v0-3-6}
 
-Released 2026-07-19 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.6)
+Released 2026-07-19 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.3.6)
 
 ### Features
 
@@ -437,7 +437,7 @@ Released 2026-07-19 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.3.5 {#v0-3-5}
 
-Released 2026-07-19 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.5)
+Released 2026-07-19 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.3.5)
 
 ### Features
 
@@ -446,7 +446,7 @@ Released 2026-07-19 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.3.4 {#v0-3-4}
 
-Released 2026-07-18 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.4)
+Released 2026-07-18 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.3.4)
 
 ### Features
 
@@ -455,7 +455,7 @@ Released 2026-07-18 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.3.3 {#v0-3-3}
 
-Released 2026-07-18 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.3)
+Released 2026-07-18 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.3.3)
 
 ### Features
 
@@ -471,7 +471,7 @@ Released 2026-07-18 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.3.2 {#v0-3-2}
 
-Released 2026-07-18 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.2)
+Released 2026-07-18 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.3.2)
 
 ### Features
 
@@ -485,7 +485,7 @@ Released 2026-07-18 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.3.1 {#v0-3-1}
 
-Released 2026-07-17 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.1)
+Released 2026-07-17 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.3.1)
 
 ### Features
 
@@ -514,7 +514,7 @@ Released 2026-07-17 - [downloads and notes](https://github.com/0spoon/seamless/r
 
 ## v0.3.0 {#v0-3-0}
 
-Released 2026-07-16 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.0)
+Released 2026-07-16 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.3.0)
 
 The first public release of Seamless.
 

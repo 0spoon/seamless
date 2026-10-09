@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // IdentifierMatchKind describes how a search query matched an entity's stable

@@ -3,7 +3,7 @@ package mcp
 import (
 	"strings"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // mishapMemoryIDs returns the ids of memories whose name appears verbatim in a

@@ -15,12 +15,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/features"
-	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/store"
-	"github.com/0spoon/seamless/internal/validate"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
+	"github.com/arctop/seamless/internal/features"
+	"github.com/arctop/seamless/internal/files"
+	"github.com/arctop/seamless/internal/store"
+	"github.com/arctop/seamless/internal/validate"
 )
 
 // repoMapping is one (host, path) -> project route, read from the repo_map

@@ -10,8 +10,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/features"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/features"
 )
 
 // expectedTools mirrors mcp.ToolCount without importing the mcp server package

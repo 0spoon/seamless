@@ -16,7 +16,7 @@ import (
 	// (it would drag the ~30 modernc.org/sqlite packages in), but the test binary
 	// can, which is what lets TestPlanWindows_MatchTheResolver pin the transcribed
 	// planWindows against the canonical resolver instead of trusting it.
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // The bugs the plans group carried into the table, pinned against the real

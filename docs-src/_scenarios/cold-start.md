@@ -73,7 +73,7 @@ The fixture is in the repo. Seed a throwaway instance with exactly this state -
 the `myapp` project, its nine memories, and the `auth-refresh` plan at 4/6:
 
 ```sh
-git clone https://github.com/0spoon/seamless && cd seamless
+git clone https://github.com/arctop/seamless && cd seamless
 go run ./cmd/demoseed -scenes -data /tmp/seamless-demo -repo /path/to/your/test/repo
 SEAMLESS_DATA_DIR=/tmp/seamless-demo go run ./cmd/seamlessd serve
 ```

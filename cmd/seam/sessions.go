@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
 )
 
 // The list and the detail view are one command, which is what `between` exists

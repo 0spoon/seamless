@@ -13,9 +13,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
-	"github.com/0spoon/seamless/internal/hooks"
-	agentskills "github.com/0spoon/seamless/internal/skills"
+	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/hooks"
+	agentskills "github.com/arctop/seamless/internal/skills"
 )
 
 // Service identifiers, duplicated on purpose from the three install surfaces that

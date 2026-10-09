@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/agentguide"
+	"github.com/arctop/seamless/internal/agentguide"
 )
 
 // A kind=stage write whose body carries no parseable Status header succeeds but

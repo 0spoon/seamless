@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // clientConsoleTimeout bounds the whole settings request. The console renders

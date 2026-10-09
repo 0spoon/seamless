@@ -10,7 +10,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/0spoon/seamless/internal/store"
+	"github.com/arctop/seamless/internal/store"
 )
 
 // scopeGate answers "may this pass touch that project?" for one pass, caching

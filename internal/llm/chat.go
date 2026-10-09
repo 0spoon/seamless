@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // chatTimeout bounds a single completion. Digests are short; a minute is ample.

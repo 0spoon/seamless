@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/0spoon/seamless/internal/skills"
+	"github.com/arctop/seamless/internal/skills"
 )
 
 // TestAgentSkillsIndexMatchesPublishedArtifacts: the index is only trustworthy

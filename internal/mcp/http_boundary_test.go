@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	seammcp "github.com/0spoon/seamless/internal/mcp"
+	seammcp "github.com/arctop/seamless/internal/mcp"
 )
 
 type countingBody struct {

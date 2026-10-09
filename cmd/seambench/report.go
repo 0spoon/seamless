@@ -27,8 +27,8 @@ import (
 	"syscall"
 	"text/tabwriter"
 
-	"github.com/0spoon/seamless/internal/bench"
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/bench"
+	"github.com/arctop/seamless/internal/config"
 )
 
 // aggregateRow is the scenario-column label for a row pooled over scenarios.

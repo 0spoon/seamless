@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/arctop/seamless/internal/config"
 )
 
 //go:embed templates
