@@ -56,7 +56,9 @@
 .k-note { color: var(--k-note); }
 
 /* ---------- hero ---------- */
-.ca-hero { position: relative; padding: calc(var(--head-h) + clamp(44px, 8vh, 96px)) 0 clamp(72px, 11vh, 120px); }
+/* clip x only: on phones .hero-copy::before's clearing reaches past the
+   viewport and the page scrolled sideways; y stays open for the chart tip */
+.ca-hero { position: relative; overflow-x: clip; padding: calc(var(--head-h) + clamp(44px, 8vh, 96px)) 0 clamp(72px, 11vh, 120px); }
 .ca-hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: clamp(32px, 4.5vw, 72px); align-items: center; }
 .ca-hero .h1 { font-size: clamp(44px, 5.1vw, 78px); line-height: 1; }
 .ca-act { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; }
