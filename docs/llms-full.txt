@@ -2234,7 +2234,8 @@ per-connection binding `session_start` makes.
 Its edges are deliberate:
 
 - **An explicit binding wins.** A `session_start` on the connection takes
-  precedence over the process binding.
+  precedence over the process binding, and a call's own `session=` argument
+  takes precedence over both, for that call only.
 - **One process, one session.** If two live ambient sessions are stamped with
   the same process - a host process running several sessions at once - nothing
   is bound automatically, and resolution falls back to the earlier rules: an
@@ -3652,6 +3653,15 @@ consequences you have to design around:
 So: **re-run `session_start` on reconnect**, with the same `name` to resume the
 same session rather than opening a second one. Treat a sudden run of
 ambiguous-scope errors as a lost binding, not as a bug in your arguments.
+
+Or carry the session on the call. Every tool except `session_start` also takes
+`session`: the `name` that `session_start` returned. A call carrying it is scoped
+to that session and credited to it, whatever the connection is bound to, for
+that call only. A name that matches no session is refused, never ignored. It is
+also how a session will survive MCP's stateless revision (`2026-07-28`), which
+has no `Mcp-Session-Id` to bind to. Seamless does not serve that revision yet: a
+client that asks for it is refused with the list of supported versions and
+negotiates down to `2025-11-25`, the newest revision with a handshake.
 
 Claude Code and Codex agents are spared all of this: their connection names the
 agent process, and the daemon matches it to the agent's own session on every
@@ -5934,6 +5944,7 @@ Create or update a durable memory -- the compact knowledge a future session must
 | `description` | string | **yes** | one line, &lt;=150 chars -- the only text shown in indexes |
 | `body` | string | **yes** | markdown body (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `supersedes` | string | no | name of an existing memory this one replaces; that memory is marked superseded (invalid) and pointed here |
 | `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); omit to leave an existing memory's tags untouched, and note an empty list reads as absent, not as a clear |
 
@@ -5946,6 +5957,7 @@ Append markdown to an existing memory's body. The memory keeps its id. To create
 | `name` | string | **yes** | memory name |
 | `body` | string | **yes** | markdown to append (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## memory_edit {#memory_edit}
 
@@ -5958,6 +5970,7 @@ Edit an existing memory in place with exact search/replace, instead of resending
 | `edits` | array | no | ordered list of exact search/replace edits, applied in order to the CURRENT body. Each is {old_string, new_string, replace_all?}. old_string must match the body EXACTLY (whitespace and indentation included) and must be unique unless replace_all is true; include surrounding lines to make it unique. All-or-nothing: if any edit fails to match, nothing is written. |
 | `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `tags_add` | array | no | tags to add, leaving the rest in place (a comma-separated string is also accepted) |
 | `tags_remove` | array | no | tags to remove, leaving the rest in place; this is how a tag gets cleared (a comma-separated string is also accepted) |
 
@@ -5970,6 +5983,7 @@ Read a memory by name within the current project (falling back to a global memor
 | `id` | string | no | memory id (ULID), as carried by events, recall results, and gardener proposals; bypasses name/project resolution |
 | `name` | string | no | memory name; pass exactly one of name or id |
 | `project` | string | no | project slug; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## memory_delete {#memory_delete}
 
@@ -5979,6 +5993,7 @@ Delete a memory by name: the markdown file leaves the disk and its index row goe
 |---|---|---|---|
 | `name` | string | **yes** | memory name |
 | `project` | string | no | project slug; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## recall {#recall}
 
@@ -5991,6 +6006,7 @@ Search durable knowledge (memories, notes) and the work record (tasks, trials, s
 | `project` | string | no | project slug; defaults to the bound session's project |
 | `query` | string | no | what you are looking for; required unless kind is set (kind alone lists that kind newest-first) |
 | `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`, `tasks`, `trials`, `sessions`. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ---
 
@@ -6098,6 +6114,7 @@ Create a work note -- a research finding, decision record, meeting summary, or a
 | `description` | string | no | optional one-line summary |
 | `plan` | string | no | optional plan slug (plan:&lt;slug&gt; convention): tags this note into that plan's composition so it surfaces on the Plans screen alongside its tasks_add plan=&lt;slug&gt; steps. Use it whenever this note is a plan's narrative or supporting context. |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `source_url` | string | no | optional source URL |
 | `tags` | array | no | tags (a comma-separated string is also accepted) |
 
@@ -6109,6 +6126,7 @@ Read a note by id, or by slug within the current project (falling back to a glob
 |---|---|---|---|
 | `id` | string | no | note id (ULID); pass exactly one of id or slug |
 | `project` | string | no | project slug for the slug lookup; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `slug` | string | no | note slug, as briefings, plan compositions, and notes_create responses name notes (alias: name) |
 
 ## notes_update {#notes_update}
@@ -6122,6 +6140,7 @@ Update a note's fields by id (title, description, body, project, tags). Omitted 
 | `description` | string | no | new description |
 | `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
 | `project` | string | no | new project slug ("" or "global" = global scope) |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); an empty list is read as absent and leaves the tags untouched -- to drop a tag use tags_remove |
 | `tags_add` | array | no | tags to add, leaving the rest in place; a tag already on the note is not duplicated. Applied after tags. |
 | `tags_remove` | array | no | tags to drop, matched exactly; a tag the note does not carry is ignored. Applied last, so it also removes what tags/tags_add just set. |
@@ -6136,6 +6155,7 @@ Edit an existing note in place with exact search/replace, by id, instead of rese
 | `id` | string | **yes** | note id (ULID), as notes_create returns and briefings and plan compositions carry |
 | `edits` | array | **yes** | ordered list of exact search/replace edits, applied in order to the CURRENT body. Each is {old_string, new_string, replace_all?}. old_string must match the body EXACTLY (whitespace and indentation included) and must be unique unless replace_all is true; include surrounding lines to make it unique. All-or-nothing: if any edit fails to match, nothing is written. |
 | `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## notes_append {#notes_append}
 
@@ -6145,6 +6165,7 @@ Append a UTC-timestamped line to an existing note's body, by id. Use it when a n
 |---|---|---|---|
 | `id` | string | **yes** | note id (ULID) |
 | `body` | string | **yes** | text to append (aliases: content, text) |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## notes_delete {#notes_delete}
 
@@ -6153,12 +6174,15 @@ Delete a note by id: the markdown file leaves the disk and its index row goes wi
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | **yes** | note id (ULID) |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## project_list {#project_list}
 
 List every project (slug, name, description, isolation). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. Each row carries its isolation state (open|confidential|sealed), which is what a cross-project call has to respect: a confidential or sealed project is readable only from a session bound to it, and a sealed one takes no writes from outside either. It returns identity, not contents; to search what is inside a project, use recall.
 
-Takes no parameters.
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## project_create {#project_create}
 
@@ -6169,6 +6193,7 @@ Register a project up front, with a human-readable name and an optional descript
 | `name` | string | **yes** | human-readable project name |
 | `description` | string | no | optional one-line description |
 | `isolation` | string | no | optional isolation state (open\|confidential\|sealed); omit for open. open shares normally. confidential means nothing leaves: agents in other projects never read this one, and agents bound to it cannot write outside it. sealed adds the inbound half -- agents here see only this project: no global memories, no family, no cross-project reads. Set it at creation for work that is sensitive from the start; there is no tool to change it afterwards, because tightening detaches family and parent links and is an owner decision, made on an owner surface. Isolation requires a standalone project, so do not create an isolated child of another project. One of: `open`, `confidential`, `sealed`. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `slug` | string | no | optional explicit slug |
 
 ## capture_url {#capture_url}
@@ -6179,6 +6204,7 @@ Fetch a web page (SSRF-guarded: private/loopback addresses are rejected) and sav
 |---|---|---|---|
 | `url` | string | **yes** | http(s) URL to capture |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ---
 
@@ -6245,6 +6271,7 @@ Add a task to the dependency-aware ready queue. depends_on lists task ids that m
 | `depends_on` | array | no | task ids this task is blocked by (a comma-separated string is also accepted) |
 | `plan` | string | no | optional plan slug (plan:&lt;slug&gt; convention) that composes this task as a step of a plan. Plan steps are excluded from the default ready-queue and surfaced under the plan filter. |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## tasks_update {#tasks_update}
 
@@ -6269,6 +6296,7 @@ List the actionable (ready) tasks for a project -- open tasks with no unfinished
 |---|---|---|---|
 | `plan` | string | no | optional plan slug: return that plan's ready/blocked step tasks instead of the default (non-plan) queue |
 | `project` | string | no | project slug; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## tasks_list {#tasks_list}
 
@@ -6279,6 +6307,7 @@ List a project's tasks, optionally filtered by status, newest first. By default 
 | `id` | string | no | load exactly one task by its globally-unique id; when set, project/status/plan are ignored and the response's tasks array holds just that task |
 | `plan` | string | no | optional plan slug: list that plan's step tasks instead of the default (non-plan) tasks |
 | `project` | string | no | project slug; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `status` | string | no | optional status filter. One of: `open`, `in_progress`, `done`, `dropped`. |
 
 ## tasks_claim {#tasks_claim}
@@ -6409,6 +6438,7 @@ Open a research lab and get its recent trial history for context -- including tr
 |---|---|---|---|
 | `lab` | string | **yes** | lab name (a stable label for a line of investigation) |
 | `goal` | string | no | optional note on what this lab is investigating |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## trial_record {#trial_record}
 
@@ -6426,6 +6456,7 @@ Record one experiment in a research lab: what changed, expected vs actual, outco
 | `metrics` | object | no | optional object of structured metrics, e.g. {"hz":497,"err_pct":0.2} (a JSON-object string is also accepted) |
 | `outcome` | string | no | suggested values pass\|fail\|partial\|inconclusive; free text accepted |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## trial_query {#trial_query}
 
@@ -6439,6 +6470,7 @@ Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics f
 | `limit` | integer | no | max results (default 20, max 200) |
 | `metrics_filter` | object | no | optional object; trials whose metrics equal every given key match, e.g. {"hz":497} (a JSON-object string is also accepted) |
 | `outcome` | string | no | filter by outcome (e.g. fail) |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## gardener_proposals {#gardener_proposals}
 
@@ -6447,6 +6479,7 @@ List pending gardener proposals (merge/consolidate duplicate memories, archive s
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`, `relocate`, `merge_plans`. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## gardener_request {#gardener_request}
 
@@ -6456,6 +6489,7 @@ The natural-language entry point for REORGANIZING memory. Describe the change in
 |---|---|---|---|
 | `request` | string | **yes** | the reorganization request in plain language |
 | `project` | string | no | scope candidate memories: a project slug (its memories + globals), "global" for globals only, or "all" for every project on the machine. Omit to use the session's project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## gardener_split {#gardener_split}
 
@@ -6465,6 +6499,7 @@ Plan a project SPLIT: divide one existing project into two or more NEW child pro
 |---|---|---|---|
 | `source` | string | **yes** | the project slug to split (its own memories are classified into the children/shared parent) |
 | `instruction` | string | no | optional guidance: which children, what stays shared |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## gardener_apply {#gardener_apply}
 
@@ -6474,12 +6509,15 @@ Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; 
 |---|---|---|---|
 | `id` | string | **yes** | proposal id (ULID) |
 | `action` | string | no | apply (default), dismiss (until it recurs), or hide (forever). One of: `apply`, `dismiss`, `hide`. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## usage_summary {#usage_summary}
 
 Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Every count is machine-wide and identical for every caller; only the named memory lists (topInjected, topUtility) are fenced, so memories this session may not read under project isolation are dropped from them and those lists can come back shorter than the counts imply. Read-only.
 
-Takes no parameters.
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## favorite_set {#favorite_set}
 
@@ -6491,6 +6529,7 @@ Star or unstar an item. Favorites sort first in the console, are pinned into ses
 | `id` | string | **yes** | the item's identifier: memory name, note id (or slug), project slug, plan slug, task id, session id (or name), trial id |
 | `favorite` | boolean | **yes** | true to star, false to unstar |
 | `project` | string | no | project scope for memory-name/note-slug resolution; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ---
 

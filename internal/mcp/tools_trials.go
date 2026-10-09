@@ -38,7 +38,12 @@ func (s *Server) handleLabOpen(ctx context.Context, req mcp.CallToolRequest) (*m
 	for _, tr := range trials {
 		recent = append(recent, trialJSON(tr))
 	}
-	return jsonResult(map[string]any{"lab": lab, "trial_count": len(trials), "recent_trials": recent})
+	out := map[string]any{"lab": lab, "trial_count": len(trials), "recent_trials": recent}
+	if s.statelessConnection(ctx) {
+		out["stateless"] = "This connection keeps no MCP session, so the lab is not bound to it: pass lab=" + lab +
+			" to every trial_record."
+	}
+	return jsonResult(out)
 }
 
 func trialRecordTool() mcp.Tool {
@@ -63,6 +68,9 @@ func (s *Server) handleTrialRecord(ctx context.Context, req mcp.CallToolRequest)
 	lab := argString(req, "lab")
 	if lab == "" {
 		lab = s.boundLab(ctx)
+	}
+	if lab == "" && s.statelessConnection(ctx) {
+		return errResult("trial_record", errors.New("no lab: pass lab -- this connection keeps no MCP session, so lab_open cannot bind one"))
 	}
 	if lab == "" {
 		return errResult("trial_record", errors.New("no lab: call lab_open first or pass lab"))

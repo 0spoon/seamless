@@ -75,7 +75,8 @@ per-connection binding `session_start` makes.
 Its edges are deliberate:
 
 - **An explicit binding wins.** A `session_start` on the connection takes
-  precedence over the process binding.
+  precedence over the process binding, and a call's own `session=` argument
+  takes precedence over both, for that call only.
 - **One process, one session.** If two live ambient sessions are stamped with
   the same process - a host process running several sessions at once - nothing
   is bound automatically, and resolution falls back to the earlier rules: an

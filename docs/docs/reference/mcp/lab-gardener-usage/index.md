@@ -102,6 +102,7 @@ Open a research lab and get its recent trial history for context -- including tr
 |---|---|---|---|
 | `lab` | string | **yes** | lab name (a stable label for a line of investigation) |
 | `goal` | string | no | optional note on what this lab is investigating |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## trial_record {#trial_record}
 
@@ -119,6 +120,7 @@ Record one experiment in a research lab: what changed, expected vs actual, outco
 | `metrics` | object | no | optional object of structured metrics, e.g. {"hz":497,"err_pct":0.2} (a JSON-object string is also accepted) |
 | `outcome` | string | no | suggested values pass\|fail\|partial\|inconclusive; free text accepted |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## trial_query {#trial_query}
 
@@ -132,6 +134,7 @@ Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics f
 | `limit` | integer | no | max results (default 20, max 200) |
 | `metrics_filter` | object | no | optional object; trials whose metrics equal every given key match, e.g. {"hz":497} (a JSON-object string is also accepted) |
 | `outcome` | string | no | filter by outcome (e.g. fail) |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## gardener_proposals {#gardener_proposals}
 
@@ -140,6 +143,7 @@ List pending gardener proposals (merge/consolidate duplicate memories, archive s
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`, `relocate`, `merge_plans`. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## gardener_request {#gardener_request}
 
@@ -149,6 +153,7 @@ The natural-language entry point for REORGANIZING memory. Describe the change in
 |---|---|---|---|
 | `request` | string | **yes** | the reorganization request in plain language |
 | `project` | string | no | scope candidate memories: a project slug (its memories + globals), "global" for globals only, or "all" for every project on the machine. Omit to use the session's project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## gardener_split {#gardener_split}
 
@@ -158,6 +163,7 @@ Plan a project SPLIT: divide one existing project into two or more NEW child pro
 |---|---|---|---|
 | `source` | string | **yes** | the project slug to split (its own memories are classified into the children/shared parent) |
 | `instruction` | string | no | optional guidance: which children, what stays shared |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## gardener_apply {#gardener_apply}
 
@@ -167,12 +173,15 @@ Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; 
 |---|---|---|---|
 | `id` | string | **yes** | proposal id (ULID) |
 | `action` | string | no | apply (default), dismiss (until it recurs), or hide (forever). One of: `apply`, `dismiss`, `hide`. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## usage_summary {#usage_summary}
 
 Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Every count is machine-wide and identical for every caller; only the named memory lists (topInjected, topUtility) are fenced, so memories this session may not read under project isolation are dropped from them and those lists can come back shorter than the counts imply. Read-only.
 
-Takes no parameters.
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## favorite_set {#favorite_set}
 
@@ -184,3 +193,4 @@ Star or unstar an item. Favorites sort first in the console, are pinned into ses
 | `id` | string | **yes** | the item's identifier: memory name, note id (or slug), project slug, plan slug, task id, session id (or name), trial id |
 | `favorite` | boolean | **yes** | true to star, false to unstar |
 | `project` | string | no | project scope for memory-name/note-slug resolution; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |

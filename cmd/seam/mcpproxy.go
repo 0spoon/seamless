@@ -26,6 +26,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -34,6 +35,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/arctop/seamless/internal/agentproc"
 	"github.com/arctop/seamless/internal/config"
@@ -159,6 +162,45 @@ func (b *bridge) run(ctx context.Context, r io.Reader, w io.Writer) error {
 	}
 }
 
+// setStatelessHeaders adds the headers the stateless MCP revision (2026-07-28,
+// SEP-2243) requires on every POST, read from the frame itself: a stdio client
+// writes a bare JSON-RPC message and has no headers of its own to set. Such a
+// request declares its version in params._meta, and the server refuses one whose
+// Mcp-Protocol-Version header is missing or disagrees -- before it even checks
+// whether it serves that version, so without these a client could not be told
+// to negotiate down. A frame on an earlier revision (no _meta version) is left
+// alone, as is anything that does not parse: the daemon reports that better.
+func setStatelessHeaders(h http.Header, frame []byte) {
+	var msg struct {
+		Method string          `json:"method"`
+		Params json.RawMessage `json:"params"`
+	}
+	if json.Unmarshal(frame, &msg) != nil || msg.Method == "" {
+		return
+	}
+	var params struct {
+		Meta *mcp.Meta `json:"_meta"`
+	}
+	if len(msg.Params) > 0 && json.Unmarshal(msg.Params, &params) != nil {
+		return
+	}
+	version := params.Meta.ProtocolVersion()
+	if !mcp.RequiresStandardHeaders(version) {
+		return
+	}
+	h.Set(mcp.HeaderProtocolVersion, version)
+	h.Set(mcp.HeaderMethod, msg.Method)
+	method := mcp.MCPMethod(msg.Method)
+	if !mcp.MethodRequiresNameHeader(method) {
+		return
+	}
+	if name, ok := mcp.ExtractHeaderName(method, msg.Params); ok {
+		if v, ok := mcp.EncodeHeaderValue(name); ok {
+			h.Set(mcp.HeaderName, v)
+		}
+	}
+}
+
 // forward POSTs one JSON-RPC frame to the daemon and relays the reply to w.
 func (b *bridge) forward(ctx context.Context, frame []byte, w io.Writer) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.endpoint, bytes.NewReader(frame))
@@ -179,6 +221,7 @@ func (b *bridge) forward(ctx context.Context, frame []byte, w io.Writer) error {
 	if b.sessionID != "" {
 		req.Header.Set(headerSessionID, b.sessionID)
 	}
+	setStatelessHeaders(req.Header, frame)
 
 	resp, err := b.client.Do(req)
 	if err != nil {
@@ -200,12 +243,19 @@ func (b *bridge) forward(ctx context.Context, frame []byte, w io.Writer) error {
 		// to relay -- writing an empty line would corrupt the stdio framing.
 		return nil
 	case resp.StatusCode < 200 || resp.StatusCode >= 300:
-		// The streamable-HTTP server answers all normal JSON-RPC traffic with 200,
-		// carrying JSON-RPC-level errors in the body. A non-2xx is therefore a
-		// transport/protocol fault (bad content type, invalid/terminated session,
-		// server error) the bridge cannot recover from per-message: fail so the
-		// client restarts and re-initializes rather than hangs.
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096)) //nolint:errcheck // best-effort read of an error body for the message; a partial read still helps
+		// A non-2xx is normally a transport/protocol fault (bad content type,
+		// invalid/terminated session, server error) the bridge cannot recover
+		// from per-message: fail so the client restarts and re-initializes rather
+		// than hangs. The exception is a JSON-RPC error answering the request:
+		// the stateless revision (2026-07-28) sends its refusals that way -- an
+		// unsupported protocol version is a 400 naming the versions to fall back
+		// to -- and the client must read it to negotiate down, so it is relayed
+		// as the reply. Failing instead would restart the client into the same
+		// refusal forever.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody)) //nolint:errcheck // best-effort read of an error body for the message; a partial read still helps
+		if isJSONRPCError(body) {
+			return writeFrame(w, body)
+		}
 		return fmt.Errorf("seamlessd returned %s: %s", resp.Status, bytes.TrimSpace(body))
 	}
 
@@ -219,6 +269,19 @@ func (b *bridge) forward(ctx context.Context, frame []byte, w io.Writer) error {
 		return fmt.Errorf("read response: %w", err)
 	}
 	return writeFrame(w, body)
+}
+
+// maxErrorBody caps how much of a non-2xx reply the bridge reads: enough for
+// any JSON-RPC error the daemon sends, and for the message of one it does not.
+const maxErrorBody = 64 << 10
+
+// isJSONRPCError reports whether body is a JSON-RPC error response.
+func isJSONRPCError(body []byte) bool {
+	var msg struct {
+		JSONRPC string          `json:"jsonrpc"`
+		Error   json.RawMessage `json:"error"`
+	}
+	return json.Unmarshal(body, &msg) == nil && msg.JSONRPC == "2.0" && len(msg.Error) > 0
 }
 
 // writeFrame relays one JSON-RPC message as a single stdio frame: trimmed to one

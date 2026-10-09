@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mark3labs/mcp-go/mcp"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/require"
 
 	"github.com/arctop/seamless/internal/agentguide"
@@ -242,4 +244,73 @@ func TestBridge_ForwardsTheAgentProcess(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	require.Equal(t, []string{"4242.17|true", "|false"}, seen)
+}
+
+// statelessToolCall is a tools/call frame on the stateless MCP revision: no
+// handshake, the version declared in _meta. A stdio client writes exactly this,
+// with no headers.
+const statelessToolCall = `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"echo","arguments":{},` +
+	`"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28",` +
+	`"io.modelcontextprotocol/clientInfo":{"name":"t","version":"0"},"io.modelcontextprotocol/clientCapabilities":{}}}}`
+
+// echoTransport is mcp-go's real streamable transport over one trivial tool, so
+// the bridge is checked against the header validation the daemon actually runs.
+func echoTransport(t *testing.T, opts ...mcpserver.StreamableHTTPOption) string {
+	t.Helper()
+	srv := mcpserver.NewMCPServer("t", "0", mcpserver.WithToolCapabilities(false))
+	srv.AddTool(mcp.NewTool("echo"), func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return mcp.NewToolResultText("echoed"), nil
+	})
+	ts := httptest.NewServer(mcpserver.NewStreamableHTTPServer(srv, opts...))
+	t.Cleanup(ts.Close)
+	return ts.URL
+}
+
+// A stateless frame through the bridge must reach the version check with the
+// headers that revision requires, and its refusal must come back as the reply:
+// the daemon serves only the session revisions, and the refusal naming them is
+// how the client learns to negotiate down. Without the headers it would be a
+// header mismatch instead; relaying nothing (a fatal exit) would restart the
+// client into the same refusal.
+func TestBridge_StatelessRefusalIsRelayed(t *testing.T) {
+	url := echoTransport(t, mcpserver.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...))
+	var out bytes.Buffer
+	require.NoError(t, newBridge(url, "k", nil).run(context.Background(), strings.NewReader(statelessToolCall+"\n"), &out))
+
+	var reply struct {
+		ID    float64 `json:"id"`
+		Error struct {
+			Code int `json:"code"`
+			Data struct {
+				Supported []string `json:"supported"`
+			} `json:"data"`
+		} `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &reply), out.String())
+	require.Equal(t, float64(7), reply.ID)
+	require.Equal(t, mcp.UNSUPPORTED_PROTOCOL_VERSION, reply.Error.Code, out.String())
+	require.Contains(t, reply.Error.Data.Supported, mcp.LATEST_LEGACY_PROTOCOL_VERSION)
+}
+
+// Served the stateless revision, the same frame is answered: the bridge supplies
+// every routing header a tools/call needs (version, method and name).
+func TestBridge_StatelessFrameIsServed(t *testing.T) {
+	var out bytes.Buffer
+	require.NoError(t, newBridge(echoTransport(t), "k", nil).run(context.Background(),
+		strings.NewReader(statelessToolCall+"\n"), &out))
+	require.Contains(t, out.String(), "echoed")
+	require.Equal(t, float64(7), jsonRPCID(t, out.String()))
+}
+
+// Only a JSON-RPC error is relayed: any other non-2xx body is still a fault.
+func TestBridge_Non2xxWithoutJSONRPCErrorIsFatal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = fmt.Fprint(w, `{"jsonrpc":"2.0","id":1,"result":{}}`)
+	}))
+	defer srv.Close()
+	err := newBridge(srv.URL, "k", nil).run(context.Background(),
+		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`+"\n"), io.Discard)
+	require.ErrorContains(t, err, "seamlessd returned 400")
 }

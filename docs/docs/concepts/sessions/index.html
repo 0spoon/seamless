@@ -321,7 +321,8 @@ per-connection binding <code>session_start</code> makes.</p>
 <p>Its edges are deliberate:</p>
 <ul>
 <li><strong>An explicit binding wins.</strong> A <code>session_start</code> on the connection takes
-precedence over the process binding.</li>
+precedence over the process binding, and a call's own <code>session=</code> argument
+takes precedence over both, for that call only.</li>
 <li><strong>One process, one session.</strong> If two live ambient sessions are stamped with
 the same process - a host process running several sessions at once - nothing
 is bound automatically, and resolution falls back to the earlier rules: an

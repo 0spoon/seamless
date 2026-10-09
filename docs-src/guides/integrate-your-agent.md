@@ -145,6 +145,15 @@ So: **re-run `session_start` on reconnect**, with the same `name` to resume the
 same session rather than opening a second one. Treat a sudden run of
 ambiguous-scope errors as a lost binding, not as a bug in your arguments.
 
+Or carry the session on the call. Every tool except `session_start` also takes
+`session`: the `name` that `session_start` returned. A call carrying it is scoped
+to that session and credited to it, whatever the connection is bound to, for
+that call only. A name that matches no session is refused, never ignored. It is
+also how a session will survive MCP's stateless revision (`2026-07-28`), which
+has no `Mcp-Session-Id` to bind to. Seamless does not serve that revision yet: a
+client that asks for it is refused with the list of supported versions and
+negotiates down to `2025-11-25`, the newest revision with a handshake.
+
 Claude Code and Codex agents are spared all of this: their connection names the
 agent process, and the daemon matches it to the agent's own session on every
 request, so a restart or reconnect loses nothing

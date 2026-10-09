@@ -334,6 +334,12 @@ the exact lease boundary, even while its status remains <code>in_progress</code>
 <td>no</td>
 <td>project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project.</td>
 </tr>
+<tr>
+<td><code>session</code></td>
+<td>string</td>
+<td>no</td>
+<td>the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -426,6 +432,12 @@ the exact lease boundary, even while its status remains <code>in_progress</code>
 <td>no</td>
 <td>project slug; defaults to the bound session's project</td>
 </tr>
+<tr>
+<td><code>session</code></td>
+<td>string</td>
+<td>no</td>
+<td>the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -459,6 +471,12 @@ the exact lease boundary, even while its status remains <code>in_progress</code>
 <td>string</td>
 <td>no</td>
 <td>project slug; defaults to the bound session's project</td>
+</tr>
+<tr>
+<td><code>session</code></td>
+<td>string</td>
+<td>no</td>
+<td>the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless</td>
 </tr>
 <tr>
 <td><code>status</code></td>

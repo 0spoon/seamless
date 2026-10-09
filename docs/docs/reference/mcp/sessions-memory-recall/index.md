@@ -187,6 +187,7 @@ Create or update a durable memory -- the compact knowledge a future session must
 | `description` | string | **yes** | one line, &lt;=150 chars -- the only text shown in indexes |
 | `body` | string | **yes** | markdown body (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `supersedes` | string | no | name of an existing memory this one replaces; that memory is marked superseded (invalid) and pointed here |
 | `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); omit to leave an existing memory's tags untouched, and note an empty list reads as absent, not as a clear |
 
@@ -199,6 +200,7 @@ Append markdown to an existing memory's body. The memory keeps its id. To create
 | `name` | string | **yes** | memory name |
 | `body` | string | **yes** | markdown to append (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## memory_edit {#memory_edit}
 
@@ -211,6 +213,7 @@ Edit an existing memory in place with exact search/replace, instead of resending
 | `edits` | array | no | ordered list of exact search/replace edits, applied in order to the CURRENT body. Each is {old_string, new_string, replace_all?}. old_string must match the body EXACTLY (whitespace and indentation included) and must be unique unless replace_all is true; include surrounding lines to make it unique. All-or-nothing: if any edit fails to match, nothing is written. |
 | `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `tags_add` | array | no | tags to add, leaving the rest in place (a comma-separated string is also accepted) |
 | `tags_remove` | array | no | tags to remove, leaving the rest in place; this is how a tag gets cleared (a comma-separated string is also accepted) |
 
@@ -223,6 +226,7 @@ Read a memory by name within the current project (falling back to a global memor
 | `id` | string | no | memory id (ULID), as carried by events, recall results, and gardener proposals; bypasses name/project resolution |
 | `name` | string | no | memory name; pass exactly one of name or id |
 | `project` | string | no | project slug; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## memory_delete {#memory_delete}
 
@@ -232,6 +236,7 @@ Delete a memory by name: the markdown file leaves the disk and its index row goe
 |---|---|---|---|
 | `name` | string | **yes** | memory name |
 | `project` | string | no | project slug; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## recall {#recall}
 
@@ -244,3 +249,4 @@ Search durable knowledge (memories, notes) and the work record (tasks, trials, s
 | `project` | string | no | project slug; defaults to the bound session's project |
 | `query` | string | no | what you are looking for; required unless kind is set (kind alone lists that kind newest-first) |
 | `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`, `tasks`, `trials`, `sessions`. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |

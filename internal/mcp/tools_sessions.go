@@ -141,11 +141,11 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			s.stampSessionModel(ctx, existing.ID, model)
 			s.setBinding(ctx, existing.ID, project)
 			s.record(ctx, core.EventSessionStarted, existing.ID, project, "", map[string]any{"resumed": true})
-			return jsonResult(withWarning(map[string]any{
+			return jsonResult(s.withStatelessHint(ctx, withWarning(map[string]any{
 				"session_id": existing.ID, "name": existing.Name,
 				"project": project, "resumed": true, "scope": scopeNote(project, how),
 				"briefing": s.briefing(ctx, host, project, "resume"),
-			}, warning))
+			}, warning), existing.Name, project, existing.ProjectSlug))
 		}
 	}
 
@@ -192,11 +192,11 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			s.setBinding(ctx, ambient.ID, project)
 			s.record(ctx, core.EventSessionStarted, ambient.ID, project, "",
 				map[string]any{"resumed": true, "adopted": true})
-			return jsonResult(withWarning(map[string]any{
+			return jsonResult(s.withStatelessHint(ctx, withWarning(map[string]any{
 				"session_id": ambient.ID, "name": ambient.Name,
 				"project": project, "resumed": true, "scope": scopeNote(project, how),
 				"briefing": s.briefing(ctx, host, project, "explicit"),
-			}, warning))
+			}, warning), ambient.Name, project, ambient.ProjectSlug))
 		}
 	}
 
@@ -220,10 +220,10 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	}
 	s.setBinding(ctx, id, project)
 	s.record(ctx, core.EventSessionStarted, id, project, "", nil)
-	return jsonResult(withWarning(map[string]any{
+	return jsonResult(s.withStatelessHint(ctx, withWarning(map[string]any{
 		"session_id": id, "name": name, "project": project, "scope": scopeNote(project, how),
 		"briefing": s.briefing(ctx, host, project, "explicit"),
-	}, warning))
+	}, warning), name, project, project))
 }
 
 // sessionProjectArg resolves session_start's project argument: validated like

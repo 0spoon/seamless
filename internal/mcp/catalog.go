@@ -15,7 +15,7 @@ import "github.com/mark3labs/mcp-go/mcp"
 // registration order), so a tool added to one and not the other fails the build
 // rather than silently vanishing from the docs.
 func Catalog() []mcp.Tool {
-	return []mcp.Tool{
+	tools := []mcp.Tool{
 		sessionStartTool(),
 		sessionUpdateTool(),
 		sessionEndTool(),
@@ -59,4 +59,10 @@ func Catalog() []mcp.Tool {
 
 		favoriteSetTool(),
 	}
+	// addTool declares the session= handle on every tool it registers; the docs
+	// must show the same schema.
+	for i, t := range tools {
+		tools[i] = withSessionHandle(t)
+	}
+	return tools
 }

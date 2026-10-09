@@ -116,6 +116,10 @@ func (s *Server) logMiddleware(next mcpserver.ToolHandlerFunc) mcpserver.ToolHan
 		// ends a session mid-call, stashes its target, which attribution reads
 		// first -- so a memo naming the session it just ended is never consulted.
 		ctx = context.WithValue(ctx, processSessionSlotKey{}, &processSessionSlot{})
+		// The session= handle's slot (session_handle.go), filled by
+		// sessionHandleMiddleware further in, so the attribution read below
+		// credits the session a call named as well as the one it was bound to.
+		ctx = context.WithValue(ctx, sessionHandleSlotKey{}, &sessionHandleSlot{})
 		start := time.Now()
 		result, err := next(ctx, req)
 		durMS := time.Since(start).Milliseconds()

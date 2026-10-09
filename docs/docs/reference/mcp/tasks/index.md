@@ -60,6 +60,7 @@ Add a task to the dependency-aware ready queue. depends_on lists task ids that m
 | `depends_on` | array | no | task ids this task is blocked by (a comma-separated string is also accepted) |
 | `plan` | string | no | optional plan slug (plan:&lt;slug&gt; convention) that composes this task as a step of a plan. Plan steps are excluded from the default ready-queue and surfaced under the plan filter. |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## tasks_update {#tasks_update}
 
@@ -84,6 +85,7 @@ List the actionable (ready) tasks for a project -- open tasks with no unfinished
 |---|---|---|---|
 | `plan` | string | no | optional plan slug: return that plan's ready/blocked step tasks instead of the default (non-plan) queue |
 | `project` | string | no | project slug; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## tasks_list {#tasks_list}
 
@@ -94,6 +96,7 @@ List a project's tasks, optionally filtered by status, newest first. By default 
 | `id` | string | no | load exactly one task by its globally-unique id; when set, project/status/plan are ignored and the response's tasks array holds just that task |
 | `plan` | string | no | optional plan slug: list that plan's step tasks instead of the default (non-plan) tasks |
 | `project` | string | no | project slug; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `status` | string | no | optional status filter. One of: `open`, `in_progress`, `done`, `dropped`. |
 
 ## tasks_claim {#tasks_claim}

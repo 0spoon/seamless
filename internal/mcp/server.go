@@ -233,7 +233,14 @@ type Config struct {
 	// effectiveFeatures, so a console toggle needs no restart. The zero value is
 	// every optional feature off, which is also config.Defaults().
 	Features config.Features
-	Logger   *slog.Logger
+	// ServeStatelessMCP also serves the stateless MCP revision (2026-07-28 and
+	// later). Off, the transport advertises only the revisions that keep
+	// Mcp-Session-Id and a newer client negotiates down (see Handler). It is
+	// off in production until a client we serve stops negotiating down; the
+	// tests turn it on to keep the stateless path -- the session= handle in
+	// place of the connection binding -- working ahead of that day.
+	ServeStatelessMCP bool
+	Logger            *slog.Logger
 }
 
 // Server hosts the MCP tools and their per-connection session bindings.
@@ -265,6 +272,7 @@ func (s *Server) NumTools() int { return len(s.toolNames) }
 // makes validation impossible to forget: a tool cannot exist without its schema
 // being recorded, because there is no other way to register one.
 func (s *Server) addTool(t mcp.Tool, h mcpserver.ToolHandlerFunc) {
+	t = withSessionHandle(t)
 	s.toolNames = append(s.toolNames, t.Name)
 	s.toolSchemas[t.Name] = t.InputSchema
 	s.mcp.AddTool(t, h)
@@ -307,7 +315,7 @@ func New(cfg Config) *Server {
 		mcpserver.WithToolCapabilities(false),
 		mcpserver.WithRecovery(),
 		// mcp-go applies middlewares in reverse registration order, so the runtime
-		// nesting is auth(log(validate(handler))):
+		// nesting is auth(log(validate(handle(handler)))):
 		//
 		//   - auth outermost: an unauthorized caller reaches neither the logger nor
 		//     the validator, so a bad key never earns schema feedback.
@@ -315,9 +323,13 @@ func New(cfg Config) *Server {
 		//     is the same observability hole as a silent coercion -- the operator
 		//     would see "the agent stopped calling tasks_add" rather than "the agent
 		//     is misspelling depends_on".
+		//   - the session= handle innermost: it resolves an argument, so it runs
+		//     only on a call validate accepted, and its refusal of a handle that
+		//     names no session is logged like any other.
 		mcpserver.WithToolHandlerMiddleware(s.authMiddleware),
 		mcpserver.WithToolHandlerMiddleware(s.logMiddleware),
 		mcpserver.WithToolHandlerMiddleware(s.validateMiddleware),
+		mcpserver.WithToolHandlerMiddleware(s.sessionHandleMiddleware),
 		// The optional-feature gate. It is a FILTER, not a middleware, because
 		// mcp-go applies filters at both tools/list and tools/call -- so a
 		// disabled feature's tools are neither advertised nor callable, with one
@@ -335,14 +347,18 @@ func New(cfg Config) *Server {
 // buffers them. The tool middleware remains as defense in depth for any future
 // non-HTTP transport or direct in-process dispatch.
 func (s *Server) Handler() http.Handler {
-	// Serve only the MCP revisions that still have protocol-level sessions. The
-	// stateless core 2026-07-28 introduced (SEP-2567, SEP-2575) ignores
-	// Mcp-Session-Id and runs each request in a throwaway session, so the
-	// binding session_start keys by that id (setBinding) would be gone by the
-	// next call. A newer client is refused with the supported list and
-	// negotiates down.
-	transport := mcpserver.NewStreamableHTTPServer(s.mcp,
-		mcpserver.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...))
+	// Serve only the MCP revisions that still have protocol-level sessions,
+	// unless ServeStatelessMCP says otherwise. The stateless core 2026-07-28
+	// introduced (SEP-2567, SEP-2575) ignores Mcp-Session-Id and runs each
+	// request in a throwaway session, so the binding session_start keys by that
+	// id (setBinding) lasts one call, and a caller must thread its session=
+	// handle instead (session_handle.go). A newer client is refused with the
+	// supported list and negotiates down.
+	var opts []mcpserver.StreamableHTTPOption
+	if !s.cfg.ServeStatelessMCP {
+		opts = append(opts, mcpserver.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...))
+	}
+	transport := mcpserver.NewStreamableHTTPServer(s.mcp, opts...)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !verifyBearer(r, s.cfg.APIKey) {
 			w.Header().Set("WWW-Authenticate", "Bearer")
@@ -501,9 +517,12 @@ func (s *Server) setBinding(ctx context.Context, sessionID, project string) {
 	s.maybeSweepBindings(ctx)
 }
 
-// getBinding returns the connection's session binding: the session an explicit
-// session_start bound, else the ambient session the calling agent process owns
-// (processSession). The explicit binding wins because it is the agent's own
+// getBinding returns the call's session binding: the session its session=
+// handle names (session_handle.go), else the session an explicit session_start
+// bound to the connection, else the ambient session the calling agent process
+// owns (processSession). The handle wins because it is this call's own explicit
+// choice, and it is the only binding a stateless connection has. The
+// session_start binding beats the process one because it is the agent's own
 // choice -- a named session, or another project -- made on top of the session
 // its hook started.
 //
@@ -513,6 +532,9 @@ func (s *Server) setBinding(ctx context.Context, sessionID, project string) {
 // shadow the ambient fallback, silently globalizing unscoped writes after a bare
 // lab_open. Such entries are visible only through rawBinding.
 func (s *Server) getBinding(ctx context.Context) (binding, bool) {
+	if b, ok := handleBinding(ctx); ok {
+		return b, true
+	}
 	if b, ok := s.rawBinding(ctx); ok && b.sessionID != "" {
 		return b, true
 	}

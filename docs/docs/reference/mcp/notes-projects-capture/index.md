@@ -101,6 +101,7 @@ Create a work note -- a research finding, decision record, meeting summary, or a
 | `description` | string | no | optional one-line summary |
 | `plan` | string | no | optional plan slug (plan:&lt;slug&gt; convention): tags this note into that plan's composition so it surfaces on the Plans screen alongside its tasks_add plan=&lt;slug&gt; steps. Use it whenever this note is a plan's narrative or supporting context. |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `source_url` | string | no | optional source URL |
 | `tags` | array | no | tags (a comma-separated string is also accepted) |
 
@@ -112,6 +113,7 @@ Read a note by id, or by slug within the current project (falling back to a glob
 |---|---|---|---|
 | `id` | string | no | note id (ULID); pass exactly one of id or slug |
 | `project` | string | no | project slug for the slug lookup; defaults to the bound session's project |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `slug` | string | no | note slug, as briefings, plan compositions, and notes_create responses name notes (alias: name) |
 
 ## notes_update {#notes_update}
@@ -125,6 +127,7 @@ Update a note's fields by id (title, description, body, project, tags). Omitted 
 | `description` | string | no | new description |
 | `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
 | `project` | string | no | new project slug ("" or "global" = global scope) |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); an empty list is read as absent and leaves the tags untouched -- to drop a tag use tags_remove |
 | `tags_add` | array | no | tags to add, leaving the rest in place; a tag already on the note is not duplicated. Applied after tags. |
 | `tags_remove` | array | no | tags to drop, matched exactly; a tag the note does not carry is ignored. Applied last, so it also removes what tags/tags_add just set. |
@@ -139,6 +142,7 @@ Edit an existing note in place with exact search/replace, by id, instead of rese
 | `id` | string | **yes** | note id (ULID), as notes_create returns and briefings and plan compositions carry |
 | `edits` | array | **yes** | ordered list of exact search/replace edits, applied in order to the CURRENT body. Each is {old_string, new_string, replace_all?}. old_string must match the body EXACTLY (whitespace and indentation included) and must be unique unless replace_all is true; include surrounding lines to make it unique. All-or-nothing: if any edit fails to match, nothing is written. |
 | `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## notes_append {#notes_append}
 
@@ -148,6 +152,7 @@ Append a UTC-timestamped line to an existing note's body, by id. Use it when a n
 |---|---|---|---|
 | `id` | string | **yes** | note id (ULID) |
 | `body` | string | **yes** | text to append (aliases: content, text) |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## notes_delete {#notes_delete}
 
@@ -156,12 +161,15 @@ Delete a note by id: the markdown file leaves the disk and its index row goes wi
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | **yes** | note id (ULID) |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## project_list {#project_list}
 
 List every project (slug, name, description, isolation). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. Each row carries its isolation state (open|confidential|sealed), which is what a cross-project call has to respect: a confidential or sealed project is readable only from a session bound to it, and a sealed one takes no writes from outside either. It returns identity, not contents; to search what is inside a project, use recall.
 
-Takes no parameters.
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 
 ## project_create {#project_create}
 
@@ -172,6 +180,7 @@ Register a project up front, with a human-readable name and an optional descript
 | `name` | string | **yes** | human-readable project name |
 | `description` | string | no | optional one-line description |
 | `isolation` | string | no | optional isolation state (open\|confidential\|sealed); omit for open. open shares normally. confidential means nothing leaves: agents in other projects never read this one, and agents bound to it cannot write outside it. sealed adds the inbound half -- agents here see only this project: no global memories, no family, no cross-project reads. Set it at creation for work that is sensitive from the start; there is no tool to change it afterwards, because tightening detaches family and parent links and is an owner decision, made on an owner surface. Isolation requires a standalone project, so do not create an isolated child of another project. One of: `open`, `confidential`, `sealed`. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
 | `slug` | string | no | optional explicit slug |
 
 ## capture_url {#capture_url}
@@ -182,3 +191,4 @@ Fetch a web page (SSRF-guarded: private/loopback addresses are rejected) and sav
 |---|---|---|---|
 | `url` | string | **yes** | http(s) URL to capture |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
+| `session` | string | no | the session to act as: the name session_start returned, the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session ULID. It scopes and credits this call. Defaults to this connection's session; pass it on every call when session_start reports the connection as stateless |
