@@ -60,7 +60,7 @@ at the `server.json` version, and a `tools/list` carrying the full catalog
 
 ## Admin form values
 
-<https://glama.ai/mcp/servers/0spoon/seamless/admin> -> Dockerfile tab. Only
+<https://glama.ai/mcp/servers/arctop/seamless/admin> -> Dockerfile tab. Only
 three fields differ from their defaults:
 
 | Field | Value |

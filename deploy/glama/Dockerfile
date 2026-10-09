@@ -1,5 +1,5 @@
 # A local mirror of the image the Glama MCP directory builds for Seamless
-# (https://glama.ai/mcp/servers/0spoon/seamless), so `build.sh` and
+# (https://glama.ai/mcp/servers/arctop/seamless), so `build.sh` and
 # `entrypoint.sh` can be verified before anyone clicks Build over there.
 #
 # Glama does not consume this file. Its admin page GENERATES a Dockerfile from a
