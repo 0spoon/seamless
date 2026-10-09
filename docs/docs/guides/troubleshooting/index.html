@@ -345,7 +345,8 @@ project automatically when the old path is gone (a <code>repo.moved</code> event
 in the console feed); if a split already happened, point the path back with
 <code>seamlessd map-repo --path &lt;new-root&gt; --project &lt;slug&gt;</code>. <code>seamlessd doctor</code>
 lists mapped paths that no longer exist on disk, and
-<code>seamlessd unmap-repo --stale</code> removes them.</li>
+<code>seamlessd unmap-repo --stale</code> removes them. Once the leftover <code>&lt;slug&gt;-2</code>
+is empty, <code>seamlessd retire-project --project &lt;slug&gt;-2</code> marks it retired.</li>
 <li><strong>No project at all</strong> - the cwd is not inside a git repo, so nothing resolved
 and the session is global.</li>
 </ul>

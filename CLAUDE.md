@@ -22,7 +22,7 @@ preserved read-only as a fallback archive.
 
 ```
 cmd/seamlessd/     server daemon: serve, doctor, export, import, install-hooks,
-                   map-repo, unmap-repo, family, console-open
+                   map-repo, unmap-repo, retire-project, family, console-open
 cmd/seam/          headless CLI (agents + owner observability)  [P2/P5]
 cmd/docsgen/       docs site generator: docs-src/ -> docs/docs/ (see SITE.md)
 cmd/demoseed/      thin CLI over internal/demokit: the console-fleet seed

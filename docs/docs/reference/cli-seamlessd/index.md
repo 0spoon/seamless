@@ -1,12 +1,12 @@
 # seamlessd CLI
 
-> The daemon and operator CLI - serve, doctor, export, import, install-hooks, client-config, uninstall, update, map-repo, unmap-repo, family, console-open, start/stop/restart/status, and version.
+> The daemon and operator CLI - serve, doctor, export, import, install-hooks, client-config, uninstall, update, map-repo, unmap-repo, retire-project, family, console-open, start/stop/restart/status, and version.
 
 `seamlessd` is both the server and the operator CLI. `serve` runs the daemon;
 every other subcommand is a one-shot that opens the same config and database
 directly, without going through a running server. That means most of them work
-whether or not the daemon is up - and that `map-repo`, `unmap-repo` and `family`
-write state the running daemon reads.
+whether or not the daemon is up - and that `map-repo`, `unmap-repo`,
+`retire-project` and `family` write state the running daemon reads.
 
 Each subcommand parses its own flags. None of them take positional arguments
 except `family`, which takes only positionals.
@@ -499,6 +499,40 @@ repo to another project, `map-repo` its root there rather than unmapping it.
 Mappings belonging to other hosts are never touched. The table row and the
 legacy `repo_project_map` entry are removed together, so the removal survives a
 daemon restart. Writes straight to the database; no running daemon needed.
+
+## seamlessd retire-project {#seamlessd_retire_project}
+
+```bash
+seamlessd retire-project --project SLUG [--dry-run]
+seamlessd retire-project --project SLUG --undo [--dry-run]
+```
+
+Marks a project retired - the cleanup for one minted by mistake, such as a
+`<slug>-2` left behind when a repo moved before moved repos were adopted, or
+the project a moved-and-renamed repo registered before you pointed it back with
+`map-repo`. It sets the same flag a gardener split stamps on its emptied source:
+the project row stays, nothing is deleted, and the console lists it as retired.
+`--undo` clears the flag.
+
+Retiring moves nothing, so it is refused while the project is still in use.
+Every blocker is printed with its remedy, and nothing changes:
+
+- a repo mapping on any host still routes sessions to it - `map-repo` the path
+  to the right project, or `unmap-repo` it, on the host that owns the mapping;
+- it holds active memories, notes, or open or in-progress tasks - move them to
+  the project they belong in, or archive or close them.
+
+Its sessions, closed tasks and archived memories are history and never block.
+Un-retiring has no guard. Both directions are idempotent: a project already in
+the requested state is reported and left alone.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--project` | - | The slug to retire. Required; an unknown slug is an error. |
+| `--undo` | `false` | Clear the retired flag instead. |
+| `--dry-run` | `false` | Print what would happen, including any blockers, and change nothing. |
+
+Writes straight to the database; no running daemon needed.
 
 ## seamlessd family {#seamlessd_family}
 
