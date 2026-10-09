@@ -143,6 +143,55 @@ func TestServer_InitializeIncludesAgentGuidance(t *testing.T) {
 	require.Len(t, listed.Tools, mcpserver.ToolCount)
 }
 
+// The session_start binding is keyed by Mcp-Session-Id, which the stateless
+// 2026-07-28 revision drops. The transport must keep every client on a revision
+// that still has sessions: an initialize asking for the stateless one is
+// negotiated down and still gets an id, and a stateless request (no handshake)
+// is refused with the versions to fall back to.
+func TestServer_ServesOnlySessionProtocolVersions(t *testing.T) {
+	url, _ := newServer(t)
+
+	code, hdr, body := rawMCPRequest(t, url, http.MethodPost, testKey,
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"`+mcp.ProtocolVersion20260728+
+			`","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}`)
+	require.Equal(t, http.StatusOK, code, body)
+	require.NotEmpty(t, hdr.Get("Mcp-Session-Id"))
+	var initResp struct {
+		Result struct {
+			ProtocolVersion string `json:"protocolVersion"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &initResp))
+	require.Equal(t, mcp.LATEST_LEGACY_PROTOCOL_VERSION, initResp.Result.ProtocolVersion)
+
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(
+		`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"_meta":{"`+mcp.MetaKeyProtocolVersion+`":"`+
+			mcp.ProtocolVersion20260728+`","`+mcp.MetaKeyClientInfo+`":{"name":"t","version":"0"},"`+
+			mcp.MetaKeyClientCapabilities+`":{}}}}`))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	req.Header.Set(mcp.HeaderProtocolVersion, mcp.ProtocolVersion20260728)
+	req.Header.Set(mcp.HeaderMethod, string(mcp.MethodToolsList))
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, string(raw))
+	var refused struct {
+		Error struct {
+			Data struct {
+				Supported []string `json:"supported"`
+			} `json:"data"`
+		} `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &refused))
+	require.Contains(t, refused.Error.Data.Supported, mcp.LATEST_LEGACY_PROTOCOL_VERSION)
+	require.NotContains(t, refused.Error.Data.Supported, mcp.ProtocolVersion20260728)
+}
+
 func callJSON(t *testing.T, ctx context.Context, cli *mcpclient.Client, name string, args map[string]any) map[string]any {
 	t.Helper()
 	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{Name: name, Arguments: args}})

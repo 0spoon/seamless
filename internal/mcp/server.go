@@ -335,7 +335,14 @@ func New(cfg Config) *Server {
 // buffers them. The tool middleware remains as defense in depth for any future
 // non-HTTP transport or direct in-process dispatch.
 func (s *Server) Handler() http.Handler {
-	transport := mcpserver.NewStreamableHTTPServer(s.mcp)
+	// Serve only the MCP revisions that still have protocol-level sessions. The
+	// stateless core 2026-07-28 introduced (SEP-2567, SEP-2575) ignores
+	// Mcp-Session-Id and runs each request in a throwaway session, so the
+	// binding session_start keys by that id (setBinding) would be gone by the
+	// next call. A newer client is refused with the supported list and
+	// negotiates down.
+	transport := mcpserver.NewStreamableHTTPServer(s.mcp,
+		mcpserver.WithStreamableHTTPProtocolVersions(mcp.LegacyProtocolVersions()...))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !verifyBearer(r, s.cfg.APIKey) {
 			w.Header().Set("WWW-Authenticate", "Bearer")
