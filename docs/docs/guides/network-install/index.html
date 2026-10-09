@@ -305,8 +305,9 @@ the bind is a wildcard. Leaving <code>server_url</code> unset on a wildcard bind
 <code>http://127.0.0.1:8081</code> - an address that means &quot;your own machine&quot; on every
 client that receives it - and the daemon warns about exactly that combination
 at startup. Putting the wildcard in <code>server_url</code> instead is refused outright at
-config load: <code>http://0.0.0.0:8081</code> is an address no client can dial, so it can
-never be the right answer to &quot;where do clients reach me&quot;.</p>
+config load, in any spelling of the unspecified address: <code>http://0.0.0.0:8081</code>
+reaches, at most, the machine doing the dialing, so it can never be the right
+answer to &quot;where do clients reach me&quot;.</p>
 <p>Naming <code>server_url</code> also arms the <strong>Host-header allowlist</strong>: the daemon then
 answers the loopback names, a concrete bind host, and the host of <code>server_url</code>,
 and refuses everything else with <code>421 Misdirected Request</code>. Add any further

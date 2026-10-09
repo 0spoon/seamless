@@ -189,7 +189,10 @@ a job `seamlessd serve` refuses by design.
 ### Go install and release archives
 
 The remaining routes end up in the same place with less done for you:
-`go install github.com/arctop/seamless/cmd/...@latest` needs Go 1.26+, and the
+`go install github.com/arctop/seamless/cmd/...@latest` needs Go 1.26+ and
+reports the release it was installed at (`seamlessd 0.6.0 (commit unknown, built
+unknown)` - the module proxy records no commit or build date), so
+`seamlessd update --check` compares it like any release; the
 [GitHub releases](https://github.com/arctop/seamless/releases) carry the same
 prebuilt archives the installer fetches. From a bare binary, `seamlessd serve`
 covers the essentials - first run seeds the config - and `seamlessd install-hooks`

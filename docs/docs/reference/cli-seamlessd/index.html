@@ -1025,8 +1025,14 @@ stopped one - are reported as a note, not a failure.</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd version
 </span></span></code></pre></div>
 <p>Prints the version, commit, and build date. <code>-v</code> and <code>--version</code> are aliases.</p>
-<p>Commit and build date are link-time metadata set by the Makefile; a plain
-<code>go build</code> leaves them <code>unknown</code>. The same version string appears in <code>/healthz</code>,
+<p>Version, commit, and build date are link-time metadata stamped by the Makefile
+and the release build. A binary built without them reports what the Go
+toolchain recorded instead: <code>go install github.com/arctop/seamless/cmd/...@vX.Y.Z</code>
+reports that version with commit and build date <code>unknown</code> (the module proxy
+carries neither), and a plain <code>go build</code> in a git checkout reports the
+toolchain's version for the checkout (a pseudo-version past a tag, ending
+<code>-dirty</code> with uncommitted changes), the short commit, and, for a clean checkout,
+the commit time as the build date. The same version string appears in <code>/healthz</code>,
 the MCP handshake, and the startup log - compare them when you suspect the
 daemon is running older code than what you just built.</p>
 

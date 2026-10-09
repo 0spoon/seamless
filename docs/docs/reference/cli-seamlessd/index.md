@@ -572,7 +572,13 @@ seamlessd version
 
 Prints the version, commit, and build date. `-v` and `--version` are aliases.
 
-Commit and build date are link-time metadata set by the Makefile; a plain
-`go build` leaves them `unknown`. The same version string appears in `/healthz`,
+Version, commit, and build date are link-time metadata stamped by the Makefile
+and the release build. A binary built without them reports what the Go
+toolchain recorded instead: `go install github.com/arctop/seamless/cmd/...@vX.Y.Z`
+reports that version with commit and build date `unknown` (the module proxy
+carries neither), and a plain `go build` in a git checkout reports the
+toolchain's version for the checkout (a pseudo-version past a tag, ending
+`-dirty` with uncommitted changes), the short commit, and, for a clean checkout,
+the commit time as the build date. The same version string appears in `/healthz`,
 the MCP handshake, and the startup log - compare them when you suspect the
 daemon is running older code than what you just built.

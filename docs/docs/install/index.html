@@ -442,7 +442,9 @@ install. A client runs no daemon here, so rendering the plist would hand launchd
 a job <code>seamlessd serve</code> refuses by design.</p>
 <h3 id="go-install-and-release-archives">Go install and release archives</h3>
 <p>The remaining routes end up in the same place with less done for you:
-<code>go install github.com/arctop/seamless/cmd/...@latest</code> needs Go 1.26+, and the
+<code>go install github.com/arctop/seamless/cmd/...@latest</code> needs Go 1.26+ and
+reports the release it was installed at (<code>seamlessd 0.6.0 (commit unknown, built unknown)</code> - the module proxy records no commit or build date), so
+<code>seamlessd update --check</code> compares it like any release; the
 <a href="https://github.com/arctop/seamless/releases">GitHub releases</a> carry the same
 prebuilt archives the installer fetches. From a bare binary, <code>seamlessd serve</code>
 covers the essentials - first run seeds the config - and <code>seamlessd install-hooks</code>

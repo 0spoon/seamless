@@ -1095,7 +1095,10 @@ a job `seamlessd serve` refuses by design.
 ### Go install and release archives
 
 The remaining routes end up in the same place with less done for you:
-`go install github.com/arctop/seamless/cmd/...@latest` needs Go 1.26+, and the
+`go install github.com/arctop/seamless/cmd/...@latest` needs Go 1.26+ and
+reports the release it was installed at (`seamlessd 0.6.0 (commit unknown, built
+unknown)` - the module proxy records no commit or build date), so
+`seamlessd update --check` compares it like any release; the
 [GitHub releases](https://github.com/arctop/seamless/releases) carry the same
 prebuilt archives the installer fetches. From a bare binary, `seamlessd serve`
 covers the essentials - first run seeds the config - and `seamlessd install-hooks`
@@ -4965,8 +4968,9 @@ the bind is a wildcard. Leaving `server_url` unset on a wildcard bind derives
 `http://127.0.0.1:8081` - an address that means "your own machine" on every
 client that receives it - and the daemon warns about exactly that combination
 at startup. Putting the wildcard in `server_url` instead is refused outright at
-config load: `http://0.0.0.0:8081` is an address no client can dial, so it can
-never be the right answer to "where do clients reach me".
+config load, in any spelling of the unspecified address: `http://0.0.0.0:8081`
+reaches, at most, the machine doing the dialing, so it can never be the right
+answer to "where do clients reach me".
 
 Naming `server_url` also arms the **Host-header allowlist**: the daemon then
 answers the loopback names, a concrete bind host, and the host of `server_url`,
@@ -7579,8 +7583,14 @@ seamlessd version
 
 Prints the version, commit, and build date. `-v` and `--version` are aliases.
 
-Commit and build date are link-time metadata set by the Makefile; a plain
-`go build` leaves them `unknown`. The same version string appears in `/healthz`,
+Version, commit, and build date are link-time metadata stamped by the Makefile
+and the release build. A binary built without them reports what the Go
+toolchain recorded instead: `go install github.com/arctop/seamless/cmd/...@vX.Y.Z`
+reports that version with commit and build date `unknown` (the module proxy
+carries neither), and a plain `go build` in a git checkout reports the
+toolchain's version for the checkout (a pseudo-version past a tag, ending
+`-dirty` with uncommitted changes), the short commit, and, for a clean checkout,
+the commit time as the build date. The same version string appears in `/healthz`,
 the MCP handshake, and the startup log - compare them when you suspect the
 daemon is running older code than what you just built.
 
@@ -7769,8 +7779,9 @@ role: "server"
 # install wants. Set it when the bind address is not the address clients use: a
 # wildcard bind, a LAN name, a TLS listener. Naming it also adds its host to the
 # Host-header allowlist, which is what arms that guard on a wildcard bind.
-# A wildcard host here is refused at load (0.0.0.0, ::): that answers "where do
-# I listen", not "where do I dial", so it belongs in addr instead.
+# A wildcard host here is refused at load (0.0.0.0, ::, [::0], ...): that
+# answers "where do I listen", not "where do I dial", so it belongs in addr
+# instead.
 # env: SEAMLESS_SERVER_URL
 server_url: ""
 

@@ -33,8 +33,9 @@ role: "server"
 # install wants. Set it when the bind address is not the address clients use: a
 # wildcard bind, a LAN name, a TLS listener. Naming it also adds its host to the
 # Host-header allowlist, which is what arms that guard on a wildcard bind.
-# A wildcard host here is refused at load (0.0.0.0, ::): that answers "where do
-# I listen", not "where do I dial", so it belongs in addr instead.
+# A wildcard host here is refused at load (0.0.0.0, ::, [::0], ...): that
+# answers "where do I listen", not "where do I dial", so it belongs in addr
+# instead.
 # env: SEAMLESS_SERVER_URL
 server_url: ""
 

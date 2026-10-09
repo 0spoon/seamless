@@ -655,8 +655,9 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="c"># install wants. Set it when the bind address is not the address clients use: a</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># wildcard bind, a LAN name, a TLS listener. Naming it also adds its host to the</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># Host-header allowlist, which is what arms that guard on a wildcard bind.</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># A wildcard host here is refused at load (0.0.0.0, ::): that answers &#34;where do</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># I listen&#34;, not &#34;where do I dial&#34;, so it belongs in addr instead.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># A wildcard host here is refused at load (0.0.0.0, ::, [::0], ...): that</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># answers &#34;where do I listen&#34;, not &#34;where do I dial&#34;, so it belongs in addr</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># instead.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># env: SEAMLESS_SERVER_URL</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">server_url</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;&#34;</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">

@@ -51,8 +51,9 @@ the bind is a wildcard. Leaving `server_url` unset on a wildcard bind derives
 `http://127.0.0.1:8081` - an address that means "your own machine" on every
 client that receives it - and the daemon warns about exactly that combination
 at startup. Putting the wildcard in `server_url` instead is refused outright at
-config load: `http://0.0.0.0:8081` is an address no client can dial, so it can
-never be the right answer to "where do clients reach me".
+config load, in any spelling of the unspecified address: `http://0.0.0.0:8081`
+reaches, at most, the machine doing the dialing, so it can never be the right
+answer to "where do clients reach me".
 
 Naming `server_url` also arms the **Host-header allowlist**: the daemon then
 answers the loopback names, a concrete bind host, and the host of `server_url`,
