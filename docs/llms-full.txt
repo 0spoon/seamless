@@ -1399,9 +1399,10 @@ native commands, log locations, and every path Seamless touches are on
 
 ## Upgrading {#upgrading}
 
-`seamlessd update` upgrades in place to the latest release, on every OS.
+`seamlessd update` upgrades in place to the newest release, on every OS -
+backed up, confirmed, and rolled back if the new release does not come up.
 [Update & uninstall](/updating/) has the full procedure, the pinning knobs,
-and how the fetched installer is signature-verified before it runs.
+and how the release's installer and checksums are signature-verified first.
 
 ## Uninstalling {#uninstalling}
 
@@ -1447,8 +1448,9 @@ What you are accepting when you run this:
   integrity only - unless `SEAMLESS_CHECKSUMS_SHA256` pins the manifest to one
   its caller already verified, in which case any other manifest is refused and
   the run says the signature was verified by seamlessd. `seamlessd update`
-  separately verifies the fetched installer script's Sigstore bundle in-process
-  before executing it. `curl | sh` still means trusting the bytes served by the
+  separately verifies the target release's installer script and `checksums.txt`
+  against their Sigstore bundles, in-process and by that release's exact tag,
+  before executing anything, and pins the installer to that `checksums.txt`. `curl | sh` still means trusting the bytes served by the
   site, so read the script first if that boundary is not acceptable;
   `go install` lands in the same place.
 
@@ -1499,28 +1501,50 @@ and tells you when one is out ([automatic update checks](#automatic-update-check
 updating is then one command.
 
 `seamlessd update` is the one command, on every OS. It upgrades in place to the
-latest release by re-running the canonical installer for you - so there is a
+newest release by running that release's own installer for you - so there is a
 single upgrade path to trust, not a second copy of the download-and-swap logic
 that could drift from the installer:
 
 ```bash
 seamlessd update --check   # report installed vs the newest release, change nothing
-seamlessd update --dry-run # print exactly what it would fetch and run
-seamlessd update           # fetch the latest release and swap it in
+seamlessd update --dry-run # print what it would install, from where, and how; change nothing
+seamlessd update           # install the newest release, confirm it, roll back if it fails
 ```
 
-It honors the same knobs as the installer, so `SEAMLESS_VERSION=0.3.0 seamlessd
-update` pins a version and `SEAMLESS_INSTALL_DIR=... seamlessd update` retargets.
-Under the hood it fetches the installer script (the PowerShell one on Windows)
-from the latest release's assets together with the Sigstore bundle the release
-workflow signed it with, verifies the signature in-process - the script must
-have been produced by this repository's release workflow on a version tag, or
-update refuses to run it - and then runs it. That is the same script as doing
-it by hand, minus the signature check:
+"Newest" is the highest version on GitHub's release list, never GitHub's
+"latest" (a backport can make that an older one). It honors the installer's
+knobs, and a knob you set wins: `SEAMLESS_VERSION=0.7.1 seamlessd update` pins a
+release, older ones too, and every run passes the version it installs to the
+installer explicitly.
+
+Under the hood it re-reads the target release from GitHub, downloads that
+release's installer script (the PowerShell one on Windows) and `checksums.txt`
+with the Sigstore bundles the release workflow signed them with, and verifies
+both in-process against the release workflow's identity on that release's exact
+tag - so an older signed installer or manifest cannot pass as the one you asked
+for. It then runs the installer pinned to the verified `checksums.txt`
+(`SEAMLESS_CHECKSUMS_SHA256`). That is the same script as doing it by hand,
+minus the signature checks:
 
 ```bash
-curl -fsSL https://thereisnospoon.org/install | sh
+curl -fsSL https://github.com/arctop/seamless/releases/download/v0.7.3/install | SEAMLESS_VERSION=0.7.3 sh
 ```
+
+On an install the installer made, it also backs the instance up to
+`~/.seamless/backups/pre-update-v<old>-<time>.tar.gz` (the newest two kept),
+counts the update only once the new release answers `/healthz` as a freshly
+started daemon that is still the same one ten seconds later, and otherwise
+rolls back: the service stops, the database is put back from the backup if the
+new release had already migrated it (the migrated file stays beside it as
+`seam.db.pre-rollback-<id>`), and the release you had is reinstalled and
+confirmed. Memories and notes are never rolled back. Each run is recorded in
+`~/.seamless/update/` (`attempt.json`, `attempts.jsonl`, `logs/`). A run whose
+installer failed after the new release came up reports "applied with warnings":
+run `seamlessd install-hooks`. Already on the newest release, it says so and
+changes nothing; pin the release to reinstall it. A source build
+(`make update`), a client machine, or a release binary the service does not run
+gets the verified installer without a backup, a rollback or a record, and the
+output says why. Homebrew installs are refused with the `brew` command.
 
 Your config and `~/.seamless` are preserved, binaries are swapped by rename
 (safe while the daemon holds them open), and the service restarts on the new
@@ -1595,7 +1619,7 @@ daemon, the test fixtures and CI stay off the network.
 
 **Deploying your working tree instead of a release**
 
-Both `seamlessd update` and `make update` install the latest *release*, which
+Both `seamlessd update` and `make update` install the newest *release*, which
 may be older than your clone's HEAD. To deploy the build from your working
 tree instead:
 
@@ -7864,33 +7888,47 @@ server it is the server's corpus.
 ## seamlessd update {#seamlessd_update}
 
 ```bash
-seamlessd update [--check] [--dry-run] [--url URL]
+seamlessd update [--check] [--dry-run] [--url URL] [--config PATH]
 ```
 
-Upgrades Seamless in place to the latest published release by re-running the
-canonical installer for this OS - the same script a fresh
-`curl ... | sh` / `irm ... | iex` install runs, fetched from the latest GitHub
-release's assets. There is deliberately no second upgrade implementation:
-after verification, `update` pipes that script to `sh` (or `powershell`), so
-binaries are swapped by rename, the service restarts on the new build, and
-hooks are reconciled exactly as [Install & deploy](/install/) describes for a
-re-run.
+Upgrades Seamless in place to the newest published release by running that
+release's own installer for this OS - the same script a fresh
+`curl ... | sh` / `irm ... | iex` install runs. There is deliberately no second
+upgrade implementation: after verification, `update` pipes that script to `sh`
+(or `powershell`), so binaries are swapped by rename, the service restarts on
+the new build, and hooks are reconciled exactly as [Install & deploy](/install/)
+describes for a re-run.
 
-Before anything executes, the fetched script is verified against the
-**Sigstore bundle** published alongside it - proof the bytes came out of this
-repository's release workflow on a version tag, not merely from the right
-host. Verification failure is fatal, with no fallback. The fetch is
-HTTPS-only, including every redirect hop.
+"Newest" is the highest version on GitHub's release list, never GitHub's
+"latest" (a backport can make that an older one). Before anything executes,
+`update` re-reads the target release, then verifies its installer script and
+its `checksums.txt` against the **Sigstore bundles** published alongside them,
+in-process, against this repository's release workflow on that release's exact
+tag - so an older signed installer or manifest cannot pass as the one asked
+for. Verification failure is fatal, with no fallback. Every fetch is
+HTTPS-only, including every redirect hop. The installer then runs pinned to the
+verified manifest (`SEAMLESS_CHECKSUMS_SHA256`).
+
+On an install the installer made, `update` also backs the instance up first
+(`~/.seamless/backups/pre-update-v<old>-<time>.tar.gz`, the newest two kept),
+counts the update only once the new release answers `/healthz` as a freshly
+started daemon that is still the same one ten seconds later, and otherwise
+rolls back to the release you had. Each such run is recorded in
+`~/.seamless/update/`. Already on the newest release, it says so and changes
+nothing. [Update & uninstall](/updating/) has the details.
 
 | Flag | Default | Meaning |
 |---|---|---|
 | `--check` | `false` | Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's [update check](/updating/#automatic-update-checks) is doing: its mode and when it last checked. It asks even when `update.check` is `false`, because running it is you asking. |
-| `--dry-run` | `false` | Print the source URL, signature status, and the equivalent hand-run one-liner, without fetching or executing. |
-| `--url` | the latest release's installer asset | Override the installer URL. A custom URL carries no Sigstore bundle, so it runs TLS-only with a printed warning. |
+| `--dry-run` | `false` | Print the target, the installer's source and signature, the install dir, and the backup and rollback plan, plus the equivalent one-liner, without downloading, installing or recording anything (it reads the release list and the target release). |
+| `--url` | the target release's installer | Run the installer at this https URL instead: TLS only, with a printed warning, your environment as is, and no backup, rollback or record. |
+| `--config` | `$SEAMLESS_CONFIG`, then the search path | The config the data dir and the daemon's address come from. |
 
-The installer's env knobs pass through: `SEAMLESS_VERSION=0.3.0 seamlessd
-update` pins a version, `SEAMLESS_INSTALL_DIR=...` retargets, exactly as the
-curl installer does.
+The installer's env knobs pass through, and a knob you set wins:
+`SEAMLESS_VERSION=0.3.0 seamlessd update` pins a version (older ones too),
+`SEAMLESS_INSTALL_DIR=...` retargets, exactly as the curl installer does.
+`--auto` and its `--attempt`/`--from`/`--to`/`--why` belong to the daemon's
+unattended updater; they are not for interactive use.
 
 ## seamlessd map-repo {#seamlessd_map_repo}
 
@@ -10446,8 +10484,13 @@ _global/{name}.md Machine-wide memories
 notes/ Durable note tree
 _global/{slug}.md Machine-wide notes
 {project}/{slug}.md One project note per file
-update/ The update check's record (release builds only)
+backups/ Pre-update archives (pre-update-v{old}-{time}.tar.gz), the newest two
+update/ The update check's and the updater's record (release builds only)
 state.json Last check, cached release list, running daemon
+update.lock The updater's lock; never delete it
+attempt.json The newest update attempt, live and finished
+attempts.jsonl Every finished attempt, one line each
+logs/{attempt}.log Each attempt's full output, the newest 20
 Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.
 ```
 

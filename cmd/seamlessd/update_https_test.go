@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -44,4 +45,27 @@ func TestFetchInstaller_RefusesHTTPSToHTTPDowngrade(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "https")
 	require.Empty(t, body)
+}
+
+// The release reads are held to the same rules: a plain-http base is refused
+// before any request, and a redirect off https is a failed fetch.
+func TestReleaseSource_RefusesPlainHTTPAndDowngrades(t *testing.T) {
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("#!/bin/sh\necho pwned\n"))
+	}))
+	defer plain.Close()
+	s := releaseSource{client: plain.Client(), apiRepo: plain.URL, downloadBase: plain.URL}
+	_, err := s.fetchAsset(context.Background(), mustVersion(t, "0.7.3"), "install")
+	require.ErrorContains(t, err, "https")
+
+	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer secure.Close()
+	client := secure.Client()
+	client.CheckRedirect = update.HTTPSOnlyRedirect
+	s = releaseSource{client: client, apiRepo: secure.URL, downloadBase: secure.URL}
+	body, err := s.fetchAsset(context.Background(), mustVersion(t, "0.7.3"), "install")
+	require.Error(t, err)
+	require.Nil(t, body)
 }

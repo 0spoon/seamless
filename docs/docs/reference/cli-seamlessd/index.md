@@ -435,33 +435,47 @@ server it is the server's corpus.
 ## seamlessd update {#seamlessd_update}
 
 ```bash
-seamlessd update [--check] [--dry-run] [--url URL]
+seamlessd update [--check] [--dry-run] [--url URL] [--config PATH]
 ```
 
-Upgrades Seamless in place to the latest published release by re-running the
-canonical installer for this OS - the same script a fresh
-`curl ... | sh` / `irm ... | iex` install runs, fetched from the latest GitHub
-release's assets. There is deliberately no second upgrade implementation:
-after verification, `update` pipes that script to `sh` (or `powershell`), so
-binaries are swapped by rename, the service restarts on the new build, and
-hooks are reconciled exactly as [Install & deploy](https://thereisnospoon.org/docs/install/) describes for a
-re-run.
+Upgrades Seamless in place to the newest published release by running that
+release's own installer for this OS - the same script a fresh
+`curl ... | sh` / `irm ... | iex` install runs. There is deliberately no second
+upgrade implementation: after verification, `update` pipes that script to `sh`
+(or `powershell`), so binaries are swapped by rename, the service restarts on
+the new build, and hooks are reconciled exactly as [Install & deploy](https://thereisnospoon.org/docs/install/)
+describes for a re-run.
 
-Before anything executes, the fetched script is verified against the
-**Sigstore bundle** published alongside it - proof the bytes came out of this
-repository's release workflow on a version tag, not merely from the right
-host. Verification failure is fatal, with no fallback. The fetch is
-HTTPS-only, including every redirect hop.
+"Newest" is the highest version on GitHub's release list, never GitHub's
+"latest" (a backport can make that an older one). Before anything executes,
+`update` re-reads the target release, then verifies its installer script and
+its `checksums.txt` against the **Sigstore bundles** published alongside them,
+in-process, against this repository's release workflow on that release's exact
+tag - so an older signed installer or manifest cannot pass as the one asked
+for. Verification failure is fatal, with no fallback. Every fetch is
+HTTPS-only, including every redirect hop. The installer then runs pinned to the
+verified manifest (`SEAMLESS_CHECKSUMS_SHA256`).
+
+On an install the installer made, `update` also backs the instance up first
+(`~/.seamless/backups/pre-update-v<old>-<time>.tar.gz`, the newest two kept),
+counts the update only once the new release answers `/healthz` as a freshly
+started daemon that is still the same one ten seconds later, and otherwise
+rolls back to the release you had. Each such run is recorded in
+`~/.seamless/update/`. Already on the newest release, it says so and changes
+nothing. [Update & uninstall](https://thereisnospoon.org/docs/updating/) has the details.
 
 | Flag | Default | Meaning |
 |---|---|---|
 | `--check` | `false` | Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's [update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks) is doing: its mode and when it last checked. It asks even when `update.check` is `false`, because running it is you asking. |
-| `--dry-run` | `false` | Print the source URL, signature status, and the equivalent hand-run one-liner, without fetching or executing. |
-| `--url` | the latest release's installer asset | Override the installer URL. A custom URL carries no Sigstore bundle, so it runs TLS-only with a printed warning. |
+| `--dry-run` | `false` | Print the target, the installer's source and signature, the install dir, and the backup and rollback plan, plus the equivalent one-liner, without downloading, installing or recording anything (it reads the release list and the target release). |
+| `--url` | the target release's installer | Run the installer at this https URL instead: TLS only, with a printed warning, your environment as is, and no backup, rollback or record. |
+| `--config` | `$SEAMLESS_CONFIG`, then the search path | The config the data dir and the daemon's address come from. |
 
-The installer's env knobs pass through: `SEAMLESS_VERSION=0.3.0 seamlessd
-update` pins a version, `SEAMLESS_INSTALL_DIR=...` retargets, exactly as the
-curl installer does.
+The installer's env knobs pass through, and a knob you set wins:
+`SEAMLESS_VERSION=0.3.0 seamlessd update` pins a version (older ones too),
+`SEAMLESS_INSTALL_DIR=...` retargets, exactly as the curl installer does.
+`--auto` and its `--attempt`/`--from`/`--to`/`--why` belong to the daemon's
+unattended updater; they are not for interactive use.
 
 ## seamlessd map-repo {#seamlessd_map_repo}
 

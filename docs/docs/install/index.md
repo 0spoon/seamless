@@ -221,9 +221,10 @@ native commands, log locations, and every path Seamless touches are on
 
 ## Upgrading {#upgrading}
 
-`seamlessd update` upgrades in place to the latest release, on every OS.
+`seamlessd update` upgrades in place to the newest release, on every OS -
+backed up, confirmed, and rolled back if the new release does not come up.
 [Update & uninstall](https://thereisnospoon.org/docs/updating/) has the full procedure, the pinning knobs,
-and how the fetched installer is signature-verified before it runs.
+and how the release's installer and checksums are signature-verified first.
 
 ## Uninstalling {#uninstalling}
 
@@ -269,8 +270,9 @@ What you are accepting when you run this:
   integrity only - unless `SEAMLESS_CHECKSUMS_SHA256` pins the manifest to one
   its caller already verified, in which case any other manifest is refused and
   the run says the signature was verified by seamlessd. `seamlessd update`
-  separately verifies the fetched installer script's Sigstore bundle in-process
-  before executing it. `curl | sh` still means trusting the bytes served by the
+  separately verifies the target release's installer script and `checksums.txt`
+  against their Sigstore bundles, in-process and by that release's exact tag,
+  before executing anything, and pins the installer to that `checksums.txt`. `curl | sh` still means trusting the bytes served by the
   site, so read the script first if that boundary is not acceptable;
   `go install` lands in the same place.
 

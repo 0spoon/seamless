@@ -24,8 +24,13 @@ _global/{name}.md Machine-wide memories
 notes/ Durable note tree
 _global/{slug}.md Machine-wide notes
 {project}/{slug}.md One project note per file
-update/ The update check's record (release builds only)
+backups/ Pre-update archives (pre-update-v{old}-{time}.tar.gz), the newest two
+update/ The update check's and the updater's record (release builds only)
 state.json Last check, cached release list, running daemon
+update.lock The updater's lock; never delete it
+attempt.json The newest update attempt, live and finished
+attempts.jsonl Every finished attempt, one line each
+logs/{attempt}.log Each attempt's full output, the newest 20
 Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.
 ```
 

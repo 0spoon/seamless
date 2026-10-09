@@ -9,7 +9,7 @@
 //	seamlessd install-hooks install agent hooks, MCP, and maintained skills
 //	seamlessd client-config print the pairing commands for a client machine
 //	seamlessd uninstall     remove Seamless (service, hooks, MCP, skills, binaries)
-//	seamlessd update        upgrade in place to the latest release (re-runs the installer)
+//	seamlessd update        upgrade in place to the newest release (runs that release's verified installer)
 //	seamlessd map-repo      override a repo's auto-derived project slug (rarely needed)
 //	seamlessd unmap-repo    remove this machine's mapping for a repo path, or every stale one
 //	seamlessd retire-project mark a mistakenly minted, empty project retired (or --undo)
@@ -163,8 +163,9 @@ usage:
                            --redact masks the key so the output is safe to paste into a ticket)
   seamlessd uninstall      remove Seamless: service, hooks, MCP, skills, binaries
                            (--purge also deletes config + ~/.seamless; --dry-run to preview)
-  seamlessd update         upgrade in place to the latest release by re-running the installer
-                           (--check reports installed vs latest; --dry-run previews; honors SEAMLESS_VERSION)
+  seamlessd update         upgrade in place to the newest release by running its verified installer;
+                           backed up, confirmed and rolled back on an installer-made install
+                           (--check reports installed vs newest; --dry-run previews; honors SEAMLESS_VERSION)
   seamlessd map-repo       override a repo's auto-derived project slug (rarely needed;
                            repos self-map on first session -- repo_project_map)
   seamlessd unmap-repo     remove this machine's mapping for a repo (--path DIR), or every mapping

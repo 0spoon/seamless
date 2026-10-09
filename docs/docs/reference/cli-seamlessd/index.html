@@ -888,21 +888,31 @@ server it is the server's corpus.</p>
 </table>
 </div>
 <h2 id="seamlessd_update">seamlessd update</h2>
-<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd update <span class="o">[</span>--check<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--url URL<span class="o">]</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd update <span class="o">[</span>--check<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--url URL<span class="o">]</span> <span class="o">[</span>--config PATH<span class="o">]</span>
 </span></span></code></pre></div>
-<p>Upgrades Seamless in place to the latest published release by re-running the
-canonical installer for this OS - the same script a fresh
-<code>curl ... | sh</code> / <code>irm ... | iex</code> install runs, fetched from the latest GitHub
-release's assets. There is deliberately no second upgrade implementation:
-after verification, <code>update</code> pipes that script to <code>sh</code> (or <code>powershell</code>), so
-binaries are swapped by rename, the service restarts on the new build, and
-hooks are reconciled exactly as <a href="../../install/">Install &amp; deploy</a> describes for a
-re-run.</p>
-<p>Before anything executes, the fetched script is verified against the
-<strong>Sigstore bundle</strong> published alongside it - proof the bytes came out of this
-repository's release workflow on a version tag, not merely from the right
-host. Verification failure is fatal, with no fallback. The fetch is
-HTTPS-only, including every redirect hop.</p>
+<p>Upgrades Seamless in place to the newest published release by running that
+release's own installer for this OS - the same script a fresh
+<code>curl ... | sh</code> / <code>irm ... | iex</code> install runs. There is deliberately no second
+upgrade implementation: after verification, <code>update</code> pipes that script to <code>sh</code>
+(or <code>powershell</code>), so binaries are swapped by rename, the service restarts on
+the new build, and hooks are reconciled exactly as <a href="../../install/">Install &amp; deploy</a>
+describes for a re-run.</p>
+<p>&quot;Newest&quot; is the highest version on GitHub's release list, never GitHub's
+&quot;latest&quot; (a backport can make that an older one). Before anything executes,
+<code>update</code> re-reads the target release, then verifies its installer script and
+its <code>checksums.txt</code> against the <strong>Sigstore bundles</strong> published alongside them,
+in-process, against this repository's release workflow on that release's exact
+tag - so an older signed installer or manifest cannot pass as the one asked
+for. Verification failure is fatal, with no fallback. Every fetch is
+HTTPS-only, including every redirect hop. The installer then runs pinned to the
+verified manifest (<code>SEAMLESS_CHECKSUMS_SHA256</code>).</p>
+<p>On an install the installer made, <code>update</code> also backs the instance up first
+(<code>~/.seamless/backups/pre-update-v&lt;old&gt;-&lt;time&gt;.tar.gz</code>, the newest two kept),
+counts the update only once the new release answers <code>/healthz</code> as a freshly
+started daemon that is still the same one ten seconds later, and otherwise
+rolls back to the release you had. Each such run is recorded in
+<code>~/.seamless/update/</code>. Already on the newest release, it says so and changes
+nothing. <a href="../../updating/">Update &amp; uninstall</a> has the details.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -921,18 +931,26 @@ HTTPS-only, including every redirect hop.</p>
 <tr>
 <td><code>--dry-run</code></td>
 <td><code>false</code></td>
-<td>Print the source URL, signature status, and the equivalent hand-run one-liner, without fetching or executing.</td>
+<td>Print the target, the installer's source and signature, the install dir, and the backup and rollback plan, plus the equivalent one-liner, without downloading, installing or recording anything (it reads the release list and the target release).</td>
 </tr>
 <tr>
 <td><code>--url</code></td>
-<td>the latest release's installer asset</td>
-<td>Override the installer URL. A custom URL carries no Sigstore bundle, so it runs TLS-only with a printed warning.</td>
+<td>the target release's installer</td>
+<td>Run the installer at this https URL instead: TLS only, with a printed warning, your environment as is, and no backup, rollback or record.</td>
+</tr>
+<tr>
+<td><code>--config</code></td>
+<td><code>$SEAMLESS_CONFIG</code>, then the search path</td>
+<td>The config the data dir and the daemon's address come from.</td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>The installer's env knobs pass through: <code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version, <code>SEAMLESS_INSTALL_DIR=...</code> retargets, exactly as the
-curl installer does.</p>
+<p>The installer's env knobs pass through, and a knob you set wins:
+<code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version (older ones too),
+<code>SEAMLESS_INSTALL_DIR=...</code> retargets, exactly as the curl installer does.
+<code>--auto</code> and its <code>--attempt</code>/<code>--from</code>/<code>--to</code>/<code>--why</code> belong to the daemon's
+unattended updater; they are not for interactive use.</p>
 <h2 id="seamlessd_map_repo">seamlessd map-repo</h2>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --project SLUG <span class="o">[</span>--path DIR<span class="o">]</span>
 </span></span></code></pre></div>

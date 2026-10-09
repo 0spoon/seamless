@@ -243,22 +243,43 @@ fixes land often. A daemon installed from a release checks for them by itself
 and tells you when one is out (<a href="#automatic-update-checks">automatic update checks</a>);
 updating is then one command.</p>
 <p><code>seamlessd update</code> is the one command, on every OS. It upgrades in place to the
-latest release by re-running the canonical installer for you - so there is a
+newest release by running that release's own installer for you - so there is a
 single upgrade path to trust, not a second copy of the download-and-swap logic
 that could drift from the installer:</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd update --check   <span class="c1"># report installed vs the newest release, change nothing</span>
-</span></span><span class="line"><span class="cl">seamlessd update --dry-run <span class="c1"># print exactly what it would fetch and run</span>
-</span></span><span class="line"><span class="cl">seamlessd update           <span class="c1"># fetch the latest release and swap it in</span>
+</span></span><span class="line"><span class="cl">seamlessd update --dry-run <span class="c1"># print what it would install, from where, and how; change nothing</span>
+</span></span><span class="line"><span class="cl">seamlessd update           <span class="c1"># install the newest release, confirm it, roll back if it fails</span>
 </span></span></code></pre></div>
-<p>It honors the same knobs as the installer, so <code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version and <code>SEAMLESS_INSTALL_DIR=... seamlessd update</code> retargets.
-Under the hood it fetches the installer script (the PowerShell one on Windows)
-from the latest release's assets together with the Sigstore bundle the release
-workflow signed it with, verifies the signature in-process - the script must
-have been produced by this repository's release workflow on a version tag, or
-update refuses to run it - and then runs it. That is the same script as doing
-it by hand, minus the signature check:</p>
-<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
+<p>&quot;Newest&quot; is the highest version on GitHub's release list, never GitHub's
+&quot;latest&quot; (a backport can make that an older one). It honors the installer's
+knobs, and a knob you set wins: <code>SEAMLESS_VERSION=0.7.1 seamlessd update</code> pins a
+release, older ones too, and every run passes the version it installs to the
+installer explicitly.</p>
+<p>Under the hood it re-reads the target release from GitHub, downloads that
+release's installer script (the PowerShell one on Windows) and <code>checksums.txt</code>
+with the Sigstore bundles the release workflow signed them with, and verifies
+both in-process against the release workflow's identity on that release's exact
+tag - so an older signed installer or manifest cannot pass as the one you asked
+for. It then runs the installer pinned to the verified <code>checksums.txt</code>
+(<code>SEAMLESS_CHECKSUMS_SHA256</code>). That is the same script as doing it by hand,
+minus the signature checks:</p>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://github.com/arctop/seamless/releases/download/v0.7.3/install <span class="p">|</span> <span class="nv">SEAMLESS_VERSION</span><span class="o">=</span>0.7.3 sh
 </span></span></code></pre></div>
+<p>On an install the installer made, it also backs the instance up to
+<code>~/.seamless/backups/pre-update-v&lt;old&gt;-&lt;time&gt;.tar.gz</code> (the newest two kept),
+counts the update only once the new release answers <code>/healthz</code> as a freshly
+started daemon that is still the same one ten seconds later, and otherwise
+rolls back: the service stops, the database is put back from the backup if the
+new release had already migrated it (the migrated file stays beside it as
+<code>seam.db.pre-rollback-&lt;id&gt;</code>), and the release you had is reinstalled and
+confirmed. Memories and notes are never rolled back. Each run is recorded in
+<code>~/.seamless/update/</code> (<code>attempt.json</code>, <code>attempts.jsonl</code>, <code>logs/</code>). A run whose
+installer failed after the new release came up reports &quot;applied with warnings&quot;:
+run <code>seamlessd install-hooks</code>. Already on the newest release, it says so and
+changes nothing; pin the release to reinstall it. A source build
+(<code>make update</code>), a client machine, or a release binary the service does not run
+gets the verified installer without a backup, a rollback or a record, and the
+output says why. Homebrew installs are refused with the <code>brew</code> command.</p>
 <p>Your config and <code>~/.seamless</code> are preserved, binaries are swapped by rename
 (safe while the daemon holds them open), and the service restarts on the new
 build. The selected clients are reconciled to the new stable paths: owned
@@ -341,7 +362,7 @@ it ties that file to this release or newer.</p>
 daemon, the test fixtures and CI stay off the network.</p>
 <details>
 <summary>Deploying your working tree instead of a release</summary>
-<p>Both <code>seamlessd update</code> and <code>make update</code> install the latest <em>release</em>, which
+<p>Both <code>seamlessd update</code> and <code>make update</code> install the newest <em>release</em>, which
 may be older than your clone's HEAD. To deploy the build from your working
 tree instead:</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">git pull

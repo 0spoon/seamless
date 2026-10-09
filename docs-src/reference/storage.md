@@ -26,8 +26,13 @@ it by hand, and what happens if you delete it.
     <div class="tree-branch"><code>notes/</code><span class="tree-note">Durable note tree</span></div>
     <div class="tree-leaf"><code>_global/{slug}.md</code><span class="tree-note">Machine-wide notes</span></div>
     <div class="tree-leaf"><code>{project}/{slug}.md</code><span class="tree-note">One project note per file</span></div>
-    <div class="tree-branch"><code>update/</code><span class="tree-note">The update check's record (release builds only)</span></div>
+    <div class="tree-branch"><code>backups/</code><span class="tree-note">Pre-update archives (pre-update-v{old}-{time}.tar.gz), the newest two</span></div>
+    <div class="tree-branch"><code>update/</code><span class="tree-note">The update check's and the updater's record (release builds only)</span></div>
     <div class="tree-leaf"><code>state.json</code><span class="tree-note">Last check, cached release list, running daemon</span></div>
+    <div class="tree-leaf"><code>update.lock</code><span class="tree-note">The updater's lock; never delete it</span></div>
+    <div class="tree-leaf"><code>attempt.json</code><span class="tree-note">The newest update attempt, live and finished</span></div>
+    <div class="tree-leaf"><code>attempts.jsonl</code><span class="tree-note">Every finished attempt, one line each</span></div>
+    <div class="tree-leaf"><code>logs/{attempt}.log</code><span class="tree-note">Each attempt's full output, the newest 20</span></div>
   </div>
   <figcaption id="storage-tree-caption">Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.</figcaption>
 </figure>

@@ -473,9 +473,10 @@ systemd <code>--user</code> on Linux, an at-logon Scheduled Task on Windows - an
 native commands, log locations, and every path Seamless touches are on
 <a href="../reference/service/">The service &amp; where things live</a>.</p>
 <h2 id="upgrading">Upgrading</h2>
-<p><code>seamlessd update</code> upgrades in place to the latest release, on every OS.
+<p><code>seamlessd update</code> upgrades in place to the newest release, on every OS -
+backed up, confirmed, and rolled back if the new release does not come up.
 <a href="../updating/">Update &amp; uninstall</a> has the full procedure, the pinning knobs,
-and how the fetched installer is signature-verified before it runs.</p>
+and how the release's installer and checksums are signature-verified first.</p>
 <h2 id="uninstalling">Uninstalling</h2>
 <p><code>seamlessd uninstall</code> reverses the whole install and keeps your knowledge by
 default. See <a href="../updating/#uninstall">Update &amp; uninstall</a>.</p>
@@ -516,8 +517,9 @@ workflow identity; without cosign it warns clearly and continues with checksum
 integrity only - unless <code>SEAMLESS_CHECKSUMS_SHA256</code> pins the manifest to one
 its caller already verified, in which case any other manifest is refused and
 the run says the signature was verified by seamlessd. <code>seamlessd update</code>
-separately verifies the fetched installer script's Sigstore bundle in-process
-before executing it. <code>curl | sh</code> still means trusting the bytes served by the
+separately verifies the target release's installer script and <code>checksums.txt</code>
+against their Sigstore bundles, in-process and by that release's exact tag,
+before executing anything, and pins the installer to that <code>checksums.txt</code>. <code>curl | sh</code> still means trusting the bytes served by the
 site, so read the script first if that boundary is not acceptable;
 <code>go install</code> lands in the same place.</li>
 </ul>
