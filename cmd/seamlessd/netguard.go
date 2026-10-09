@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/arctop/seamless/internal/config"
 )
 
 // This file holds the two network-boundary guards from the 2026-07-19 audit:
@@ -33,12 +35,21 @@ var loopbackHosts = map[string]bool{
 //
 // The allowlist is the loopback names, plus a concrete bind host, plus extra --
 // the names the operator has told us the daemon answers to (an advertised
-// server URL, additional hostnames). A wildcard bind (0.0.0.0, ::, or a bare
-// port) with nothing extra cannot have an allowlist -- the operator
-// deliberately made the daemon reachable at addresses only they know -- so the
-// guard steps aside there and warnNonLoopbackBind carries the message instead.
-// Naming even one extra host is what turns the guard back on for a wildcard
-// bind: the operator has now said what the daemon is called.
+// server URL, additional hostnames). A wildcard bind (0.0.0.0, ::, any other
+// spelling of the unspecified address, or a bare port) with nothing extra
+// cannot have an allowlist -- the operator deliberately made the daemon
+// reachable at addresses only they know -- so the guard steps aside there and
+// warnNonLoopbackBind carries the message instead. Naming even one extra host
+// is what turns the guard back on for a wildcard bind: the operator has now
+// said what the daemon is called.
+//
+// "Wildcard" is config.IsWildcardHost, the same predicate that derives
+// server_url and refuses a wildcard one. Listening and dialing are different
+// questions, but they are asked about the same set of hosts: net.Listen binds
+// "[::0]" to exactly the socket "[::]" gets, so a private list that missed it
+// treated a listener on every interface as a concrete host -- admitting a
+// Host of "::0" that no client sends, and 421ing every client that does reach
+// it.
 //
 // The concrete bind host is in the list unconditionally, which is what lets
 // `--addr 192.168.1.5:8081` work while still rejecting a rebound name.
@@ -50,10 +61,10 @@ func hostGuard(bind string, extra []string, next http.Handler) http.Handler {
 			allowed[h] = true
 		}
 	}
-	if isWildcardHost(host) && len(allowed) == 0 {
+	if config.IsWildcardHost(host) && len(allowed) == 0 {
 		return next
 	}
-	if !isWildcardHost(host) {
+	if !config.IsWildcardHost(host) {
 		allowed[strings.ToLower(host)] = true
 	}
 	for h := range loopbackHosts {
@@ -90,21 +101,12 @@ func bindHost(bind string) string {
 	return strings.Trim(bind, "[]")
 }
 
-// isWildcardHost reports whether a bind host means "every interface".
-func isWildcardHost(h string) bool {
-	switch h {
-	case "", "0.0.0.0", "::", "[::]":
-		return true
-	}
-	return false
-}
-
 // isLoopbackBind reports whether bind keeps the daemon reachable only from this
 // machine. An unresolvable or wildcard host is reported as non-loopback, so the
 // warning errs toward being shown.
 func isLoopbackBind(bind string) bool {
 	h := bindHost(bind)
-	if isWildcardHost(h) {
+	if config.IsWildcardHost(h) {
 		return false
 	}
 	if loopbackHosts[strings.ToLower(h)] {

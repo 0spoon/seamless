@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"slices"
@@ -171,15 +172,14 @@ func validateServerURL(raw string) error {
 	if u.Hostname() == "" {
 		return fmt.Errorf("config: server_url %q names no host", s)
 	}
-	// The predicate is reachableHost's own rewrite, not a second copy of its
-	// literal set: the derive path and this refusal must never disagree about
-	// which hosts are wildcards. url.Hostname strips IPv6 brackets, so
-	// "http://[::]:8081" arrives here as "::" -- the bracketed spelling in that
-	// set is for callers that split a host themselves, and a real IPv6 literal
-	// like [fd00::1] is untouched by either. The empty host is a wildcard to
-	// reachableHost too, which is why this sits BELOW the "names no host"
-	// check: that value has its own, more specific error.
-	if host := u.Hostname(); reachableHost(host) != host {
+	// IsWildcardHost is the predicate reachableHost rewrites by, so the derive
+	// path and this refusal can never disagree about which hosts are
+	// wildcards. url.Hostname strips the brackets, so "http://[::0]:8081"
+	// arrives here as "::0", and a real IPv6 literal like [fd00::1] is not a
+	// wildcard to either. The empty host is a wildcard too, which is why this
+	// sits BELOW the "names no host" check: that value has its own, more
+	// specific error.
+	if host := u.Hostname(); IsWildcardHost(host) {
 		return fmt.Errorf("config: server_url %q names the wildcard host %q, which says where the daemon LISTENS, not where a client dials: "+
 			"put the wildcard in addr and set server_url to the name or address other machines reach this one at", s, host)
 	}
@@ -197,15 +197,45 @@ func validateServerURL(raw string) error {
 
 // reachableHost maps a bind host that means "every interface" to loopback. A
 // wildcard is an answer to "where do I listen", never to "where do I dial":
-// advertising http://0.0.0.0:8081 hands a client an address it cannot connect
-// to. SplitHostPort already strips IPv6 brackets, so "[::]" only shows up when
-// a caller passes a host it parsed itself.
+// advertising http://0.0.0.0:8081 hands a client an address that reaches, at
+// most, the client's own machine. Which hosts count is IsWildcardHost's call
+// alone, so this rewrite and validateServerURL's refusal cannot disagree.
 func reachableHost(host string) string {
-	switch host {
-	case "", "0.0.0.0", "::", "[::]":
+	if IsWildcardHost(host) {
 		return "127.0.0.1"
 	}
 	return host
+}
+
+// IsWildcardHost reports whether host means "every interface": the empty host
+// of a bare-port bind (":8081"), or any spelling of the unspecified address.
+//
+// It is the one definition of a wildcard host. The derive path (reachableHost),
+// the server_url refusal and the daemon's bind guards (cmd/seamlessd's
+// hostGuard and isLoopbackBind) ask it different questions -- what to dial
+// instead, whether to refuse, whether a Host allowlist is knowable -- but about
+// the same set of hosts, and a second copy of that set is how they drift.
+//
+// The test is the address, not its spelling. "[::0]", "[0:0:0:0:0:0:0:0]" and
+// "[::ffff:0.0.0.0]" all bind exactly the socket "[::]" does, and the literal
+// list this replaced missed every one of them. netip.ParseAddr is the parser
+// net.Listen and net.Dial apply to a literal host: it accepts a zone, which the
+// unspecified address ignores ("[::%lo0]:8081" still listens everywhere), and
+// Unmap folds the IPv4-mapped form the way net.IP.IsUnspecified does. One pair
+// of IPv6 brackets is stripped, for a caller that split a host itself.
+//
+// A NAME is never a wildcard, even one a resolver maps to 0.0.0.0 (the libc
+// resolver reads "0" and "00.0.0.0" that way; Go's own refuses both): answering
+// would put a platform-dependent lookup on the config path.
+func IsWildcardHost(host string) bool {
+	if len(host) >= 2 && host[0] == '[' && host[len(host)-1] == ']' {
+		host = host[1 : len(host)-1]
+	}
+	if host == "" {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.WithZone("").Unmap().IsUnspecified()
 }
 
 var (

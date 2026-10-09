@@ -67,10 +67,18 @@ func TestHostGuard_ConcreteNonLoopbackBindIsAllowlisted(t *testing.T) {
 	}
 }
 
+// wildcardBinds are the bind addresses that listen on every interface, in each
+// spelling the guard has to recognize: net.Listen gives all of them the socket
+// "[::]:8081" gets, so none may be mistaken for a concrete host.
+var wildcardBinds = []string{
+	"0.0.0.0:8081", ":8081", "[::]:8081",
+	"[::0]:8081", "[0:0:0:0:0:0:0:0]:8081", "[::ffff:0.0.0.0]:8081",
+}
+
 // A wildcard bind has no knowable set of valid Host values, so the guard steps
 // aside rather than guessing and breaking the operator's setup.
 func TestHostGuard_WildcardBindPassesEverythingThrough(t *testing.T) {
-	for _, bind := range []string{"0.0.0.0:8081", ":8081", "[::]:8081"} {
+	for _, bind := range wildcardBinds {
 		h := hostGuard(bind, nil, okHandler())
 		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 		req.Host = "anything.example.com"
@@ -105,13 +113,16 @@ func TestHostGuard_ExtraHostsJoinTheAllowlist(t *testing.T) {
 // guard is on even for 0.0.0.0, and the wildcard itself never joins the list
 // (an empty Host header must not match a bare ":8081" bind).
 func TestHostGuard_WildcardBindWithExtraHostsIsGuarded(t *testing.T) {
-	for _, bind := range []string{"0.0.0.0:8081", ":8081", "[::]:8081"} {
+	for _, bind := range wildcardBinds {
 		h := hostGuard(bind, []string{"seam.lan"}, okHandler())
 		for host, want := range map[string]int{
 			"seam.lan:8081":    http.StatusTeapot,
 			"127.0.0.1:8081":   http.StatusTeapot,
 			"anything.example": http.StatusMisdirectedRequest,
 			"":                 http.StatusMisdirectedRequest,
+			// What a literal list used to admit for a "[::0]" bind, by
+			// mistaking it for the concrete bind host.
+			"[::0]:8081": http.StatusMisdirectedRequest,
 		} {
 			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 			req.Host = host
@@ -142,6 +153,7 @@ func TestIsLoopbackBind(t *testing.T) {
 		"0.0.0.0:8081":   false,
 		":8081":          false,
 		"[::]:8081":      false,
+		"[::0]:8081":     false, // every spelling of the wildcard, not just the common ones
 		"192.168.1.5:80": false,
 		"example.com:80": false, // unresolvable name: warn rather than stay quiet
 	} {
