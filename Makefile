@@ -120,7 +120,7 @@ DOCS_ADDR ?= 127.0.0.1:8899
 INSTALLER    := docs/install
 PS_INSTALLER := docs/install.ps1
 
-.PHONY: help build test test-race bench seambench lint vet vulncheck fmt fmt-check check check-fast tidy run doctor console console-chrome \
+.PHONY: help build test test-race bench seambench lint vet cross-check vulncheck fmt fmt-check check check-fast tidy run doctor console console-chrome \
 	docs docs-check docs-serve changelog installer-check site-check site-stamp indexnow metrics release-snapshot install-git-hooks uninstall-git-hooks \
 	install uninstall update _seed-config _install-service _reload-service \
 	_check-health _wait-healthy _check-server start stop restart status \
@@ -137,10 +137,11 @@ help:
 	@echo "             prints with-vs-without uplift. SPENDS REAL API TOKENS; needs a 'claude'"
 	@echo "             binary + credentials. MANUAL ONLY -- not in check, CI, or any schedule."
 	@echo "             Unrelated to 'bench' above (see cmd/seambench/README.md)"
-	@echo "  check      the full gate: build + vet + fmt + docs + installer + site + lint + vulncheck + test-race"
+	@echo "  check      the full gate: build + vet + cross-check + fmt + docs + installer + site + lint + vulncheck + test-race"
 	@echo "  check-fast the pre-commit subset: same minus build and test-race"
 	@echo "  lint       run golangci-lint"
 	@echo "  vet        run go vet"
+	@echo "  cross-check  go vet for $(CROSS_TARGETS) (part of check; CI only runs Linux)"
 	@echo "  vulncheck  run govulncheck against the vuln DB (part of check; needs network)"
 	@echo "  fmt        gofmt tracked files"
 	@echo "  fmt-check  fail if tracked files have gofmt drift"
@@ -266,6 +267,21 @@ lint:
 vet:
 	$(GO) vet $(PKG)
 
+# Cross-OS vet. CI runs on ubuntu only, so a darwin- or windows-tagged file
+# (internal/agentproc/proc_{darwin,windows}.go, the service and update code
+# that branches per OS) would otherwise compile for the first time inside the
+# release workflow, after the tag is already pushed. vet type-checks test
+# files too, which a plain cross-build would not. CGO off matches the release
+# builds (.goreleaser.yaml) and keeps a missing cross C toolchain out of it.
+CROSS_TARGETS := darwin/arm64 windows/amd64
+
+cross-check:
+	@for t in $(CROSS_TARGETS); do \
+	    os=$${t%/*}; arch=$${t#*/}; \
+	    echo "cross-check: go vet for $$os/$$arch"; \
+	    GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 $(GO) vet $(PKG) || exit 1; \
+	done
+
 # Known-vulnerability gate. Reachability-based (govulncheck reports only vulns
 # whose vulnerable symbols this code actually calls), so it stays quiet about
 # the long tail in transitive deps and fails only on something real.
@@ -335,6 +351,7 @@ changelog:
 check:
 	@$(MAKE) build
 	@$(MAKE) vet
+	@$(MAKE) cross-check
 	@$(MAKE) fmt-check
 	@$(MAKE) docs-check
 	@$(MAKE) installer-check
