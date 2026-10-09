@@ -9,7 +9,7 @@ GO      ?= go
 # schema generations are mutually unreadable, so a v1 binary does not lint badly
 # here -- it refuses to start. The `lint` target checks for that rather than
 # letting the raw schema error surface. CI pins this same version; bump both.
-GOLANGCI_VERSION ?= v2.12.2
+GOLANGCI_VERSION ?= v2.14.0
 GOLANGCI_INSTALL := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 
 # Build metadata linked into the daemon (surfaced in /healthz, the MCP handshake,

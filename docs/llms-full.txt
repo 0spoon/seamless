@@ -10663,7 +10663,7 @@ so errors discarded into `_` are reported too.
 `/v2` in the module path, since v1's path installs a v1 binary:
 
 ```bash
-go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 ```
 
 The two schema generations are mutually unreadable, so a mismatched binary does
