@@ -166,7 +166,8 @@ usage:
   seamlessd map-repo       override a repo's auto-derived project slug (rarely needed;
                            repos self-map on first session -- repo_project_map)
   seamlessd unmap-repo     remove this machine's mapping for a repo (--path DIR), or every mapping
-                           whose path no longer exists (--stale); --dry-run previews. Projects stay
+                           whose path no longer exists (--stale); --dry-run previews. Projects stay.
+                           --host NAME --path DIR removes another machine's mapping on a shared daemon
   seamlessd retire-project mark a mistakenly minted project retired (--project SLUG); refused while
                            repos map to it or it holds memories, notes or open tasks; --undo; --dry-run
   seamlessd family         manage project families (list|add|remove)

@@ -52,10 +52,11 @@ const SettingLocalHost = "local_host"
 // says so (a hook.error event, a session_start warning).
 var ErrRemoteRootUnknown = errors.New("store: remote host sent no repo root")
 
-// ErrRepoMappingNotFound is returned by RemoveRepoMappings when a path has no
-// mapping on this machine. Nothing is removed: the call is all-or-nothing, so
-// one mistyped path never half-applies a batch.
-var ErrRepoMappingNotFound = errors.New("store: no repo mapping for that path on this machine")
+// ErrRepoMappingNotFound is returned by RemoveRepoMappings and
+// RemoveHostRepoMappings when a path has no mapping on the host being edited.
+// Nothing is removed: the call is all-or-nothing, so one mistyped path never
+// half-applies a batch.
+var ErrRepoMappingNotFound = errors.New("store: no repo mapping for that path")
 
 // RepoMapRow is one (host, path) -> project mapping.
 type RepoMapRow struct {
@@ -271,11 +272,41 @@ func LocalRepoMappings(ctx context.Context, db *sql.DB) ([]RepoMapRow, error) {
 // no mapping here fails the whole call with ErrRepoMappingNotFound. The removed
 // rows are returned in the order the paths were given.
 func RemoveRepoMappings(ctx context.Context, db *sql.DB, paths []string) ([]RepoMapRow, error) {
+	return removeRepoMappings(ctx, db, "store.RemoveRepoMappings", "", paths)
+}
+
+// RemoveHostRepoMappings is RemoveRepoMappings for a named host: the owner's
+// override behind `seamlessd unmap-repo --host`. On a shared daemon a client
+// machine's rows live in THIS database, so that machine's own unmap-repo, which
+// edits its own database, can never reach them. Naming this machine's host (or
+// "") is exactly RemoveRepoMappings.
+//
+// Nothing is stat'd: whether a path still exists on another machine is
+// unknowable from here (constraint network-install-identity-is-host-scoped), so
+// each mapping is named exactly. Another host's removal never touches the legacy
+// JSON mirror, which holds only the local view -- two machines with the same
+// home layout map the same paths, and dropping the remote row must leave the
+// local route alone.
+func RemoveHostRepoMappings(ctx context.Context, db *sql.DB, host string, paths []string) ([]RepoMapRow, error) {
+	return removeRepoMappings(ctx, db, "store.RemoveHostRepoMappings", strings.TrimSpace(host), paths)
+}
+
+// removeRepoMappings deletes host's mapping for each path; host "" (or the local
+// host's own name) is this machine, whose rows include the unnamed bucket and
+// whose removals are mirrored into the legacy JSON.
+func removeRepoMappings(ctx context.Context, db *sql.DB, op, host string, paths []string) ([]RepoMapRow, error) {
 	var removed []RepoMapRow
-	err := inRepoMapTx(ctx, db, "store.RemoveRepoMappings", func(tx *sql.Tx) error {
-		host, err := localHostSetting(ctx, tx)
+	err := inRepoMapTx(ctx, db, op, func(tx *sql.Tx) error {
+		localHost, err := localHostSetting(ctx, tx)
 		if err != nil {
 			return err
+		}
+		local := host == "" || host == localHost
+		owns := func(r RepoMapRow) bool {
+			if local {
+				return r.Host == localHost || r.Host == ""
+			}
+			return r.Host == host
 		}
 		rows, err := repoMapSnapshot(ctx, tx)
 		if err != nil {
@@ -290,7 +321,7 @@ func RemoveRepoMappings(ctx context.Context, db *sql.DB, paths []string) ([]Repo
 			}
 			found := false
 			for _, r := range rows {
-				if (r.Host != host && r.Host != "") || normPath(r.Path) != want {
+				if !owns(r) || normPath(r.Path) != want {
 					continue
 				}
 				// A mirror-only entry has no table row, so this can legitimately
@@ -304,11 +335,17 @@ func RemoveRepoMappings(ctx context.Context, db *sql.DB, paths []string) ([]Repo
 				found = true
 			}
 			if !found {
-				return fmt.Errorf("%w: %s", ErrRepoMappingNotFound, p)
+				if local {
+					return fmt.Errorf("%w on this machine: %s", ErrRepoMappingNotFound, p)
+				}
+				return fmt.Errorf("%w on host %q: %s", ErrRepoMappingNotFound, host, p)
 			}
 			done[want] = true
 		}
-		return mirrorRepoMapMutation(ctx, tx, host, nil, del)
+		if !local {
+			return nil
+		}
+		return mirrorRepoMapMutation(ctx, tx, localHost, nil, del)
 	})
 	if err != nil {
 		return nil, err

@@ -18,12 +18,16 @@ import (
 // runUnmapRepo removes this machine's repo mappings -- the inverse of map-repo.
 // --path removes the mapping for one repo root; --stale removes every mapping
 // whose path no longer exists on disk, which is the list doctor's repo map check
-// warns about. Like map-repo it writes straight to the database, so no running
-// daemon is needed. Only routes go: projects and everything in them stay.
+// warns about. --host, with --path, removes another machine's mapping from this
+// database instead: on a shared daemon that machine's rows live here, out of
+// reach of its own unmap-repo. Like map-repo it writes straight to the database,
+// so no running daemon is needed. Only routes go: projects and everything in
+// them stay.
 func runUnmapRepo(args []string) error {
 	fs := flag.NewFlagSet("unmap-repo", flag.ContinueOnError)
 	path := fs.String("path", "", "repo path whose mapping to remove (exact match, made absolute)")
 	stale := fs.Bool("stale", false, "remove every mapping on this machine whose path no longer exists on disk")
+	host := fs.String("host", "", "with --path: remove that host's mapping instead of this machine's")
 	dryRun := fs.Bool("dry-run", false, "print what would be removed without changing anything")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -33,6 +37,11 @@ func runUnmapRepo(args []string) error {
 	}
 	if (strings.TrimSpace(*path) == "") == !*stale {
 		return fmt.Errorf("seamlessd.unmap-repo: pass exactly one of --path DIR or --stale")
+	}
+	// --stale stats each path, and another machine's paths cannot be stat'd from
+	// here (constraint network-install-identity-is-host-scoped).
+	if *stale && strings.TrimSpace(*host) != "" {
+		return fmt.Errorf("seamlessd.unmap-repo: --host needs --path; --stale only checks this machine's disk")
 	}
 
 	cfg, err := config.Load()
@@ -46,7 +55,7 @@ func runUnmapRepo(args []string) error {
 	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
-	targets, err := unmapTargets(ctx, db, *path, *stale)
+	targets, err := unmapTargets(ctx, db, *path, *stale, *host)
 	if err != nil {
 		return fmt.Errorf("seamlessd.unmap-repo: %w", err)
 	}
@@ -56,7 +65,7 @@ func runUnmapRepo(args []string) error {
 	}
 	if *dryRun {
 		for _, r := range targets {
-			fmt.Printf("would unmap %s -> project %q\n", r.Path, r.Slug)
+			fmt.Printf("would unmap %s%s -> project %q\n", r.Path, hostSuffix(*host), r.Slug)
 		}
 		return nil
 	}
@@ -64,22 +73,39 @@ func runUnmapRepo(args []string) error {
 	for i, r := range targets {
 		paths[i] = r.Path
 	}
-	removed, err := store.RemoveRepoMappings(ctx, db, paths)
+	removed, err := store.RemoveHostRepoMappings(ctx, db, *host, paths)
 	if err != nil {
 		return fmt.Errorf("seamlessd.unmap-repo: %w", err)
 	}
 	for _, r := range removed {
-		fmt.Printf("unmapped %s -> project %q\n", r.Path, r.Slug)
+		fmt.Printf("unmapped %s%s -> project %q\n", r.Path, hostSuffix(*host), r.Slug)
 	}
 	return nil
 }
 
-// unmapTargets picks the local mappings an unmap-repo run acts on. With stale it
-// is every mapping whose path is provably gone (a clean not-exist, the same test
-// doctor applies; any other stat failure keeps the mapping). Otherwise it is the
-// mapping for exactly that path, and a path this machine has not mapped is an
-// error rather than an empty success.
-func unmapTargets(ctx context.Context, db *sql.DB, path string, stale bool) ([]store.RepoMapRow, error) {
+// hostSuffix names the host an unmap-repo line is about when --host was given.
+func hostSuffix(host string) string {
+	if strings.TrimSpace(host) == "" {
+		return ""
+	}
+	return fmt.Sprintf(" (host %q)", strings.TrimSpace(host))
+}
+
+// unmapTargets picks the mappings an unmap-repo run acts on. With stale it is
+// every local mapping whose path is provably gone (a clean not-exist, the same
+// test doctor applies; any other stat failure keeps the mapping). Otherwise it
+// is the mapping for exactly that path, and a path the host has not mapped is an
+// error rather than an empty success. host "" or this machine's own name means
+// this machine; any other host is matched by exact absolute path, never stat'd.
+func unmapTargets(ctx context.Context, db *sql.DB, path string, stale bool, host string) ([]store.RepoMapRow, error) {
+	host = strings.TrimSpace(host)
+	localHost, _, err := store.GetSetting(ctx, db, store.SettingLocalHost)
+	if err != nil {
+		return nil, err
+	}
+	if host != "" && host != localHost {
+		return remoteUnmapTargets(ctx, db, host, path)
+	}
 	local, err := store.LocalRepoMappings(ctx, db)
 	if err != nil {
 		return nil, err
@@ -104,7 +130,31 @@ func unmapTargets(ctx context.Context, db *sql.DB, path string, stale bool) ([]s
 		}
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("%w: %s", store.ErrRepoMappingNotFound, abs)
+		return nil, fmt.Errorf("%w on this machine: %s", store.ErrRepoMappingNotFound, abs)
+	}
+	return out, nil
+}
+
+// remoteUnmapTargets is unmapTargets for another host. The path is that
+// machine's, so it must already be absolute: resolving a relative one against
+// this machine's working directory would name a path on the wrong disk.
+func remoteUnmapTargets(ctx context.Context, db *sql.DB, host, path string) ([]store.RepoMapRow, error) {
+	if !filepath.IsAbs(path) {
+		return nil, fmt.Errorf("--path must be absolute with --host: %q is a path on %s, not here", path, host)
+	}
+	want := filepath.Clean(path)
+	rows, err := store.RepoMapRows(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	var out []store.RepoMapRow
+	for _, r := range rows {
+		if r.Host == host && filepath.Clean(r.Path) == want {
+			out = append(out, r)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%w on host %q: %s", store.ErrRepoMappingNotFound, host, want)
 	}
 	return out, nil
 }

@@ -936,6 +936,7 @@ registers it. Writes straight to the database; no running daemon needed.</p>
 <h2 id="seamlessd_unmap_repo">seamlessd unmap-repo</h2>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd unmap-repo --path DIR <span class="o">[</span>--dry-run<span class="o">]</span>
 </span></span><span class="line"><span class="cl">seamlessd unmap-repo --stale <span class="o">[</span>--dry-run<span class="o">]</span>
+</span></span><span class="line"><span class="cl">seamlessd unmap-repo --host NAME --path DIR <span class="o">[</span>--dry-run<span class="o">]</span>
 </span></span></code></pre></div>
 <p>Removes this machine's repo mappings - the inverse of <code>map-repo</code>. <code>--path</code>
 removes the mapping for exactly that directory (made absolute; a directory
@@ -964,6 +965,11 @@ exactly one of the two.</p>
 <td>Remove every local mapping whose path is gone. Only a clean &quot;does not exist&quot; counts; a path that cannot be stat'd for another reason is kept.</td>
 </tr>
 <tr>
+<td><code>--host</code></td>
+<td>this machine</td>
+<td>With <code>--path</code>: remove that host's mapping instead. The path must be absolute. Not valid with <code>--stale</code>.</td>
+</tr>
+<tr>
 <td><code>--dry-run</code></td>
 <td><code>false</code></td>
 <td>Print what would be removed and change nothing.</td>
@@ -974,9 +980,17 @@ exactly one of the two.</p>
 <p>Only the route goes. The project stays, with its memories, notes and tasks,
 and a repo still on disk maps itself again on its next session - so to move a
 repo to another project, <code>map-repo</code> its root there rather than unmapping it.
-Mappings belonging to other hosts are never touched. The table row and the
-legacy <code>repo_project_map</code> entry are removed together, so the removal survives a
-daemon restart. Writes straight to the database; no running daemon needed.</p>
+The table row and the legacy <code>repo_project_map</code> entry are removed together, so
+the removal survives a daemon restart. Writes straight to the database; no
+running daemon needed.</p>
+<p>Without <code>--host</code>, mappings belonging to other hosts are never touched. On a
+<a href="../../guides/network-install/">shared daemon</a> a client machine's mappings live in the
+server's database, where that machine's own <code>unmap-repo</code> cannot reach them, so
+run <code>--host NAME --path DIR</code> beside the server's database instead. It names
+the mapping exactly and never checks the path: another machine's disk cannot be
+read from here, which is also why <code>--stale</code> refuses <code>--host</code>. <code>doctor</code> lists
+those rows as not verifiable from this machine. Removing another host's mapping
+leaves this machine's mapping for the same path alone.</p>
 <h2 id="seamlessd_retire_project">seamlessd retire-project</h2>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd retire-project --project SLUG <span class="o">[</span>--dry-run<span class="o">]</span>
 </span></span><span class="line"><span class="cl">seamlessd retire-project --project SLUG --undo <span class="o">[</span>--dry-run<span class="o">]</span>
@@ -991,7 +1005,8 @@ the project row stays, nothing is deleted, and the console lists it as retired.
 Every blocker is printed with its remedy, and nothing changes:</p>
 <ul>
 <li>a repo mapping on any host still routes sessions to it - <code>map-repo</code> the path
-to the right project, or <code>unmap-repo</code> it, on the host that owns the mapping;</li>
+to the right project, or <code>unmap-repo</code> it (<code>--host NAME</code> for another
+machine's mapping);</li>
 <li>it holds active memories, notes, or open or in-progress tasks - move them to
 the project they belong in, or archive or close them.</li>
 </ul>

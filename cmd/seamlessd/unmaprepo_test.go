@@ -29,35 +29,50 @@ func TestUnmapTargets(t *testing.T) {
 	require.NoError(t, err)
 
 	// --stale: only the local mapping whose path is gone.
-	targets, err := unmapTargets(ctx, db, "", true)
+	targets, err := unmapTargets(ctx, db, "", true, "")
 	require.NoError(t, err)
 	require.Len(t, targets, 1)
 	require.Equal(t, gone, targets[0].Path)
 	require.Equal(t, "gone-project", targets[0].Slug)
 
 	// --path: the exact mapping, whether or not the directory still exists.
-	targets, err = unmapTargets(ctx, db, present, false)
+	targets, err = unmapTargets(ctx, db, present, false, "")
 	require.NoError(t, err)
 	require.Len(t, targets, 1)
 	require.Equal(t, "here", targets[0].Slug)
 
 	// A path this machine has not mapped is an error, not an empty success --
 	// including a directory nested under a mapped one.
-	_, err = unmapTargets(ctx, db, filepath.Join(present, "sub"), false)
+	_, err = unmapTargets(ctx, db, filepath.Join(present, "sub"), false, "")
 	require.ErrorIs(t, err, store.ErrRepoMappingNotFound)
-	_, err = unmapTargets(ctx, db, "/elsewhere/app", false)
+	_, err = unmapTargets(ctx, db, "/elsewhere/app", false, "")
 	require.ErrorIs(t, err, store.ErrRepoMappingNotFound)
+
+	// --host names another machine's mapping by exact absolute path; this
+	// machine's own name is the local view.
+	targets, err = unmapTargets(ctx, db, "/elsewhere/app", false, "beta")
+	require.NoError(t, err)
+	require.Len(t, targets, 1)
+	require.Equal(t, "beta", targets[0].Host)
+	_, err = unmapTargets(ctx, db, "/elsewhere/other", false, "beta")
+	require.ErrorIs(t, err, store.ErrRepoMappingNotFound)
+	_, err = unmapTargets(ctx, db, "elsewhere/app", false, "beta")
+	require.ErrorContains(t, err, "must be absolute")
+	targets, err = unmapTargets(ctx, db, present, false, "alpha")
+	require.NoError(t, err)
+	require.Len(t, targets, 1)
+	require.Equal(t, "here", targets[0].Slug)
 
 	// Removing what --stale selected leaves nothing stale behind, and the live
 	// mapping stays.
-	stale, err := unmapTargets(ctx, db, "", true)
+	stale, err := unmapTargets(ctx, db, "", true, "")
 	require.NoError(t, err)
 	_, err = store.RemoveRepoMappings(ctx, db, []string{stale[0].Path})
 	require.NoError(t, err)
-	stale, err = unmapTargets(ctx, db, "", true)
+	stale, err = unmapTargets(ctx, db, "", true, "")
 	require.NoError(t, err)
 	require.Empty(t, stale)
-	targets, err = unmapTargets(ctx, db, present, false)
+	targets, err = unmapTargets(ctx, db, present, false, "")
 	require.NoError(t, err)
 	require.Len(t, targets, 1)
 }

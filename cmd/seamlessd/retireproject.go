@@ -123,9 +123,10 @@ func retireProject(ctx context.Context, db *sql.DB, w io.Writer, slug string, un
 }
 
 // retireBlockers lists what keeps slug from being retired, one line per blocker
-// naming its remedy; none means it is safe. A mapping on this machine gets the
-// exact command to clear it. Another host's mapping can only be cleared there,
-// since unmap-repo never touches other hosts' rows.
+// naming its remedy; none means it is safe. Every mapping gets the exact command
+// that clears it. Another host's row lives in this database, so it is dropped
+// from here with unmap-repo --host; that host's own unmap-repo edits its own
+// database and could never reach it.
 func retireBlockers(ctx context.Context, db *sql.DB, slug string) ([]string, error) {
 	local, err := store.LocalRepoMappings(ctx, db)
 	if err != nil {
@@ -153,7 +154,8 @@ func retireBlockers(ctx context.Context, db *sql.DB, slug string) ([]string, err
 			continue
 		}
 		out = append(out, fmt.Sprintf(
-			"%s on host %q still maps here: run map-repo or unmap-repo on that host", r.Path, r.Host))
+			"%s on host %q still maps here: drop it with `seamlessd unmap-repo --host %s --path %s`",
+			r.Path, r.Host, r.Host, r.Path))
 	}
 
 	c, err := store.GetProjectCounts(ctx, db, slug)

@@ -479,6 +479,7 @@ registers it. Writes straight to the database; no running daemon needed.
 ```bash
 seamlessd unmap-repo --path DIR [--dry-run]
 seamlessd unmap-repo --stale [--dry-run]
+seamlessd unmap-repo --host NAME --path DIR [--dry-run]
 ```
 
 Removes this machine's repo mappings - the inverse of `map-repo`. `--path`
@@ -492,14 +493,24 @@ exactly one of the two.
 |---|---|---|
 | `--path` | - | The repo root whose mapping to remove. Unmapped on this machine is an error, and nothing is removed. |
 | `--stale` | `false` | Remove every local mapping whose path is gone. Only a clean "does not exist" counts; a path that cannot be stat'd for another reason is kept. |
+| `--host` | this machine | With `--path`: remove that host's mapping instead. The path must be absolute. Not valid with `--stale`. |
 | `--dry-run` | `false` | Print what would be removed and change nothing. |
 
 Only the route goes. The project stays, with its memories, notes and tasks,
 and a repo still on disk maps itself again on its next session - so to move a
 repo to another project, `map-repo` its root there rather than unmapping it.
-Mappings belonging to other hosts are never touched. The table row and the
-legacy `repo_project_map` entry are removed together, so the removal survives a
-daemon restart. Writes straight to the database; no running daemon needed.
+The table row and the legacy `repo_project_map` entry are removed together, so
+the removal survives a daemon restart. Writes straight to the database; no
+running daemon needed.
+
+Without `--host`, mappings belonging to other hosts are never touched. On a
+[shared daemon](/guides/network-install/) a client machine's mappings live in the
+server's database, where that machine's own `unmap-repo` cannot reach them, so
+run `--host NAME --path DIR` beside the server's database instead. It names
+the mapping exactly and never checks the path: another machine's disk cannot be
+read from here, which is also why `--stale` refuses `--host`. `doctor` lists
+those rows as not verifiable from this machine. Removing another host's mapping
+leaves this machine's mapping for the same path alone.
 
 ## seamlessd retire-project {#seamlessd_retire_project}
 
@@ -519,7 +530,8 @@ Retiring moves nothing, so it is refused while the project is still in use.
 Every blocker is printed with its remedy, and nothing changes:
 
 - a repo mapping on any host still routes sessions to it - `map-repo` the path
-  to the right project, or `unmap-repo` it, on the host that owns the mapping;
+  to the right project, or `unmap-repo` it (`--host NAME` for another
+  machine's mapping);
 - it holds active memories, notes, or open or in-progress tasks - move them to
   the project they belong in, or archive or close them.
 

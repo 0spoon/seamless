@@ -87,7 +87,7 @@ func TestRetireProject_RefusesWhileInUse(t *testing.T) {
 		require.ErrorIs(t, err, errProjectInUse)
 		got := out.String()
 		require.Contains(t, got, "seamlessd unmap-repo --path "+local)
-		require.Contains(t, got, `/elsewhere/app on host "beta" still maps here`)
+		require.Contains(t, got, "seamlessd unmap-repo --host beta --path /elsewhere/app")
 		require.Contains(t, got, "1 active memory, 1 note, 1 open task")
 		requireRetired(t, db, "app", false)
 	}

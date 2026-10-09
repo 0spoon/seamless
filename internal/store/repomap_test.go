@@ -428,6 +428,55 @@ func TestRemoveRepoMappings_DropsRowAndMirror(t *testing.T) {
 	check()
 }
 
+// RemoveHostRepoMappings drops another host's row on a shared daemon and leaves
+// this machine's mapping for the same path -- and the local mirror -- alone,
+// since two machines with one home layout map the same paths. An unknown path
+// fails the whole call, naming the host. Naming the local host is a local
+// removal, mirror included.
+func TestRemoveHostRepoMappings_LeavesLocalRouteAlone(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	require.NoError(t, AdoptLocalHost(ctx, db, "alpha"))
+	require.NoError(t, AddRepoMapping(ctx, db, "/work/app", "app"))
+	for _, root := range []string{"/work/app", "/tmp/scratch"} {
+		_, _, err := RegisterProjectForCWD(ctx, db, CWDIdentity{
+			Host: "beta", CWD: root, RepoRoot: root,
+		}, "alpha")
+		require.NoError(t, err)
+	}
+
+	_, err := RemoveHostRepoMappings(ctx, db, "beta", []string{"/work/app", "/work/typo"})
+	require.ErrorIs(t, err, ErrRepoMappingNotFound)
+	require.ErrorContains(t, err, `host "beta"`)
+	slug, err := ResolveProjectForCWD(ctx, db, "beta", "/work/app")
+	require.NoError(t, err)
+	require.Equal(t, "app", slug, "a failed batch removes nothing")
+
+	removed, err := RemoveHostRepoMappings(ctx, db, "beta", []string{"/work/app", "/tmp/scratch"})
+	require.NoError(t, err)
+	require.Len(t, removed, 2)
+	for _, r := range removed {
+		require.Equal(t, "beta", r.Host)
+	}
+	slug, err = ResolveProjectForCWD(ctx, db, "beta", "/tmp/scratch")
+	require.NoError(t, err)
+	require.Empty(t, slug)
+	slug, err = ResolveProjectForCWD(ctx, db, "alpha", "/work/app")
+	require.NoError(t, err)
+	require.Equal(t, "app", slug, "the local row for the same path stays")
+	mirror, err := RepoProjectMap(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"/work/app": "app"}, mirror)
+
+	// The local host by name is a local removal: row and mirror both go.
+	removed, err = RemoveHostRepoMappings(ctx, db, "alpha", []string{"/work/app"})
+	require.NoError(t, err)
+	require.Len(t, removed, 1)
+	mirror, err = RepoProjectMap(ctx, db)
+	require.NoError(t, err)
+	require.Empty(t, mirror)
+}
+
 // One unknown path fails the whole call and removes nothing, so a typo never
 // half-applies a batch.
 func TestRemoveRepoMappings_UnknownPathRemovesNothing(t *testing.T) {
