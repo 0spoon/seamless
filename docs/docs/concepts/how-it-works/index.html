@@ -352,7 +352,10 @@ is how a store fills with noise.</li>
 exactly. No ANN index, no separate service.</li>
 <li><strong>Not a cloud service.</strong> No account, no sync, and no outbound product
 telemetry. The local event and retrieval telemetry shown in the console never
-leaves the machine. The bind is loopback and the key is static.</li>
+leaves the machine. The bind is loopback and the key is static. The one
+request Seamless makes unprompted is the anonymous
+<a href="../../updating/#automatic-update-checks">update check</a> against GitHub's release
+list, which <code>update.check: false</code> turns off.</li>
 <li><strong>Not autonomous.</strong> The gardener proposes; you decide. Nothing rewrites your
 knowledge behind your back.</li>
 <li><strong>Not a chat memory.</strong> It is not trying to remember your conversation. It

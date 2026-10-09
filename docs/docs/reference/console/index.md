@@ -40,6 +40,9 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Dismiss the welcome card | `POST /console/settings/level/welcome` | Records that the Home welcome card was seen, without choosing a level. |
 | Save optional features | `POST /console/settings/features` | Writes the feature switches as a stored **override row** in the DB. It changes what is exposed - console screens and the matching agent tools - and deletes nothing. |
 | Reset optional features | `POST /console/settings/features/reset` | Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing. |
+| Turn update checks on or off | `POST /console/settings/updates` | Stores the console's `update.check` override (`check=on` or `off`). It can always turn checks off; it cannot turn them on while the config file or environment says `update.check: false` - that is final, and the form says so. Installs nothing. |
+| Reset update checks | `POST /console/settings/updates/reset` | Clears that override, handing the switch back to the config file (or, without one, the build's default). |
+| Check for updates now | `POST /console/settings/updates/check` | Asks GitHub's release list once, right away - refused while checks are off or within a minute of the last check. Reads; installs nothing. |
 | Save a project family | `POST /console/settings/families/save` | Creates a family or replaces one family's name and member set - the same `project_families` setting `seamlessd family` manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member. |
 | Delete a project family | `POST /console/settings/families/delete` | Removes the whole family. Its projects lose the sibling-findings channel; nothing else about them changes. |
 | Sign in / sign out | `POST /console/login`, `POST /console/logout` | Sets or clears the console cookie. Touches no data. |
@@ -49,9 +52,9 @@ Read the shape of that list. There is no "create memory", no "edit note", no
 state are **archive a memory**, **approve a captured plan**, and the **star**
 flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
-configuration knob (briefing overrides, feature switches, project families) that
-shapes future briefings, or what is exposed, without touching any memory's
-content. The console level is presentation state of the same kind: it changes
+configuration knob (briefing overrides, feature switches, project families, the
+update-check switch) that shapes future briefings, or what is exposed, without
+touching any memory's content. The console level is presentation state of the same kind: it changes
 what this console shows you and nothing else.
 
 This is deliberate, and it is the same principle as
@@ -186,7 +189,8 @@ Claude Code or Codex and wants to know it works: what the agents remember
 (Memories, Notes), what they did (Sessions), cleanup suggestions to accept or
 decline (Gardener), and a Home that opens on a health strip - which agent clients
 are working here, whether semantic recall is on, when the last briefing went
-out, and the version.
+out, and the version (which says when a newer release is out) - plus the
+Updates settings.
 
 **Standard** adds following the work: Now, Projects, Plans, and Tasks (and Labs
 and Trials when that feature is on), the Overview's window, vitals, and
@@ -253,6 +257,7 @@ What each level shows, generated from the console's own registries:
 | **Experience** - How much of the console you see, and how it looks | shown | shown | shown |
 | **Features** - Optional features, for the console and agents alike | shown | shown | shown |
 | **Your setup** - Version, files, and what is connected | shown | shown | shown |
+| **Updates** - New releases, and whether this install checks for them | shown | shown | shown |
 | **Briefing** - What every new agent session starts with | - | shown | shown |
 | **Workspaces** - Projects, repo routes, and families | - | shown | shown |
 | **Knowledge engine** - Semantic index, ranking, storage, and policy | - | - | shown |
@@ -932,6 +937,34 @@ and its size, which agent clients have recorded sessions and when each was last
 active, whether semantic recall is on - and when it is off, what to do about it -
 whether the gardener is running and how often, and links to these docs. No
 budgets or policy numbers: those live in Knowledge engine.
+
+### Updates
+
+`/console/settings?s=updates`
+
+The [automatic update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks) in plain words:
+whether this install checks for new releases and why (a release build does by
+default, a build from source does not), what a check sends (one anonymous
+request to `api.github.com` every few hours; nothing when checks are off), the
+installed version and kind of build, the command that updates this install
+(with a copy button), the newest release with its date and release notes - or
+"up to date" - and when the daemon last checked and checks next, including a
+streak of failed checks and why.
+
+The note at the top says who decided the switch: **Default for this build**,
+**Set in the config file or environment**, or **Set in this console** with
+**Reset to the config file** beside it. Turning checks off from here always
+works. Turning them on does not when the config file or `SEAMLESS_UPDATE_CHECK`
+says `false`: that is final, the switch shows locked, and the form refuses -
+`false` promises no update traffic at all. **Check now** asks GitHub once, right
+away (not more than once a minute). Nothing on this page installs anything; the
+update command is yours to run.
+
+When a newer release is out, the Home health strip's version fact turns into
+`v0.7.2 -- v0.7.3 available` and links here, and a toast announces it if the
+console is open when the daemon finds it. For a day after the daemon starts on
+a new version, every page carries a banner - "Seamless updated to v0.7.3 (from
+v0.7.2)" - with the release notes and **Got it**, which hides it for that tab.
 
 ### Briefing
 

@@ -265,6 +265,17 @@ Every skip is also an event in the log (`hook.error`, stage
 `remote-host-skip`, with the capture name and the host), recorded at INFO -
 on a shared daemon a skip is the design working, not a fault.
 
+## Updates on a shared daemon
+
+The server's [automatic update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks)
+covers the server: its briefing notice reaches every session, and a session on
+another machine is told that **the server** can update - an action for whoever
+runs it, not for that machine. Updating the server does not update the clients:
+each paired machine keeps its own `seam` binary (the hooks and the MCP bridge),
+and updates it by re-running the pairing commands `seamlessd client-config`
+prints on the server. A client runs no daemon, so it has no update check of its
+own.
+
 ## Windows: a second user on one box
 
 The Windows install is per-user in where it writes (`%USERPROFILE%`) but **not**

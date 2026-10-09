@@ -445,8 +445,9 @@ a job <code>seamlessd serve</code> refuses by design.</p>
 <h3 id="go-install-and-release-archives">Go install and release archives</h3>
 <p>The remaining routes end up in the same place with less done for you:
 <code>go install github.com/arctop/seamless/cmd/...@latest</code> needs Go 1.26+ and
-reports the release it was installed at (<code>seamlessd 0.6.0 (commit unknown, built unknown)</code> - the module proxy records no commit or build date), so
-<code>seamlessd update --check</code> compares it like any release; the
+reports the release it was installed at (<code>seamlessd 0.6.0 (commit unknown, built unknown, source build)</code> - the module proxy records no commit or build date), so
+<code>seamlessd update --check</code> compares it like any release, though as a source
+build it does not check for updates by itself; the
 <a href="https://github.com/arctop/seamless/releases">GitHub releases</a> carry the same
 prebuilt archives the installer fetches. From a bare binary, <code>seamlessd serve</code>
 covers the essentials - first run seeds the config - and <code>seamlessd install-hooks</code>
@@ -490,8 +491,11 @@ to <code>capture.allowed_ports</code> (80 and 443 by default) - never &quot;any 
 <li><strong>No product telemetry.</strong> Seamless sends no usage or analytics data. The
 outbound traffic is: calls to a configured OpenAI or Anthropic provider (use
 Ollama to keep model calls local), URLs an agent explicitly asks
-<code>capture_url</code> to fetch, and the GitHub release check and download that an
-explicit <code>seamlessd update</code> performs.</li>
+<code>capture_url</code> to fetch, the GitHub release check and download that an
+explicit <code>seamlessd update</code> performs, and - on a release build - the
+<a href="../updating/#automatic-update-checks">background update check</a>: one anonymous
+request to GitHub's releases API every 6 hours, carrying no identifiers.
+<code>update.check: false</code> turns it off and means no update traffic at all.</li>
 <li><strong>Release authenticity has two layers.</strong> Every installer verifies the
 archive's SHA-256 against <code>checksums.txt</code>. When <code>cosign</code> is installed it also
 verifies the manifest's keyless signature against this repository's release

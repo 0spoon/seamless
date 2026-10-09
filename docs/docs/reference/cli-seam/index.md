@@ -288,7 +288,10 @@ seam status
 
 Server health from the unauthenticated `/healthz` endpoint (status and version),
 the configured data directory, then the project count and slugs via
-`project_list` - which doubles as proof the static key works.
+`project_list` - which doubles as proof the static key works. When the daemon's
+[update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks) has seen a newer release, an
+`update:` line names it and points at `seamlessd update --check` on the daemon's
+machine, which knows how that install updates.
 
 **`seam status` exits non-zero if any check failed**, so it works as a scripted
 health gate. A partial answer is still printed - if MCP is unavailable it reports
@@ -399,7 +402,15 @@ Prints the version of the daemon this CLI is configured to talk to, in the same
 form as `seamlessd version`:
 
 ```
-seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z)
+seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z, release build)
+```
+
+A daemon from before the distribution was reported leaves `, release build`
+off. When the daemon's [update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks) has
+seen a newer release, a second line says so:
+
+```
+update available: v0.3.9 (seamlessd update --check on the daemon's machine shows how to update)
 ```
 
 `seam` carries no version of its own. Both binaries ship from one tag and one

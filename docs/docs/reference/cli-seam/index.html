@@ -431,7 +431,10 @@ one already exists.</p>
 </span></span></code></pre></div>
 <p>Server health from the unauthenticated <code>/healthz</code> endpoint (status and version),
 the configured data directory, then the project count and slugs via
-<code>project_list</code> - which doubles as proof the static key works.</p>
+<code>project_list</code> - which doubles as proof the static key works. When the daemon's
+<a href="../../updating/#automatic-update-checks">update check</a> has seen a newer release, an
+<code>update:</code> line names it and points at <code>seamlessd update --check</code> on the daemon's
+machine, which knows how that install updates.</p>
 <p><strong><code>seam status</code> exits non-zero if any check failed</strong>, so it works as a scripted
 health gate. A partial answer is still printed - if MCP is unavailable it reports
 health and names the failure on the projects line - but the command fails rather
@@ -511,7 +514,13 @@ questions.</p>
 </span></span></code></pre></div>
 <p>Prints the version of the daemon this CLI is configured to talk to, in the same
 form as <code>seamlessd version</code>:</p>
-<div class="code-block"><pre><code>seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z)
+<div class="code-block"><pre><code>seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z, release build)
+</code></pre>
+</div>
+<p>A daemon from before the distribution was reported leaves <code>, release build</code>
+off. When the daemon's <a href="../../updating/#automatic-update-checks">update check</a> has
+seen a newer release, a second line says so:</p>
+<div class="code-block"><pre><code>update available: v0.3.9 (seamlessd update --check on the daemon's machine shows how to update)
 </code></pre>
 </div>
 <p><code>seam</code> carries no version of its own. Both binaries ship from one tag and one

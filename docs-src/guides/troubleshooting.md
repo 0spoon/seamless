@@ -375,6 +375,36 @@ have). Installed with Homebrew from the old `0spoon/tap`? That install does not
 use `seamlessd update`; switch taps once as
 [Install & deploy](/install/#homebrew) describes.
 
+## The update check keeps failing
+
+**What is happening.** The daemon's [automatic update check](/updating/#automatic-update-checks)
+could not read GitHub's release list. `seamlessd doctor`'s `updates` row and
+**Settings -> Updates** show the error and how long it has lasted; after a week
+the row turns into a warning. A failed check retries after 15 minutes, doubling
+up to the check interval, and a GitHub rate limit (60 anonymous requests an hour
+per address, shared by everything behind your router) is waited out.
+
+**Fix.** Usually the network: the daemon reaches `api.github.com` directly
+unless its own environment carries `HTTPS_PROXY`. A proxy exported in your shell
+does not reach a daemon the service manager starts; see
+[The service & where things live](/reference/service/). If the machine should
+not talk to GitHub at all, set `update.check: false` - then nothing is sent and
+nothing is reported. `seamlessd update --check` asks directly, so it shows the
+same error with its cause.
+
+## The update notice will not go away
+
+**What is happening.** A newer release is out, and the daemon says so in new
+sessions' briefings for a week after it first saw it, in the console, and in
+`seamlessd doctor`. Nothing installs itself.
+
+**Fix.** Update with the command the notice names - it depends on how Seamless
+was installed (`seamlessd update`, `brew upgrade --cask arctop/tap/seamless`, or
+`git pull && make install`); the table in
+[automatic update checks](/updating/#automatic-update-checks) lists them. To stop
+hearing about updates instead, turn checks off in **Settings -> Updates** or set
+`update.check: false`.
+
 ## `memory_write` says the name is held by a superseded memory
 
 **What is happening.** A superseded or archived memory leaves every index but

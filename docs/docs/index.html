@@ -330,7 +330,8 @@ read, <code>grep</code>, edit, and put in git. The database is a rebuildable ind
 them, plus the record for high-churn state (sessions, tasks, events).</p>
 <p><strong>Local-first.</strong> One daemon process, one SQLite file, bound to loopback. No
 external database, no required cloud service, and no outbound product
-telemetry.</p>
+telemetry - the only unprompted request is an anonymous check for new releases,
+and one config line turns it off.</p>
 <p><strong>Propose, don't act.</strong> The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.</p>
 

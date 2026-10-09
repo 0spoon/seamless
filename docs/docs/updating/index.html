@@ -229,7 +229,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#update">Update</a></li><li class="lvl-2"><a href="#uninstall">Uninstall</a></li><li class="lvl-2"><a href="#add-or-remove-one-client">Add or remove one client</a></li>
+      <li class="lvl-2"><a href="#update">Update</a></li><li class="lvl-3"><a href="#automatic-update-checks">Automatic update checks</a></li><li class="lvl-2"><a href="#uninstall">Uninstall</a></li><li class="lvl-2"><a href="#add-or-remove-one-client">Add or remove one client</a></li>
     </ul>
   </details>
   <p>The install is one command, and so is everything after it. <code>seamlessd</code>
@@ -239,12 +239,14 @@ manager and paths for you. The OS-specific detail all lives on
 <a href="../reference/service/">The service &amp; where things live</a>.</p>
 <h2 id="update">Update</h2>
 <p>Seamless is early in its development cycle: releases with improvements and bug
-fixes land often, so update at least weekly to stay on the latest version.</p>
+fixes land often. A daemon installed from a release checks for them by itself
+and tells you when one is out (<a href="#automatic-update-checks">automatic update checks</a>);
+updating is then one command.</p>
 <p><code>seamlessd update</code> is the one command, on every OS. It upgrades in place to the
 latest release by re-running the canonical installer for you - so there is a
 single upgrade path to trust, not a second copy of the download-and-swap logic
 that could drift from the installer:</p>
-<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd update --check   <span class="c1"># report installed vs latest, change nothing</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd update --check   <span class="c1"># report installed vs the newest release, change nothing</span>
 </span></span><span class="line"><span class="cl">seamlessd update --dry-run <span class="c1"># print exactly what it would fetch and run</span>
 </span></span><span class="line"><span class="cl">seamlessd update           <span class="c1"># fetch the latest release and swap it in</span>
 </span></span></code></pre></div>
@@ -265,6 +267,78 @@ are untouched, foreign hooks are preserved, and the recurring skill is
 refreshed.</p>
 <p>From a clone, <code>make update</code> builds first and then runs that same command against
 your installed copy (<code>make update CHECK=1</code> only reports).</p>
+<h3 id="automatic-update-checks">Automatic update checks</h3>
+<p>A daemon installed from a release checks GitHub for new releases by itself: a
+few minutes after it starts, then about every 6 hours (<code>update.check_interval</code>).
+It installs nothing. When a newer release is out, it tells you:</p>
+<ul>
+<li>New agent sessions get one line in their briefing, for a week after the
+release first shows up, worded as your action rather than the agent's:
+<code>Seamless v0.7.3 is available (running v0.7.2). Owner action, not a task for this session: seamlessd update</code>. A session on another machine of a
+<a href="../guides/network-install/">shared daemon</a> is told the server can update.</li>
+<li>The console shows it on the Home health strip and in
+<strong>Settings -&gt; Updates</strong>, with the newest release, when the daemon last
+checked, and the command for your install.</li>
+<li><code>seamlessd doctor</code> reports it on its <code>updates</code> row, <code>seamlessd update --check</code>
+adds what the daemon's check is doing, and <code>seam version</code> / <code>seam status</code>
+print an extra line.</li>
+</ul>
+<p>For a day after the daemon starts on a new version, new sessions hear
+<code>Seamless updated to v0.7.3 (from v0.7.2)</code> with a link to the release notes,
+and the console shows the same as a banner.</p>
+<p>How you update depends on how you installed, and every notice names the right
+command:</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Installed with</th>
+<th>Update with</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the installer (<code>curl ... | sh</code> or <code>irm ... | iex</code>)</td>
+<td><code>seamlessd update</code></td>
+</tr>
+<tr>
+<td>Homebrew</td>
+<td><code>brew upgrade --cask arctop/tap/seamless</code></td>
+</tr>
+<tr>
+<td>a clone (<code>make install</code>), <code>go install</code> or <code>go build</code></td>
+<td><code>git pull &amp;&amp; make install</code></td>
+</tr>
+<tr>
+<td>a client of a shared daemon</td>
+<td>re-run the pairing commands <code>seamlessd client-config</code> prints on the server</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>What is sent.</strong> One anonymous <code>GET</code> to
+<code>https://api.github.com/repos/arctop/seamless/releases</code>, with a fixed
+<code>User-Agent</code> (<code>seamlessd-update-check</code>), no token, no version, and no machine or
+install identifier. It honors <code>HTTPS_PROXY</code> from the daemon's environment. The
+answer is cached with its <code>ETag</code> in <code>~/.seamless/update/state.json</code>; a failed
+check retries after 15 minutes, doubling up to the check interval, and a rate
+limit is waited out. Releases still uploading their assets, drafts and
+prereleases are ignored, and &quot;newest&quot; means the highest version, not the most
+recently published.</p>
+<p><strong>Turning it off.</strong> In <code>seamless.yaml</code>:</p>
+<div class="code-block" data-lang="yaml"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nt">update</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">check</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span></span></span></code></pre></div>
+<p><code>false</code> means no update traffic at all, and it is final: the console shows its
+toggle locked. With the key left out, <strong>Settings -&gt; Updates</strong> turns checks on
+and off at runtime, and <code>SEAMLESS_UPDATE_CHECK=false</code> does the same from the
+service's environment. <code>seamlessd update --check</code> and <code>seamlessd update</code> work
+either way - running them is you asking. The <code>update:</code> keys are new: a
+seamlessd release from before them refuses a config that sets one, so setting
+it ties that file to this release or newer.</p>
+<p>Builds from source (<code>make install</code>, <code>go install</code>, <code>go build</code>) do not check unless
+<code>update.check: true</code> is set, and never write the state file - a developer's
+daemon, the test fixtures and CI stay off the network.</p>
 <details>
 <summary>Deploying your working tree instead of a release</summary>
 <p>Both <code>seamlessd update</code> and <code>make update</code> install the latest <em>release</em>, which
@@ -349,7 +423,7 @@ uninstall - the service and binaries come out regardless.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#update">Update</a></li><li class="lvl-2"><a href="#uninstall">Uninstall</a></li><li class="lvl-2"><a href="#add-or-remove-one-client">Add or remove one client</a></li>
+      <li class="lvl-2"><a href="#update">Update</a></li><li class="lvl-3"><a href="#automatic-update-checks">Automatic update checks</a></li><li class="lvl-2"><a href="#uninstall">Uninstall</a></li><li class="lvl-2"><a href="#add-or-remove-one-client">Add or remove one client</a></li>
     </ul>
   </aside>
   

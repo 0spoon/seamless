@@ -94,7 +94,8 @@ them, plus the record for high-churn state (sessions, tasks, events).
 
 **Local-first.** One daemon process, one SQLite file, bound to loopback. No
 external database, no required cloud service, and no outbound product
-telemetry.
+telemetry - the only unprompted request is an anonymous check for new releases,
+and one config line turns it off.
 
 **Propose, don't act.** The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.
@@ -1368,8 +1369,9 @@ a job `seamlessd serve` refuses by design.
 The remaining routes end up in the same place with less done for you:
 `go install github.com/arctop/seamless/cmd/...@latest` needs Go 1.26+ and
 reports the release it was installed at (`seamlessd 0.6.0 (commit unknown, built
-unknown)` - the module proxy records no commit or build date), so
-`seamlessd update --check` compares it like any release; the
+unknown, source build)` - the module proxy records no commit or build date), so
+`seamlessd update --check` compares it like any release, though as a source
+build it does not check for updates by itself; the
 [GitHub releases](https://github.com/arctop/seamless/releases) carry the same
 prebuilt archives the installer fetches. From a bare binary, `seamlessd serve`
 covers the essentials - first run seeds the config - and `seamlessd install-hooks`
@@ -1422,8 +1424,11 @@ What you are accepting when you run this:
 - **No product telemetry.** Seamless sends no usage or analytics data. The
   outbound traffic is: calls to a configured OpenAI or Anthropic provider (use
   Ollama to keep model calls local), URLs an agent explicitly asks
-  `capture_url` to fetch, and the GitHub release check and download that an
-  explicit `seamlessd update` performs.
+  `capture_url` to fetch, the GitHub release check and download that an
+  explicit `seamlessd update` performs, and - on a release build - the
+  [background update check](/updating/#automatic-update-checks): one anonymous
+  request to GitHub's releases API every 6 hours, carrying no identifiers.
+  `update.check: false` turns it off and means no update traffic at all.
 - **Release authenticity has two layers.** Every installer verifies the
   archive's SHA-256 against `checksums.txt`. When `cosign` is installed it also
   verifies the manifest's keyless signature against this repository's release
@@ -1475,7 +1480,9 @@ manager and paths for you. The OS-specific detail all lives on
 ## Update
 
 Seamless is early in its development cycle: releases with improvements and bug
-fixes land often, so update at least weekly to stay on the latest version.
+fixes land often. A daemon installed from a release checks for them by itself
+and tells you when one is out ([automatic update checks](#automatic-update-checks));
+updating is then one command.
 
 `seamlessd update` is the one command, on every OS. It upgrades in place to the
 latest release by re-running the canonical installer for you - so there is a
@@ -1483,7 +1490,7 @@ single upgrade path to trust, not a second copy of the download-and-swap logic
 that could drift from the installer:
 
 ```bash
-seamlessd update --check   # report installed vs latest, change nothing
+seamlessd update --check   # report installed vs the newest release, change nothing
 seamlessd update --dry-run # print exactly what it would fetch and run
 seamlessd update           # fetch the latest release and swap it in
 ```
@@ -1510,6 +1517,67 @@ refreshed.
 
 From a clone, `make update` builds first and then runs that same command against
 your installed copy (`make update CHECK=1` only reports).
+
+### Automatic update checks {#automatic-update-checks}
+
+A daemon installed from a release checks GitHub for new releases by itself: a
+few minutes after it starts, then about every 6 hours (`update.check_interval`).
+It installs nothing. When a newer release is out, it tells you:
+
+- New agent sessions get one line in their briefing, for a week after the
+  release first shows up, worded as your action rather than the agent's:
+  `Seamless v0.7.3 is available (running v0.7.2). Owner action, not a task for
+  this session: seamlessd update`. A session on another machine of a
+  [shared daemon](/guides/network-install/) is told the server can update.
+- The console shows it on the Home health strip and in
+  **Settings -> Updates**, with the newest release, when the daemon last
+  checked, and the command for your install.
+- `seamlessd doctor` reports it on its `updates` row, `seamlessd update --check`
+  adds what the daemon's check is doing, and `seam version` / `seam status`
+  print an extra line.
+
+For a day after the daemon starts on a new version, new sessions hear
+`Seamless updated to v0.7.3 (from v0.7.2)` with a link to the release notes,
+and the console shows the same as a banner.
+
+How you update depends on how you installed, and every notice names the right
+command:
+
+| Installed with | Update with |
+|---|---|
+| the installer (`curl ... \| sh` or `irm ... \| iex`) | `seamlessd update` |
+| Homebrew | `brew upgrade --cask arctop/tap/seamless` |
+| a clone (`make install`), `go install` or `go build` | `git pull && make install` |
+| a client of a shared daemon | re-run the pairing commands `seamlessd client-config` prints on the server |
+
+**What is sent.** One anonymous `GET` to
+`https://api.github.com/repos/arctop/seamless/releases`, with a fixed
+`User-Agent` (`seamlessd-update-check`), no token, no version, and no machine or
+install identifier. It honors `HTTPS_PROXY` from the daemon's environment. The
+answer is cached with its `ETag` in `~/.seamless/update/state.json`; a failed
+check retries after 15 minutes, doubling up to the check interval, and a rate
+limit is waited out. Releases still uploading their assets, drafts and
+prereleases are ignored, and "newest" means the highest version, not the most
+recently published.
+
+**Turning it off.** In `seamless.yaml`:
+
+```yaml
+update:
+  check: false
+```
+
+`false` means no update traffic at all, and it is final: the console shows its
+toggle locked. With the key left out, **Settings -> Updates** turns checks on
+and off at runtime, and `SEAMLESS_UPDATE_CHECK=false` does the same from the
+service's environment. `seamlessd update --check` and `seamlessd update` work
+either way - running them is you asking. The `update:` keys are new: a
+seamlessd release from before them refuses a config that sets one, so setting
+it ties that file to this release or newer.
+
+Builds from source (`make install`, `go install`, `go build`) do not check unless
+`update.check: true` is set, and never write the state file - a developer's
+daemon, the test fixtures and CI stay off the network.
 
 **Deploying your working tree instead of a release**
 
@@ -2260,7 +2328,10 @@ All three are covered in [Recall](/concepts/recall/) and
   exactly. No ANN index, no separate service.
 - **Not a cloud service.** No account, no sync, and no outbound product
   telemetry. The local event and retrieval telemetry shown in the console never
-  leaves the machine. The bind is loopback and the key is static.
+  leaves the machine. The bind is loopback and the key is static. The one
+  request Seamless makes unprompted is the anonymous
+  [update check](/updating/#automatic-update-checks) against GitHub's release
+  list, which `update.check: false` turns off.
 - **Not autonomous.** The gardener proposes; you decide. Nothing rewrites your
   knowledge behind your back.
 - **Not a chat memory.** It is not trying to remember your conversation. It
@@ -5453,6 +5524,17 @@ Every skip is also an event in the log (`hook.error`, stage
 `remote-host-skip`, with the capture name and the host), recorded at INFO -
 on a shared daemon a skip is the design working, not a fault.
 
+## Updates on a shared daemon
+
+The server's [automatic update check](/updating/#automatic-update-checks)
+covers the server: its briefing notice reaches every session, and a session on
+another machine is told that **the server** can update - an action for whoever
+runs it, not for that machine. Updating the server does not update the clients:
+each paired machine keeps its own `seam` binary (the hooks and the MCP bridge),
+and updates it by re-running the pairing commands `seamlessd client-config`
+prints on the server. A client runs no daemon, so it has no update check of its
+own.
+
 ## Windows: a second user on one box
 
 The Windows install is per-user in where it writes (`%USERPROFILE%`) but **not**
@@ -5866,6 +5948,36 @@ After that, `seamlessd update` works again (`seamlessd version` shows what you
 have). Installed with Homebrew from the old `0spoon/tap`? That install does not
 use `seamlessd update`; switch taps once as
 [Install & deploy](/install/#homebrew) describes.
+
+## The update check keeps failing
+
+**What is happening.** The daemon's [automatic update check](/updating/#automatic-update-checks)
+could not read GitHub's release list. `seamlessd doctor`'s `updates` row and
+**Settings -> Updates** show the error and how long it has lasted; after a week
+the row turns into a warning. A failed check retries after 15 minutes, doubling
+up to the check interval, and a GitHub rate limit (60 anonymous requests an hour
+per address, shared by everything behind your router) is waited out.
+
+**Fix.** Usually the network: the daemon reaches `api.github.com` directly
+unless its own environment carries `HTTPS_PROXY`. A proxy exported in your shell
+does not reach a daemon the service manager starts; see
+[The service & where things live](/reference/service/). If the machine should
+not talk to GitHub at all, set `update.check: false` - then nothing is sent and
+nothing is reported. `seamlessd update --check` asks directly, so it shows the
+same error with its cause.
+
+## The update notice will not go away
+
+**What is happening.** A newer release is out, and the daemon says so in new
+sessions' briefings for a week after it first saw it, in the console, and in
+`seamlessd doctor`. Nothing installs itself.
+
+**Fix.** Update with the command the notice names - it depends on how Seamless
+was installed (`seamlessd update`, `brew upgrade --cask arctop/tap/seamless`, or
+`git pull && make install`); the table in
+[automatic update checks](/updating/#automatic-update-checks) lists them. To stop
+hearing about updates instead, turn checks off in **Settings -> Updates** or set
+`update.check: false`.
 
 ## `memory_write` says the name is held by a superseded memory
 
@@ -7100,7 +7212,10 @@ seam status
 
 Server health from the unauthenticated `/healthz` endpoint (status and version),
 the configured data directory, then the project count and slugs via
-`project_list` - which doubles as proof the static key works.
+`project_list` - which doubles as proof the static key works. When the daemon's
+[update check](/updating/#automatic-update-checks) has seen a newer release, an
+`update:` line names it and points at `seamlessd update --check` on the daemon's
+machine, which knows how that install updates.
 
 **`seam status` exits non-zero if any check failed**, so it works as a scripted
 health gate. A partial answer is still printed - if MCP is unavailable it reports
@@ -7211,7 +7326,15 @@ Prints the version of the daemon this CLI is configured to talk to, in the same
 form as `seamlessd version`:
 
 ```
-seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z)
+seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z, release build)
+```
+
+A daemon from before the distribution was reported leaves `, release build`
+off. When the daemon's [update check](/updating/#automatic-update-checks) has
+seen a newer release, a second line says so:
+
+```
+update available: v0.3.9 (seamlessd update --check on the daemon's machine shows how to update)
 ```
 
 `seam` carries no version of its own. Both binaries ship from one tag and one
@@ -7387,6 +7510,7 @@ Checks stop early if config or the database cannot be loaded at all.
 | `codex mcp` | Exact enabled stdio bridge state from `codex mcp get seamless --json`, plus executable/config target existence. |
 | `feature skills` | An **info** line when a client's skill home still holds a skill for an [optional feature](/reference/console/#optional-features) you switched off - the daemon never deletes there on a toggle. Re-run `install-hooks` to remove it, or re-enable the feature. |
 | `gardener` | The ticker configuration, or a warning that it is disabled. |
+| `updates` | The [automatic update check](/updating/#automatic-update-checks), read from the daemon's own record (`~/.seamless/update/state.json`) without asking GitHub: **ok** when up to date, a **warn** naming the newer release and the command for this install, an **info** line when checks are off (and why) or have not run yet. A check failing for a week is a **warn** - usually a proxy the service's environment does not know about. |
 
 Under `role: client` the report is a deliberately short, different list: a
 `role` info line naming the server it dials, a `server_url` reachability probe,
@@ -7729,7 +7853,7 @@ HTTPS-only, including every redirect hop.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--check` | `false` | Report installed vs latest release version and exit without changing anything. |
+| `--check` | `false` | Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's [update check](/updating/#automatic-update-checks) is doing: its mode and when it last checked. It asks even when `update.check` is `false`, because running it is you asking. |
 | `--dry-run` | `false` | Print the source URL, signature status, and the equivalent hand-run one-liner, without fetching or executing. |
 | `--url` | the latest release's installer asset | Override the installer URL. A custom URL carries no Sigstore bundle, so it runs TLS-only with a printed warning. |
 
@@ -7899,7 +8023,11 @@ From a clone, `make start` / `stop` / `restart` / `status` wrap these exactly.
 seamlessd version
 ```
 
-Prints the version, commit, and build date. `-v` and `--version` are aliases.
+Prints the version, commit, build date, and whether this is a `release` build
+(made by the release pipeline) or a `source` build (everything else), e.g.
+`seamlessd 0.7.2 (commit 1a2b3c4, built 2026-10-09T12:00:00Z, release build)`.
+`-v` and `--version` are aliases. Only a release build checks for updates by
+default ([automatic update checks](/updating/#automatic-update-checks)).
 
 Version, commit, and build date are link-time metadata stamped by the Makefile
 and the release build. A binary built without them reports what the Go
@@ -7941,13 +8069,21 @@ Four layers resolve each key. Later layers win:
    the database. They win over file *and* env, take effect without a daemon
    restart, and stay until reset.
 
-That fourth layer covers three blocks, and only those three:
+That fourth layer covers three blocks where the stored row simply wins:
 
 | Block | Written by | When it takes effect |
 |---|---|---|
 | `briefing:` | Settings → [Briefing](/reference/console/#briefing) | From the next session start. |
 | `features:` | Settings → [Features](/reference/console/#optional-features) | Immediately in the console; an agent sees it from its next session (tool lists and briefings alike). |
 | `console.level` | Settings → [Experience](/reference/console/#experience), or the Home welcome card | Immediately, in the console only. |
+
+A fourth, `update.check`, is merged the other way round: the **more
+restrictive** value wins. Settings → [Updates](/reference/console/#updates) can
+always turn the update check off, and can turn it on when file and env leave
+the key unset - but an explicit `check: false` in the file or
+`SEAMLESS_UPDATE_CHECK=false` is final, and the console shows the toggle locked
+with where it was set. `false` promises no update traffic at all, so it is
+never one click from untrue. See [the update block](#the-update-check).
 
 It exists so you can change what agents get injected - and what they can reach -
 while they are running, and it is the one place where the config file is not the
@@ -7977,6 +8113,23 @@ already recorded sessions stores `advanced` once, as the same kind of runtime
 override (labeled "set by the upgrade" in Settings → Experience), so an upgrade
 never hides a screen you were using. Like any override, it wins over this key
 until **Reset** hands the level back to file/env.
+
+### The update check {#the-update-check}
+
+The `update:` block drives the daemon's
+[automatic update checks](/updating/#automatic-update-checks):
+
+- `check` (`SEAMLESS_UPDATE_CHECK`) is optional. Left unset, a release build
+  checks and a build from source does not; `true` or `false` decides either
+  way. `false` means no request to GitHub at all.
+- `check_interval` (`SEAMLESS_UPDATE_CHECK_INTERVAL`) is the time between
+  checks: a Go duration from `1h` to `720h`, default `6h`. Write the unit - a
+  bare number other than `0` is refused rather than guessed at, since `6` could
+  mean six seconds or six hours.
+
+Both keys are new in this release. seamlessd releases before it refuse config
+keys they do not know, so a file that sets one runs only with this release or
+newer - which is why the example file leaves `check` commented out.
 
 ## Generating a key
 
@@ -8056,6 +8209,8 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 | `plan_capture.enabled` | bool | `true` |
 | `plan_capture.auto_task` | bool | `true` |
 | `plan_capture.inject_related` | bool | `true` |
+| `update.check` | bool, optional | unset |
+| `update.check_interval` | duration | `6h` |
 
 ## Annotated example
 
@@ -8366,6 +8521,22 @@ plan_capture:
   # memories to the planning agent as additionalContext.
   # env: SEAMLESS_PLAN_CAPTURE_INJECT_RELATED
   inject_related: true
+
+# Update check. The daemon asks GitHub's releases API whether a newer Seamless
+# release exists -- one anonymous request that carries no identifiers -- and
+# tells you when one does. Nothing is installed automatically.
+update:
+  # Unset (the default) means on for release builds and off for builds from
+  # source. false means zero update traffic: no request to GitHub at all. The
+  # key is left commented out because seamlessd releases before this one reject
+  # config keys they do not know, so setting it pins this file to this release
+  # or newer.
+  # env: SEAMLESS_UPDATE_CHECK
+  # check: false
+  # Time between checks, as a Go duration (6h, 90m, 1h30m) from 1h to 720h. A
+  # bare number is refused rather than guessed at: write 6h, not 6.
+  # env: SEAMLESS_UPDATE_CHECK_INTERVAL
+  check_interval: 6h
 ```
 
 ---
@@ -9152,6 +9323,9 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Dismiss the welcome card | `POST /console/settings/level/welcome` | Records that the Home welcome card was seen, without choosing a level. |
 | Save optional features | `POST /console/settings/features` | Writes the feature switches as a stored **override row** in the DB. It changes what is exposed - console screens and the matching agent tools - and deletes nothing. |
 | Reset optional features | `POST /console/settings/features/reset` | Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing. |
+| Turn update checks on or off | `POST /console/settings/updates` | Stores the console's `update.check` override (`check=on` or `off`). It can always turn checks off; it cannot turn them on while the config file or environment says `update.check: false` - that is final, and the form says so. Installs nothing. |
+| Reset update checks | `POST /console/settings/updates/reset` | Clears that override, handing the switch back to the config file (or, without one, the build's default). |
+| Check for updates now | `POST /console/settings/updates/check` | Asks GitHub's release list once, right away - refused while checks are off or within a minute of the last check. Reads; installs nothing. |
 | Save a project family | `POST /console/settings/families/save` | Creates a family or replaces one family's name and member set - the same `project_families` setting `seamlessd family` manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member. |
 | Delete a project family | `POST /console/settings/families/delete` | Removes the whole family. Its projects lose the sibling-findings channel; nothing else about them changes. |
 | Sign in / sign out | `POST /console/login`, `POST /console/logout` | Sets or clears the console cookie. Touches no data. |
@@ -9161,9 +9335,9 @@ Read the shape of that list. There is no "create memory", no "edit note", no
 state are **archive a memory**, **approve a captured plan**, and the **star**
 flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
-configuration knob (briefing overrides, feature switches, project families) that
-shapes future briefings, or what is exposed, without touching any memory's
-content. The console level is presentation state of the same kind: it changes
+configuration knob (briefing overrides, feature switches, project families, the
+update-check switch) that shapes future briefings, or what is exposed, without
+touching any memory's content. The console level is presentation state of the same kind: it changes
 what this console shows you and nothing else.
 
 This is deliberate, and it is the same principle as
@@ -9298,7 +9472,8 @@ Claude Code or Codex and wants to know it works: what the agents remember
 (Memories, Notes), what they did (Sessions), cleanup suggestions to accept or
 decline (Gardener), and a Home that opens on a health strip - which agent clients
 are working here, whether semantic recall is on, when the last briefing went
-out, and the version.
+out, and the version (which says when a newer release is out) - plus the
+Updates settings.
 
 **Standard** adds following the work: Now, Projects, Plans, and Tasks (and Labs
 and Trials when that feature is on), the Overview's window, vitals, and
@@ -9365,6 +9540,7 @@ What each level shows, generated from the console's own registries:
 | **Experience** - How much of the console you see, and how it looks | shown | shown | shown |
 | **Features** - Optional features, for the console and agents alike | shown | shown | shown |
 | **Your setup** - Version, files, and what is connected | shown | shown | shown |
+| **Updates** - New releases, and whether this install checks for them | shown | shown | shown |
 | **Briefing** - What every new agent session starts with | - | shown | shown |
 | **Workspaces** - Projects, repo routes, and families | - | shown | shown |
 | **Knowledge engine** - Semantic index, ranking, storage, and policy | - | - | shown |
@@ -10045,6 +10221,34 @@ active, whether semantic recall is on - and when it is off, what to do about it 
 whether the gardener is running and how often, and links to these docs. No
 budgets or policy numbers: those live in Knowledge engine.
 
+### Updates
+
+`/console/settings?s=updates`
+
+The [automatic update check](/updating/#automatic-update-checks) in plain words:
+whether this install checks for new releases and why (a release build does by
+default, a build from source does not), what a check sends (one anonymous
+request to `api.github.com` every few hours; nothing when checks are off), the
+installed version and kind of build, the command that updates this install
+(with a copy button), the newest release with its date and release notes - or
+"up to date" - and when the daemon last checked and checks next, including a
+streak of failed checks and why.
+
+The note at the top says who decided the switch: **Default for this build**,
+**Set in the config file or environment**, or **Set in this console** with
+**Reset to the config file** beside it. Turning checks off from here always
+works. Turning them on does not when the config file or `SEAMLESS_UPDATE_CHECK`
+says `false`: that is final, the switch shows locked, and the form refuses -
+`false` promises no update traffic at all. **Check now** asks GitHub once, right
+away (not more than once a minute). Nothing on this page installs anything; the
+update command is yours to run.
+
+When a newer release is out, the Home health strip's version fact turns into
+`v0.7.2 -- v0.7.3 available` and links here, and a toast announces it if the
+console is open when the daemon finds it. For a day after the daemon starts on
+a new version, every page carries a banner - "Seamless updated to v0.7.3 (from
+v0.7.2)" - with the release notes and **Got it**, which hides it for that tab.
+
 ### Briefing
 
 `/console/settings?s=briefing`
@@ -10188,6 +10392,8 @@ _global/{name}.md Machine-wide memories
 notes/ Durable note tree
 _global/{slug}.md Machine-wide notes
 {project}/{slug}.md One project note per file
+update/ The update check's record (release builds only)
+state.json Last check, cached release list, running daemon
 Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.
 ```
 
@@ -10327,8 +10533,8 @@ so losing `seam.db` loses them:
   (merge, consolidate, archive, digest, reproject, rekind, split, abandon-plan,
   memory-wanted, tool-error).
 - `settings` - `repo_project_map`, project families, the runtime briefing
-  overrides the console writes, the per-scope utility-activation latch, and the
-  embedder on/off switch.
+  overrides the console writes, the console's update-check override, the
+  per-scope utility-activation latch, and the embedder on/off switch.
 - `jobs` - the small queue for embeds and LLM digests.
 
 The split is deliberate: durable knowledge is yours in plain markdown, and
@@ -10341,6 +10547,20 @@ to think about any of that is
 [`seamlessd export`](/reference/cli-seamlessd/#seamlessd_export), which takes the
 snapshot with SQLite's `VACUUM INTO` inside a read transaction and is safe to run
 against a running daemon.
+
+### The update check's record
+
+`update/state.json` is the [automatic update check's](/updating/#automatic-update-checks)
+memory between restarts: when it last asked GitHub, the cached release list and
+its `ETag`, when it asks next, the current error streak, the newest release it
+has told you about, the daemon that wrote it (version, install kind, process
+and instance id), and the last version change it saw. Only a daemon from a
+release build writes it - a build from source never creates the directory -
+and `seamlessd doctor` and `seamlessd update --check` only read it. It is
+private (mode `0600` in a `0700` directory) and disposable: delete it and the
+next start rebuilds it, at the cost of one "version changed" notice it can no
+longer tell. A file that does not parse is moved aside to
+`state.json.corrupt-<time>` and the daemon starts fresh.
 
 ### Reconciliation
 

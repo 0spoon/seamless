@@ -11,7 +11,9 @@ manager and paths for you. The OS-specific detail all lives on
 ## Update
 
 Seamless is early in its development cycle: releases with improvements and bug
-fixes land often, so update at least weekly to stay on the latest version.
+fixes land often. A daemon installed from a release checks for them by itself
+and tells you when one is out ([automatic update checks](#automatic-update-checks));
+updating is then one command.
 
 `seamlessd update` is the one command, on every OS. It upgrades in place to the
 latest release by re-running the canonical installer for you - so there is a
@@ -19,7 +21,7 @@ single upgrade path to trust, not a second copy of the download-and-swap logic
 that could drift from the installer:
 
 ```bash
-seamlessd update --check   # report installed vs latest, change nothing
+seamlessd update --check   # report installed vs the newest release, change nothing
 seamlessd update --dry-run # print exactly what it would fetch and run
 seamlessd update           # fetch the latest release and swap it in
 ```
@@ -46,6 +48,67 @@ refreshed.
 
 From a clone, `make update` builds first and then runs that same command against
 your installed copy (`make update CHECK=1` only reports).
+
+### Automatic update checks {#automatic-update-checks}
+
+A daemon installed from a release checks GitHub for new releases by itself: a
+few minutes after it starts, then about every 6 hours (`update.check_interval`).
+It installs nothing. When a newer release is out, it tells you:
+
+- New agent sessions get one line in their briefing, for a week after the
+  release first shows up, worded as your action rather than the agent's:
+  `Seamless v0.7.3 is available (running v0.7.2). Owner action, not a task for
+  this session: seamlessd update`. A session on another machine of a
+  [shared daemon](https://thereisnospoon.org/docs/guides/network-install/) is told the server can update.
+- The console shows it on the Home health strip and in
+  **Settings -> Updates**, with the newest release, when the daemon last
+  checked, and the command for your install.
+- `seamlessd doctor` reports it on its `updates` row, `seamlessd update --check`
+  adds what the daemon's check is doing, and `seam version` / `seam status`
+  print an extra line.
+
+For a day after the daemon starts on a new version, new sessions hear
+`Seamless updated to v0.7.3 (from v0.7.2)` with a link to the release notes,
+and the console shows the same as a banner.
+
+How you update depends on how you installed, and every notice names the right
+command:
+
+| Installed with | Update with |
+|---|---|
+| the installer (`curl ... \| sh` or `irm ... \| iex`) | `seamlessd update` |
+| Homebrew | `brew upgrade --cask arctop/tap/seamless` |
+| a clone (`make install`), `go install` or `go build` | `git pull && make install` |
+| a client of a shared daemon | re-run the pairing commands `seamlessd client-config` prints on the server |
+
+**What is sent.** One anonymous `GET` to
+`https://api.github.com/repos/arctop/seamless/releases`, with a fixed
+`User-Agent` (`seamlessd-update-check`), no token, no version, and no machine or
+install identifier. It honors `HTTPS_PROXY` from the daemon's environment. The
+answer is cached with its `ETag` in `~/.seamless/update/state.json`; a failed
+check retries after 15 minutes, doubling up to the check interval, and a rate
+limit is waited out. Releases still uploading their assets, drafts and
+prereleases are ignored, and "newest" means the highest version, not the most
+recently published.
+
+**Turning it off.** In `seamless.yaml`:
+
+```yaml
+update:
+  check: false
+```
+
+`false` means no update traffic at all, and it is final: the console shows its
+toggle locked. With the key left out, **Settings -> Updates** turns checks on
+and off at runtime, and `SEAMLESS_UPDATE_CHECK=false` does the same from the
+service's environment. `seamlessd update --check` and `seamlessd update` work
+either way - running them is you asking. The `update:` keys are new: a
+seamlessd release from before them refuses a config that sets one, so setting
+it ties that file to this release or newer.
+
+Builds from source (`make install`, `go install`, `go build`) do not check unless
+`update.check: true` is set, and never write the state file - a developer's
+daemon, the test fixtures and CI stay off the network.
 
 **Deploying your working tree instead of a release**
 

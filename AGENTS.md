@@ -29,7 +29,7 @@ Strict layering, no circular imports. `cmd/` wires everything; no package import
 ```
 cmd/seamlessd, cmd/seam, cmd/seambench, cmd/demoseed, cmd/docsgen
   -> internal/{mcp,hooks,console}         (API surfaces)
-    -> internal/{retrieve,lifecycle,gardener,files,capture,bench,demokit} (domains)
+    -> internal/{retrieve,lifecycle,gardener,files,capture,bench,demokit,update} (domains)
       -> internal/{store,events,llm,core,config,validate}          (foundations)
 ```
 
@@ -242,6 +242,50 @@ the pointer is where to look, not a substitute for reading it.
   is advisory and must never block `memory_write`; indexing is best-effort with
   a hash-retry). Leave them.
 
+### Background update check (`internal/update`)
+
+The daemon asks GitHub which releases exist and tells the owner; it installs
+nothing (applying stays `seamlessd update`, which verifies and runs the
+release's own installer). Owner decisions: memory
+`auto-update-architecture-and-policy`.
+
+- **Only a release build counts.** `main.distribution` is stamped `release` by
+  `.goreleaser.yaml` alone (`buildinfo_test.go` fails if another build script
+  stamps it), and `update.IsReleaseBuild` also wants a clean X.Y.Z version. A
+  source build -- `make run`, `make install`, the fixtures, seambench, CI --
+  never asks GitHub unless `update.check: true`, never writes
+  `<data_dir>/update/state.json`, and is never an installer install
+  (constraint `dev-and-fixture-daemons-never-self-update`).
+- **Text from parsed versions only.** Every notice, banner, row and event
+  payload is built from `update.Version` values, `update.ReleaseURL` and the
+  fixed `update.Hint` for the install kind -- never from the release API's
+  `tag_name`, `name`, `html_url` or `body` (constraint
+  `update-surfaces-render-parsed-versions-only`). The briefing line is worded
+  as an owner action and must survive `sanitizeField` unchanged; the status
+  tests pin both.
+- **The more restrictive setting wins.** `update.Effective` merges the
+  file/env `update:` block with the console's `update_config` row the other
+  way round from the briefing and features rows: an explicit file/env
+  `check: false` is final and locks the console toggle; the console may always
+  turn checking off. `check: false` means no update traffic at all.
+- **One writer.** The checker's loop goroutine owns the state; `CheckNow` and
+  `Refresh` are commands it serves, and readers get a copied `Status`. It
+  schedules on wall-clock deadlines saved in the state (a 1-minute tick
+  compares them), so sleep cannot stall it, and it saves a pessimistic
+  `next_check_at` BEFORE each request, so a crash loop cannot hammer GitHub.
+- **Not `config.HTTPClient`.** The release fetcher is an anonymous request to
+  a public host: default TLS, proxy from the environment, https-only
+  redirects, fixed User-Agent, never a token. `config.HTTPClient` stays the
+  constructor for dials to a Seamless daemon.
+- **Startup order.** `runServe` binds the listener, THEN starts the checker,
+  THEN serves: the checker records this process as the running daemon, which
+  must never describe one that lost the port. `/healthz` serves the process's
+  `instance` id for the same reason.
+- **Detection is a pure function.** `update.Detect` classifies from an
+  `update.Probe`; every OS read lives in `cmd/seamlessd/install_probe.go`, whose
+  parsers (plist, systemd unit, Task Scheduler XML, cgroup) are tested on
+  Linux with fixtures. Compare paths with `os.SameFile`, never strings.
+
 ### Benchmark scenarios and graders (`internal/bench`, `cmd/seambench`)
 
 The agent-scenario benchmark produces a NUMBER the owner acts on, so its
@@ -374,8 +418,8 @@ months. Workflow and flags: `cmd/seambench/README.md`. (`make seambench`, not
 
 ## Verification before declaring done
 
-1. **`make check`** -- build + vet + fmt-check + docs-check + installer-check +
-   site-check + lint + vulncheck + test-race, in that order. This is the gate;
+1. **`make check`** -- build + vet + cross-check + fmt-check + docs-check +
+   installer-check + site-check + lint + vulncheck + test-race, in that order. This is the gate;
    the individual targets exist for iterating. `make seambench` is NOT part of
    it and must never be added: it spends real API tokens (see the benchmark
    section above).

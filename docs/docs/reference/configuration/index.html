@@ -230,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#where-the-config-comes-from">Where the config comes from</a></li><li class="lvl-2"><a href="#precedence">Precedence</a></li><li class="lvl-3"><a href="#the-console-level">The console level</a></li><li class="lvl-2"><a href="#generating-a-key">Generating a key</a></li><li class="lvl-2"><a href="#every-key">Every key</a></li><li class="lvl-2"><a href="#annotated-example">Annotated example</a></li>
+      <li class="lvl-2"><a href="#where-the-config-comes-from">Where the config comes from</a></li><li class="lvl-2"><a href="#precedence">Precedence</a></li><li class="lvl-3"><a href="#the-console-level">The console level</a></li><li class="lvl-3"><a href="#the-update-check">The update check</a></li><li class="lvl-2"><a href="#generating-a-key">Generating a key</a></li><li class="lvl-2"><a href="#every-key">Every key</a></li><li class="lvl-2"><a href="#annotated-example">Annotated example</a></li>
     </ul>
   </details>
   <p>Seamless reads a single YAML file. Every key also has a <code>SEAMLESS_*</code> environment
@@ -252,7 +252,7 @@ override.</p>
 the database. They win over file <em>and</em> env, take effect without a daemon
 restart, and stay until reset.</li>
 </ol>
-<p>That fourth layer covers three blocks, and only those three:</p>
+<p>That fourth layer covers three blocks where the stored row simply wins:</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -281,6 +281,13 @@ restart, and stay until reset.</li>
 </tbody>
 </table>
 </div>
+<p>A fourth, <code>update.check</code>, is merged the other way round: the <strong>more
+restrictive</strong> value wins. Settings → <a href="../../reference/console/#updates">Updates</a> can
+always turn the update check off, and can turn it on when file and env leave
+the key unset - but an explicit <code>check: false</code> in the file or
+<code>SEAMLESS_UPDATE_CHECK=false</code> is final, and the console shows the toggle locked
+with where it was set. <code>false</code> promises no update traffic at all, so it is
+never one click from untrue. See <a href="#the-update-check">the update block</a>.</p>
 <p>It exists so you can change what agents get injected - and what they can reach -
 while they are running, and it is the one place where the config file is not the
 last word: check the console before concluding a <code>briefing:</code>, <code>features:</code>, or
@@ -305,6 +312,21 @@ already recorded sessions stores <code>advanced</code> once, as the same kind of
 override (labeled &quot;set by the upgrade&quot; in Settings → Experience), so an upgrade
 never hides a screen you were using. Like any override, it wins over this key
 until <strong>Reset</strong> hands the level back to file/env.</p>
+<h3 id="the-update-check">The update check</h3>
+<p>The <code>update:</code> block drives the daemon's
+<a href="../../updating/#automatic-update-checks">automatic update checks</a>:</p>
+<ul>
+<li><code>check</code> (<code>SEAMLESS_UPDATE_CHECK</code>) is optional. Left unset, a release build
+checks and a build from source does not; <code>true</code> or <code>false</code> decides either
+way. <code>false</code> means no request to GitHub at all.</li>
+<li><code>check_interval</code> (<code>SEAMLESS_UPDATE_CHECK_INTERVAL</code>) is the time between
+checks: a Go duration from <code>1h</code> to <code>720h</code>, default <code>6h</code>. Write the unit - a
+bare number other than <code>0</code> is refused rather than guessed at, since <code>6</code> could
+mean six seconds or six hours.</li>
+</ul>
+<p>Both keys are new in this release. seamlessd releases before it refuse config
+keys they do not know, so a file that sets one runs only with this release or
+newer - which is why the example file leaves <code>check</code> commented out.</p>
 <h2 id="generating-a-key">Generating a key</h2>
 <p><code>mcp.api_key</code> guards <code>/api/mcp</code> and the console. On a true first run - no
 config file anywhere in the search order and no <code>SEAMLESS_MCP_API_KEY</code> in the
@@ -617,6 +639,16 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 <td>bool</td>
 <td><code>true</code></td>
 </tr>
+<tr>
+<td><code>update.check</code></td>
+<td>bool, optional</td>
+<td>unset</td>
+</tr>
+<tr>
+<td><code>update.check_interval</code></td>
+<td>duration</td>
+<td><code>6h</code></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -926,6 +958,22 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># memories to the planning agent as additionalContext.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_PLAN_CAPTURE_INJECT_RELATED</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">inject_related</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># Update check. The daemon asks GitHub&#39;s releases API whether a newer Seamless</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># release exists -- one anonymous request that carries no identifiers -- and</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># tells you when one does. Nothing is installed automatically.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">update</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Unset (the default) means on for release builds and off for builds from</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># source. false means zero update traffic: no request to GitHub at all. The</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># key is left commented out because seamlessd releases before this one reject</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># config keys they do not know, so setting it pins this file to this release</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># or newer.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_UPDATE_CHECK</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># check: false</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Time between checks, as a Go duration (6h, 90m, 1h30m) from 1h to 720h. A</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># bare number is refused rather than guessed at: write 6h, not 6.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_UPDATE_CHECK_INTERVAL</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">check_interval</span><span class="p">:</span><span class="w"> </span><span class="l">6h</span><span class="w">
 </span></span></span></code></pre></div>
 
 </article>
@@ -944,7 +992,7 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#where-the-config-comes-from">Where the config comes from</a></li><li class="lvl-2"><a href="#precedence">Precedence</a></li><li class="lvl-3"><a href="#the-console-level">The console level</a></li><li class="lvl-2"><a href="#generating-a-key">Generating a key</a></li><li class="lvl-2"><a href="#every-key">Every key</a></li><li class="lvl-2"><a href="#annotated-example">Annotated example</a></li>
+      <li class="lvl-2"><a href="#where-the-config-comes-from">Where the config comes from</a></li><li class="lvl-2"><a href="#precedence">Precedence</a></li><li class="lvl-3"><a href="#the-console-level">The console level</a></li><li class="lvl-3"><a href="#the-update-check">The update check</a></li><li class="lvl-2"><a href="#generating-a-key">Generating a key</a></li><li class="lvl-2"><a href="#every-key">Every key</a></li><li class="lvl-2"><a href="#annotated-example">Annotated example</a></li>
     </ul>
   </aside>
   

@@ -26,13 +26,21 @@ Four layers resolve each key. Later layers win:
    the database. They win over file *and* env, take effect without a daemon
    restart, and stay until reset.
 
-That fourth layer covers three blocks, and only those three:
+That fourth layer covers three blocks where the stored row simply wins:
 
 | Block | Written by | When it takes effect |
 |---|---|---|
 | `briefing:` | Settings → [Briefing](/reference/console/#briefing) | From the next session start. |
 | `features:` | Settings → [Features](/reference/console/#optional-features) | Immediately in the console; an agent sees it from its next session (tool lists and briefings alike). |
 | `console.level` | Settings → [Experience](/reference/console/#experience), or the Home welcome card | Immediately, in the console only. |
+
+A fourth, `update.check`, is merged the other way round: the **more
+restrictive** value wins. Settings → [Updates](/reference/console/#updates) can
+always turn the update check off, and can turn it on when file and env leave
+the key unset - but an explicit `check: false` in the file or
+`SEAMLESS_UPDATE_CHECK=false` is final, and the console shows the toggle locked
+with where it was set. `false` promises no update traffic at all, so it is
+never one click from untrue. See [the update block](#the-update-check).
 
 It exists so you can change what agents get injected - and what they can reach -
 while they are running, and it is the one place where the config file is not the
@@ -62,6 +70,23 @@ already recorded sessions stores `advanced` once, as the same kind of runtime
 override (labeled "set by the upgrade" in Settings → Experience), so an upgrade
 never hides a screen you were using. Like any override, it wins over this key
 until **Reset** hands the level back to file/env.
+
+### The update check {#the-update-check}
+
+The `update:` block drives the daemon's
+[automatic update checks](/updating/#automatic-update-checks):
+
+- `check` (`SEAMLESS_UPDATE_CHECK`) is optional. Left unset, a release build
+  checks and a build from source does not; `true` or `false` decides either
+  way. `false` means no request to GitHub at all.
+- `check_interval` (`SEAMLESS_UPDATE_CHECK_INTERVAL`) is the time between
+  checks: a Go duration from `1h` to `720h`, default `6h`. Write the unit - a
+  bare number other than `0` is refused rather than guessed at, since `6` could
+  mean six seconds or six hours.
+
+Both keys are new in this release. seamlessd releases before it refuse config
+keys they do not know, so a file that sets one runs only with this release or
+newer - which is why the example file leaves `check` commented out.
 
 ## Generating a key
 

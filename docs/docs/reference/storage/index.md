@@ -23,6 +23,8 @@ _global/{name}.md Machine-wide memories
 notes/ Durable note tree
 _global/{slug}.md Machine-wide notes
 {project}/{slug}.md One project note per file
+update/ The update check's record (release builds only)
+state.json Last check, cached release list, running daemon
 Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.
 ```
 
@@ -162,8 +164,8 @@ so losing `seam.db` loses them:
   (merge, consolidate, archive, digest, reproject, rekind, split, abandon-plan,
   memory-wanted, tool-error).
 - `settings` - `repo_project_map`, project families, the runtime briefing
-  overrides the console writes, the per-scope utility-activation latch, and the
-  embedder on/off switch.
+  overrides the console writes, the console's update-check override, the
+  per-scope utility-activation latch, and the embedder on/off switch.
 - `jobs` - the small queue for embeds and LLM digests.
 
 The split is deliberate: durable knowledge is yours in plain markdown, and
@@ -176,6 +178,20 @@ to think about any of that is
 [`seamlessd export`](https://thereisnospoon.org/docs/reference/cli-seamlessd/#seamlessd_export), which takes the
 snapshot with SQLite's `VACUUM INTO` inside a read transaction and is safe to run
 against a running daemon.
+
+### The update check's record
+
+`update/state.json` is the [automatic update check's](https://thereisnospoon.org/docs/updating/#automatic-update-checks)
+memory between restarts: when it last asked GitHub, the cached release list and
+its `ETag`, when it asks next, the current error streak, the newest release it
+has told you about, the daemon that wrote it (version, install kind, process
+and instance id), and the last version change it saw. Only a daemon from a
+release build writes it - a build from source never creates the directory -
+and `seamlessd doctor` and `seamlessd update --check` only read it. It is
+private (mode `0600` in a `0700` directory) and disposable: delete it and the
+next start rebuilds it, at the cost of one "version changed" notice it can no
+longer tell. A file that does not parse is moved aside to
+`state.json.corrupt-<time>` and the daemon starts fresh.
 
 ### Reconciliation
 

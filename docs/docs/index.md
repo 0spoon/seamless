@@ -87,7 +87,8 @@ them, plus the record for high-churn state (sessions, tasks, events).
 
 **Local-first.** One daemon process, one SQLite file, bound to loopback. No
 external database, no required cloud service, and no outbound product
-telemetry.
+telemetry - the only unprompted request is an anonymous check for new releases,
+and one config line turns it off.
 
 **Propose, don't act.** The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.

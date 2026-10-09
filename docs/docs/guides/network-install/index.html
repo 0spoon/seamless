@@ -230,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#the-topology">The topology</a></li><li class="lvl-2"><a href="#step-1-widen-the-server">Step 1: widen the server</a></li><li class="lvl-2"><a href="#step-2-tls">Step 2: TLS</a></li><li class="lvl-3"><a href="#mkcert-the-friction-free-path">mkcert (the friction-free path)</a></li><li class="lvl-3"><a href="#openssl-no-extra-tool">openssl (no extra tool)</a></li><li class="lvl-3"><a href="#why-https-changes-the-claude-code-wiring">Why https changes the Claude Code wiring</a></li><li class="lvl-2"><a href="#step-3-pair-a-client">Step 3: pair a client</a></li><li class="lvl-2"><a href="#what-a-remote-device-does-not-get">What a remote device does not get</a></li><li class="lvl-3"><a href="#how-doctor-reports-it">How doctor reports it</a></li><li class="lvl-2"><a href="#windows-a-second-user-on-one-box">Windows: a second user on one box</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#the-topology">The topology</a></li><li class="lvl-2"><a href="#step-1-widen-the-server">Step 1: widen the server</a></li><li class="lvl-2"><a href="#step-2-tls">Step 2: TLS</a></li><li class="lvl-3"><a href="#mkcert-the-friction-free-path">mkcert (the friction-free path)</a></li><li class="lvl-3"><a href="#openssl-no-extra-tool">openssl (no extra tool)</a></li><li class="lvl-3"><a href="#why-https-changes-the-claude-code-wiring">Why https changes the Claude Code wiring</a></li><li class="lvl-2"><a href="#step-3-pair-a-client">Step 3: pair a client</a></li><li class="lvl-2"><a href="#what-a-remote-device-does-not-get">What a remote device does not get</a></li><li class="lvl-3"><a href="#how-doctor-reports-it">How doctor reports it</a></li><li class="lvl-2"><a href="#updates-on-a-shared-daemon">Updates on a shared daemon</a></li><li class="lvl-2"><a href="#windows-a-second-user-on-one-box">Windows: a second user on one box</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </details>
   <p>The default install is one daemon per machine, bound to loopback. This guide is
@@ -535,6 +535,15 @@ here&quot; rather than treated as missing.</li>
 <p>Every skip is also an event in the log (<code>hook.error</code>, stage
 <code>remote-host-skip</code>, with the capture name and the host), recorded at INFO -
 on a shared daemon a skip is the design working, not a fault.</p>
+<h2 id="updates-on-a-shared-daemon">Updates on a shared daemon</h2>
+<p>The server's <a href="../../updating/#automatic-update-checks">automatic update check</a>
+covers the server: its briefing notice reaches every session, and a session on
+another machine is told that <strong>the server</strong> can update - an action for whoever
+runs it, not for that machine. Updating the server does not update the clients:
+each paired machine keeps its own <code>seam</code> binary (the hooks and the MCP bridge),
+and updates it by re-running the pairing commands <code>seamlessd client-config</code>
+prints on the server. A client runs no daemon, so it has no update check of its
+own.</p>
 <h2 id="windows-a-second-user-on-one-box">Windows: a second user on one box</h2>
 <p>The Windows install is per-user in where it writes (<code>%USERPROFILE%</code>) but <strong>not</strong>
 isolated in what it registers: the Scheduled Task name (<code>Seamless</code>) is global
@@ -581,7 +590,7 @@ daemon does with it.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-topology">The topology</a></li><li class="lvl-2"><a href="#step-1-widen-the-server">Step 1: widen the server</a></li><li class="lvl-2"><a href="#step-2-tls">Step 2: TLS</a></li><li class="lvl-3"><a href="#mkcert-the-friction-free-path">mkcert (the friction-free path)</a></li><li class="lvl-3"><a href="#openssl-no-extra-tool">openssl (no extra tool)</a></li><li class="lvl-3"><a href="#why-https-changes-the-claude-code-wiring">Why https changes the Claude Code wiring</a></li><li class="lvl-2"><a href="#step-3-pair-a-client">Step 3: pair a client</a></li><li class="lvl-2"><a href="#what-a-remote-device-does-not-get">What a remote device does not get</a></li><li class="lvl-3"><a href="#how-doctor-reports-it">How doctor reports it</a></li><li class="lvl-2"><a href="#windows-a-second-user-on-one-box">Windows: a second user on one box</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#the-topology">The topology</a></li><li class="lvl-2"><a href="#step-1-widen-the-server">Step 1: widen the server</a></li><li class="lvl-2"><a href="#step-2-tls">Step 2: TLS</a></li><li class="lvl-3"><a href="#mkcert-the-friction-free-path">mkcert (the friction-free path)</a></li><li class="lvl-3"><a href="#openssl-no-extra-tool">openssl (no extra tool)</a></li><li class="lvl-3"><a href="#why-https-changes-the-claude-code-wiring">Why https changes the Claude Code wiring</a></li><li class="lvl-2"><a href="#step-3-pair-a-client">Step 3: pair a client</a></li><li class="lvl-2"><a href="#what-a-remote-device-does-not-get">What a remote device does not get</a></li><li class="lvl-3"><a href="#how-doctor-reports-it">How doctor reports it</a></li><li class="lvl-2"><a href="#updates-on-a-shared-daemon">Updates on a shared daemon</a></li><li class="lvl-2"><a href="#windows-a-second-user-on-one-box">Windows: a second user on one box</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </aside>
   

@@ -398,6 +398,10 @@ Checks stop early if config or the database cannot be loaded at all.</p>
 <td><code>gardener</code></td>
 <td>The ticker configuration, or a warning that it is disabled.</td>
 </tr>
+<tr>
+<td><code>updates</code></td>
+<td>The <a href="../../updating/#automatic-update-checks">automatic update check</a>, read from the daemon's own record (<code>~/.seamless/update/state.json</code>) without asking GitHub: <strong>ok</strong> when up to date, a <strong>warn</strong> naming the newer release and the command for this install, an <strong>info</strong> line when checks are off (and why) or have not run yet. A check failing for a week is a <strong>warn</strong> - usually a proxy the service's environment does not know about.</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -905,7 +909,7 @@ HTTPS-only, including every redirect hop.</p>
 <tr>
 <td><code>--check</code></td>
 <td><code>false</code></td>
-<td>Report installed vs latest release version and exit without changing anything.</td>
+<td>Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's <a href="../../updating/#automatic-update-checks">update check</a> is doing: its mode and when it last checked. It asks even when <code>update.check</code> is <code>false</code>, because running it is you asking.</td>
 </tr>
 <tr>
 <td><code>--dry-run</code></td>
@@ -1091,7 +1095,11 @@ stopped one - are reported as a note, not a failure.</p>
 <h2 id="seamlessd_version">seamlessd version</h2>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd version
 </span></span></code></pre></div>
-<p>Prints the version, commit, and build date. <code>-v</code> and <code>--version</code> are aliases.</p>
+<p>Prints the version, commit, build date, and whether this is a <code>release</code> build
+(made by the release pipeline) or a <code>source</code> build (everything else), e.g.
+<code>seamlessd 0.7.2 (commit 1a2b3c4, built 2026-10-09T12:00:00Z, release build)</code>.
+<code>-v</code> and <code>--version</code> are aliases. Only a release build checks for updates by
+default (<a href="../../updating/#automatic-update-checks">automatic update checks</a>).</p>
 <p>Version, commit, and build date are link-time metadata stamped by the Makefile
 and the release build. A binary built without them reports what the Go
 toolchain recorded instead: <code>go install github.com/arctop/seamless/cmd/...@vX.Y.Z</code>

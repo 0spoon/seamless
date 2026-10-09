@@ -230,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-3"><a href="#ambient-signals">Ambient signals</a></li><li class="lvl-2"><a href="#choose-how-much-you-see">Choose how much you see</a></li><li class="lvl-3"><a href="#screens">Screens</a></li><li class="lvl-3"><a href="#settings-sections">Settings sections</a></li><li class="lvl-3"><a href="#within-screens">Within screens</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#experience">Experience</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#your-setup">Your setup</a></li><li class="lvl-3"><a href="#briefing">Briefing</a></li><li class="lvl-3"><a href="#workspaces">Workspaces</a></li><li class="lvl-3"><a href="#knowledge-engine">Knowledge engine</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
+      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-3"><a href="#ambient-signals">Ambient signals</a></li><li class="lvl-2"><a href="#choose-how-much-you-see">Choose how much you see</a></li><li class="lvl-3"><a href="#screens">Screens</a></li><li class="lvl-3"><a href="#settings-sections">Settings sections</a></li><li class="lvl-3"><a href="#within-screens">Within screens</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#experience">Experience</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#your-setup">Your setup</a></li><li class="lvl-3"><a href="#updates">Updates</a></li><li class="lvl-3"><a href="#briefing">Briefing</a></li><li class="lvl-3"><a href="#workspaces">Workspaces</a></li><li class="lvl-3"><a href="#knowledge-engine">Knowledge engine</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
     </ul>
   </details>
   <p>The console is the owner's window onto a system whose actual clients are agents.
@@ -379,6 +379,21 @@ is not how Seamless is driven; it is how you watch it.</p>
 <td>Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing.</td>
 </tr>
 <tr>
+<td>Turn update checks on or off</td>
+<td><code>POST /console/settings/updates</code></td>
+<td>Stores the console's <code>update.check</code> override (<code>check=on</code> or <code>off</code>). It can always turn checks off; it cannot turn them on while the config file or environment says <code>update.check: false</code> - that is final, and the form says so. Installs nothing.</td>
+</tr>
+<tr>
+<td>Reset update checks</td>
+<td><code>POST /console/settings/updates/reset</code></td>
+<td>Clears that override, handing the switch back to the config file (or, without one, the build's default).</td>
+</tr>
+<tr>
+<td>Check for updates now</td>
+<td><code>POST /console/settings/updates/check</code></td>
+<td>Asks GitHub's release list once, right away - refused while checks are off or within a minute of the last check. Reads; installs nothing.</td>
+</tr>
+<tr>
 <td>Save a project family</td>
 <td><code>POST /console/settings/families/save</code></td>
 <td>Creates a family or replaces one family's name and member set - the same <code>project_families</code> setting <code>seamlessd family</code> manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member.</td>
@@ -401,9 +416,9 @@ is not how Seamless is driven; it is how you watch it.</p>
 state are <strong>archive a memory</strong>, <strong>approve a captured plan</strong>, and the <strong>star</strong>
 flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
-configuration knob (briefing overrides, feature switches, project families) that
-shapes future briefings, or what is exposed, without touching any memory's
-content. The console level is presentation state of the same kind: it changes
+configuration knob (briefing overrides, feature switches, project families, the
+update-check switch) that shapes future briefings, or what is exposed, without
+touching any memory's content. The console level is presentation state of the same kind: it changes
 what this console shows you and nothing else.</p>
 <p>This is deliberate, and it is the same principle as
 <a href="../../concepts/gardener/">the gardener's</a> propose-only contract. The store is written
@@ -563,7 +578,8 @@ Claude Code or Codex and wants to know it works: what the agents remember
 (Memories, Notes), what they did (Sessions), cleanup suggestions to accept or
 decline (Gardener), and a Home that opens on a health strip - which agent clients
 are working here, whether semantic recall is on, when the last briefing went
-out, and the version.</p>
+out, and the version (which says when a newer release is out) - plus the
+Updates settings.</p>
 <p><strong>Standard</strong> adds following the work: Now, Projects, Plans, and Tasks (and Labs
 and Trials when that feature is on), the Overview's window, vitals, and
 workspaces, the Briefing and Workspaces settings, and the finer controls on the
@@ -731,6 +747,12 @@ there. See <a href="../../reference/configuration/">Configuration</a>.</p>
 </tr>
 <tr>
 <td><strong>Your setup</strong> - Version, files, and what is connected</td>
+<td>shown</td>
+<td>shown</td>
+<td>shown</td>
+</tr>
+<tr>
+<td><strong>Updates</strong> - New releases, and whether this install checks for them</td>
 <td>shown</td>
 <td>shown</td>
 <td>shown</td>
@@ -1507,6 +1529,29 @@ and its size, which agent clients have recorded sessions and when each was last
 active, whether semantic recall is on - and when it is off, what to do about it -
 whether the gardener is running and how often, and links to these docs. No
 budgets or policy numbers: those live in Knowledge engine.</p>
+<h3 id="updates">Updates</h3>
+<p><code>/console/settings?s=updates</code></p>
+<p>The <a href="../../updating/#automatic-update-checks">automatic update check</a> in plain words:
+whether this install checks for new releases and why (a release build does by
+default, a build from source does not), what a check sends (one anonymous
+request to <code>api.github.com</code> every few hours; nothing when checks are off), the
+installed version and kind of build, the command that updates this install
+(with a copy button), the newest release with its date and release notes - or
+&quot;up to date&quot; - and when the daemon last checked and checks next, including a
+streak of failed checks and why.</p>
+<p>The note at the top says who decided the switch: <strong>Default for this build</strong>,
+<strong>Set in the config file or environment</strong>, or <strong>Set in this console</strong> with
+<strong>Reset to the config file</strong> beside it. Turning checks off from here always
+works. Turning them on does not when the config file or <code>SEAMLESS_UPDATE_CHECK</code>
+says <code>false</code>: that is final, the switch shows locked, and the form refuses -
+<code>false</code> promises no update traffic at all. <strong>Check now</strong> asks GitHub once, right
+away (not more than once a minute). Nothing on this page installs anything; the
+update command is yours to run.</p>
+<p>When a newer release is out, the Home health strip's version fact turns into
+<code>v0.7.2 -- v0.7.3 available</code> and links here, and a toast announces it if the
+console is open when the daemon finds it. For a day after the daemon starts on
+a new version, every page carries a banner - &quot;Seamless updated to v0.7.3 (from
+v0.7.2)&quot; - with the release notes and <strong>Got it</strong>, which hides it for that tab.</p>
 <h3 id="briefing">Briefing</h3>
 <p><code>/console/settings?s=briefing</code></p>
 <p>What every new agent session starts with. Three <strong>presets</strong> lead the section -
@@ -1618,7 +1663,7 @@ the detail pane would nest the whole console inside itself.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-3"><a href="#ambient-signals">Ambient signals</a></li><li class="lvl-2"><a href="#choose-how-much-you-see">Choose how much you see</a></li><li class="lvl-3"><a href="#screens">Screens</a></li><li class="lvl-3"><a href="#settings-sections">Settings sections</a></li><li class="lvl-3"><a href="#within-screens">Within screens</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#experience">Experience</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#your-setup">Your setup</a></li><li class="lvl-3"><a href="#briefing">Briefing</a></li><li class="lvl-3"><a href="#workspaces">Workspaces</a></li><li class="lvl-3"><a href="#knowledge-engine">Knowledge engine</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
+      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-3"><a href="#ambient-signals">Ambient signals</a></li><li class="lvl-2"><a href="#choose-how-much-you-see">Choose how much you see</a></li><li class="lvl-3"><a href="#screens">Screens</a></li><li class="lvl-3"><a href="#settings-sections">Settings sections</a></li><li class="lvl-3"><a href="#within-screens">Within screens</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#experience">Experience</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#your-setup">Your setup</a></li><li class="lvl-3"><a href="#updates">Updates</a></li><li class="lvl-3"><a href="#briefing">Briefing</a></li><li class="lvl-3"><a href="#workspaces">Workspaces</a></li><li class="lvl-3"><a href="#knowledge-engine">Knowledge engine</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
     </ul>
   </aside>
   

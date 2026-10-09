@@ -104,6 +104,7 @@ Checks stop early if config or the database cannot be loaded at all.
 | `codex mcp` | Exact enabled stdio bridge state from `codex mcp get seamless --json`, plus executable/config target existence. |
 | `feature skills` | An **info** line when a client's skill home still holds a skill for an [optional feature](https://thereisnospoon.org/docs/reference/console/#optional-features) you switched off - the daemon never deletes there on a toggle. Re-run `install-hooks` to remove it, or re-enable the feature. |
 | `gardener` | The ticker configuration, or a warning that it is disabled. |
+| `updates` | The [automatic update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks), read from the daemon's own record (`~/.seamless/update/state.json`) without asking GitHub: **ok** when up to date, a **warn** naming the newer release and the command for this install, an **info** line when checks are off (and why) or have not run yet. A check failing for a week is a **warn** - usually a proxy the service's environment does not know about. |
 
 Under `role: client` the report is a deliberately short, different list: a
 `role` info line naming the server it dials, a `server_url` reachability probe,
@@ -446,7 +447,7 @@ HTTPS-only, including every redirect hop.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--check` | `false` | Report installed vs latest release version and exit without changing anything. |
+| `--check` | `false` | Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's [update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks) is doing: its mode and when it last checked. It asks even when `update.check` is `false`, because running it is you asking. |
 | `--dry-run` | `false` | Print the source URL, signature status, and the equivalent hand-run one-liner, without fetching or executing. |
 | `--url` | the latest release's installer asset | Override the installer URL. A custom URL carries no Sigstore bundle, so it runs TLS-only with a printed warning. |
 
@@ -616,7 +617,11 @@ From a clone, `make start` / `stop` / `restart` / `status` wrap these exactly.
 seamlessd version
 ```
 
-Prints the version, commit, and build date. `-v` and `--version` are aliases.
+Prints the version, commit, build date, and whether this is a `release` build
+(made by the release pipeline) or a `source` build (everything else), e.g.
+`seamlessd 0.7.2 (commit 1a2b3c4, built 2026-10-09T12:00:00Z, release build)`.
+`-v` and `--version` are aliases. Only a release build checks for updates by
+default ([automatic update checks](https://thereisnospoon.org/docs/updating/#automatic-update-checks)).
 
 Version, commit, and build date are link-time metadata stamped by the Makefile
 and the release build. A binary built without them reports what the Go

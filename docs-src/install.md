@@ -197,8 +197,9 @@ a job `seamlessd serve` refuses by design.
 The remaining routes end up in the same place with less done for you:
 `go install github.com/arctop/seamless/cmd/...@latest` needs Go 1.26+ and
 reports the release it was installed at (`seamlessd 0.6.0 (commit unknown, built
-unknown)` - the module proxy records no commit or build date), so
-`seamlessd update --check` compares it like any release; the
+unknown, source build)` - the module proxy records no commit or build date), so
+`seamlessd update --check` compares it like any release, though as a source
+build it does not check for updates by itself; the
 [GitHub releases](https://github.com/arctop/seamless/releases) carry the same
 prebuilt archives the installer fetches. From a bare binary, `seamlessd serve`
 covers the essentials - first run seeds the config - and `seamlessd install-hooks`
@@ -251,8 +252,11 @@ What you are accepting when you run this:
 - **No product telemetry.** Seamless sends no usage or analytics data. The
   outbound traffic is: calls to a configured OpenAI or Anthropic provider (use
   Ollama to keep model calls local), URLs an agent explicitly asks
-  `capture_url` to fetch, and the GitHub release check and download that an
-  explicit `seamlessd update` performs.
+  `capture_url` to fetch, the GitHub release check and download that an
+  explicit `seamlessd update` performs, and - on a release build - the
+  [background update check](/updating/#automatic-update-checks): one anonymous
+  request to GitHub's releases API every 6 hours, carrying no identifiers.
+  `update.check: false` turns it off and means no update traffic at all.
 - **Release authenticity has two layers.** Every installer verifies the
   archive's SHA-256 against `checksums.txt`. When `cosign` is installed it also
   verifies the manifest's keyless signature against this repository's release
