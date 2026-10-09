@@ -11,9 +11,10 @@
    6. the board      two agents race for one plan step, once (iv)
    7. the folder     a star opens into a file; the gardener asks first (v)
    8. the console    an annotated screen and a lightbox for the others (vi)
-   9. the finale     the empty-set mark draws itself
-   10. memory        the page remembers how far you read, in your browser only
-   11. small things  copy confirmations, the copy meteor, the phone menu
+   9. the asks       day-one requests: an index beside the one on show (viii)
+   10. the finale    the empty-set mark draws itself
+   11. memory        the page remembers how far you read, in your browser only
+   12. small things  copy confirmations, the copy meteor, the phone menu
 
    site.js (shared with the docs) still owns the theme toggle, the OS switch,
    copy buttons, the phone menu's close-on-pick, and the .rv -> .in reveal. */
@@ -1196,7 +1197,40 @@
   }
 
   /* ======================================================================
-     9. THE FINALE
+     9. THE ASKS -- a WAI-ARIA tablist; the markup shows every request until
+        this hides all but the first
+     ====================================================================== */
+  function Asks(box) {
+    var tabs = $$('[role="tab"]', box);
+    function pick(tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute("aria-selected", on ? "true" : "false");
+        t.classList.toggle("active", on);
+        t.tabIndex = on ? 0 : -1;
+        var panel = document.getElementById(t.getAttribute("aria-controls"));
+        panel.hidden = !on;
+        panel.classList.toggle("is-shown", on);
+      });
+      if (focus) tab.focus();
+    }
+    tabs.forEach(function (t, i) {
+      t.addEventListener("click", function () { pick(t, false); });
+      t.addEventListener("keydown", function (ev) {
+        var k = ev.key;
+        var j = k === "ArrowDown" || k === "ArrowRight" ? i + 1
+          : k === "ArrowUp" || k === "ArrowLeft" ? i - 1
+          : k === "Home" ? 0 : k === "End" ? tabs.length - 1 : null;
+        if (j === null) return;
+        ev.preventDefault();
+        pick(tabs[(j + tabs.length) % tabs.length], true);
+      });
+    });
+    if (tabs.length) pick(tabs[0], false);
+  }
+
+  /* ======================================================================
+     10. THE FINALE
      ====================================================================== */
   function Finale(sec) {
     if (reduced) return;
@@ -1205,7 +1239,7 @@
   }
 
   /* ======================================================================
-     10. THE PAGE REMEMBERS YOU -- locally, legibly, and you can delete it
+     11. THE PAGE REMEMBERS YOU -- locally, legibly, and you can delete it
      ====================================================================== */
   var memory = (function () {
     var KEY = "seamless.visit";
@@ -1309,7 +1343,7 @@
   })();
 
   /* ======================================================================
-     11. SMALL THINGS
+     12. SMALL THINGS
      ====================================================================== */
   var sky = null;
   function copies() {
@@ -1322,7 +1356,7 @@
       /* tell assistive tech what site.js did: copied, or selected for you */
       var mo = new MutationObserver(function () {
         if (btn.classList.contains("ok")) { say("Copied to clipboard"); mo.disconnect(); }
-        else if (btn.classList.contains("sel")) { say("Command selected. Press Command C or Control C to copy it."); mo.disconnect(); }
+        else if (btn.classList.contains("sel")) { say("Selected. Press Command C or Control C to copy it."); mo.disconnect(); }
       });
       mo.observe(btn, { attributes: true, attributeFilter: ["class"] });
       setTimeout(function () { mo.disconnect(); }, 2500);
@@ -1376,6 +1410,8 @@
     var shot = $("[data-hotshot]");
     if (shot) Hotshot(shot);
     Lightbox();
+    var asks = $("[data-asks]");
+    if (asks) Asks(asks);
     var fin = $(".finale");
     if (fin) Finale(fin);
     window.addEventListener("scroll", requestScroll, { passive: true });

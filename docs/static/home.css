@@ -1537,6 +1537,66 @@ svg { overflow: visible; }
 .leave-more { margin: 0; }
 
 /* ==========================================================================
+   VIII. DAY ONE -- first asks (here, and /claude-app/'s first chats)
+   ========================================================================== */
+/* a request typed to the agent, not to a shell: prose type on a light panel */
+.code.say {
+  align-items: flex-start;
+  background: var(--panel); color: var(--ink); border-color: var(--hair-2);
+  font-family: var(--sans); font-size: 15.5px; line-height: 1.55;
+  box-shadow: var(--shadow-md);
+}
+.code.say .cmd { white-space: normal; overflow: visible; }
+.say-label {
+  flex: none; margin-top: 2px; padding: 2px 8px;
+  border: 1px solid var(--hair-2); border-radius: 6px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+}
+.code.say .copy-btn { background: var(--bg); border-color: var(--hair-2); color: var(--muted); }
+.code.say .copy-btn:hover { color: var(--ink); border-color: var(--accent); }
+
+/* an index of requests beside the one on show; without JS every request
+   shows, stacked under its own name, and the index hides */
+.asks { display: grid; grid-template-columns: minmax(0, 0.34fr) minmax(0, 1fr); gap: clamp(24px, 3.6vw, 56px); align-items: start; }
+:root:not(.js) .asks { grid-template-columns: minmax(0, 1fr); }
+.ask-tabs {
+  position: sticky; top: calc(var(--head-h) + 24px);
+  display: flex; flex-direction: column;
+  border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair);
+}
+:root:not(.js) .ask-tabs { display: none; }
+.ask-tab {
+  display: flex; align-items: baseline; gap: 12px; width: 100%;
+  padding: 13px 6px 14px; border: 0; border-bottom: 1px dashed var(--hair);
+  background: none; cursor: pointer; text-align: left;
+  font-family: var(--sans); font-size: 16px; font-weight: 500; line-height: 1.35; color: var(--muted);
+  transition: color 0.3s;
+}
+.ask-tab:last-child { border-bottom: 0; }
+.ask-tab .sr-num { flex: none; width: 24px; }
+.ask-tab:hover, .ask-tab.active { color: var(--ink); }
+.ask-tab.active .sr-num { color: var(--accent); }
+.ask-tab::after {
+  content: "\2726"; margin-left: auto; font-size: 10px; color: var(--accent);
+  opacity: 0; transform: scale(0.4); transition: opacity 0.3s, transform 0.45s var(--ease-out);
+}
+.ask-tab.active::after { opacity: 1; transform: none; }
+.ask-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.ask { min-width: 0; }
+.js .ask[hidden] { display: none; }
+.js .ask.is-shown { animation: scene-in 0.6s var(--ease-out); }
+:root:not(.js) .ask + .ask { margin-top: 48px; }
+.ask-name { margin: 0 0 14px; font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink); }
+.js .ask-name { display: none; }
+.ask .code.say { margin-bottom: 16px; }
+.ask-then { margin: 22px 0 10px; font-size: 15.5px; color: var(--muted); }
+.ask-note { margin: 16px 0 0; max-width: 660px; font-size: 15.5px; line-height: 1.6; color: var(--muted); }
+.ask-note code { font-size: 0.82em; }
+.term-bar .term-tag { flex: none; margin-left: auto; font-size: 11px; color: var(--term-faint); }
+.t-sep { margin: 12px 0 10px !important; padding-top: 10px; border-top: 1px dashed var(--term-line); color: var(--term-faint); }
+.t-say { color: var(--term-ink); }
+
+/* ==========================================================================
    FAQ
    ========================================================================== */
 .faq-grid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(40px, 6vw, 96px); align-items: start; }
@@ -1696,6 +1756,14 @@ svg { overflow: visible; }
 @media (max-width: 960px) {
   .fleet-grid, .folder-grid { grid-template-columns: minmax(0, 1fr); }
   .board, .file-cell, .folder-side { max-width: 720px; }
+  /* the index folds into a wrap of pills above the request on show */
+  .asks { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .ask-tabs { position: static; flex-direction: row; flex-wrap: wrap; gap: 6px; border: 0; }
+  .ask-tab { width: auto; gap: 8px; padding: 8px 14px 9px; border: 1px solid var(--hair); border-radius: 999px; font-size: 14.5px; }
+  .ask-tab:last-child { border-bottom: 1px solid var(--hair); }
+  .ask-tab.active { border-color: var(--hair-2); background: var(--panel-a); }
+  .ask-tab .sr-num { width: auto; font-size: 14px; }
+  .ask-tab::after { display: none; }
 }
 @media (max-width: 900px) {
   .days {
@@ -1750,6 +1818,7 @@ svg { overflow: visible; }
   .hs-notes, .thumbs { grid-template-columns: minmax(0, 1fr); }
   .hs { width: 22px; height: 22px; margin: -11px 0 0 -11px; font-size: 12px; }
   .code { font-size: 13px; padding-left: 12px; }
+  .code.say { font-size: 15px; }
   .leave { padding: 22px 18px 20px; }
   .board { padding: 16px 14px 14px; }
   .bstep { grid-template-columns: 16px minmax(0, 1fr) auto; gap: 10px; padding: 11px 12px; font-size: 14px; }

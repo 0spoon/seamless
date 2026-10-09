@@ -36,14 +36,15 @@
 <link rel="preload" as="font" type="font/woff2" href="../static/fonts/fraunces-italic.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="../static/fonts/instrument-sans.woff2" crossorigin>
 <script>(function(){var d=document.documentElement,t=localStorage.getItem("theme");if(t)d.dataset.theme=t;var o=localStorage.getItem("os");if(o==="macos"||o==="linux")o="unix";if(o!=="unix"&&o!=="windows")o=/Windows/i.test(navigator.userAgent)?"windows":"unix";d.dataset.os=o;d.className+=" js";})();</script>
-<link rel="stylesheet" href="../static/home.css?v=bb7f0dfa">
+<link rel="stylesheet" href="../static/home.css?v=bc122c78">
 <style>
 /* /claude-app/ -- Seamless for people who use Claude in the desktop app for
    work that isn't code. The landing's stylesheet (home.css) carries the
    identity: header, rail, chapters, steps, file card, FAQ, finale, footer.
    This block adds only what this page has and the landing doesn't: the
-   matter chart in the hero, the desk switcher, the claims ledger, the
-   comparison table, and the say-this-to-Claude boxes. */
+   matter chart in the hero, the desk switcher, the claims ledger, and the
+   comparison table. The say-this-to-Claude boxes and the first-chats index
+   are shared with the landing's day-one section, so they live in home.css. */
 :root { --k-refuted: #7a7c8e; --k-note: var(--muted); }
 :root[data-theme="dark"] { --k-refuted: #8b91ad; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --k-refuted: #8b91ad; } }
@@ -209,21 +210,7 @@ table.vs { width: 100%; border-collapse: collapse; }
 /* ---------- iv. your files ---------- */
 .files .points { margin-top: 0; }
 
-/* ---------- v. set it up: things you say to Claude, not to a shell ---------- */
-.code.say {
-  align-items: flex-start;
-  background: var(--panel); color: var(--ink); border-color: var(--hair-2);
-  font-family: var(--sans); font-size: 15.5px; line-height: 1.55;
-  box-shadow: var(--shadow-md);
-}
-.code.say .cmd { white-space: normal; overflow: visible; }
-.say-label {
-  flex: none; margin-top: 2px; padding: 2px 8px;
-  border: 1px solid var(--hair-2); border-radius: 6px;
-  font-family: var(--mono); font-size: 11px; color: var(--muted);
-}
-.code.say .copy-btn { background: var(--bg); border-color: var(--hair-2); color: var(--muted); }
-.code.say .copy-btn:hover { color: var(--ink); border-color: var(--accent); }
+/* ---------- v. set it up (the say-to-Claude boxes live in home.css) ---------- */
 .qs-note + .code, .qs-note + .qs-try, .code + .qs-note { margin-top: 12px; }
 .leave .code .cmd { white-space: normal; overflow-wrap: anywhere; }
 
@@ -261,7 +248,6 @@ table.vs { width: 100%; border-collapse: collapse; }
   .rec { padding: 16px 14px 12px; }
   .msg { max-width: 100%; font-size: 15.5px; }
   .gain { padding: 18px 2px; }
-  .code.say { font-size: 15px; }
 }
 </style>
 </head>
@@ -303,6 +289,7 @@ table.vs { width: 100%; border-collapse: collapse; }
         <a href="#memory">Claude&rsquo;s memory</a>
         <a href="#files">Your files</a>
         <a href="#setup">Set it up</a>
+        <a href="#first-chats">What to say first</a>
         <a href="#questions">Questions</a>
         <a href="../">For developers</a>
         <a href="../docs/claude-app/">Docs</a>
@@ -339,6 +326,7 @@ table.vs { width: 100%; border-collapse: collapse; }
     <li><a href="#memory" data-rail="memory"><span class="rail-dot"></span><span class="rail-label"><em>iii.</em> Claude&rsquo;s memory</span></a></li>
     <li><a href="#files" data-rail="files"><span class="rail-dot"></span><span class="rail-label"><em>iv.</em> Your files</span></a></li>
     <li><a href="#setup" data-rail="setup"><span class="rail-dot"></span><span class="rail-label"><em>v.</em> Set it up</span></a></li>
+    <li><a href="#first-chats" data-rail="first-chats"><span class="rail-dot"></span><span class="rail-label"><em>vi.</em> First chats</span></a></li>
   </ol>
   <span class="rail-line" aria-hidden="true"><i></i></span>
 </nav>
@@ -779,7 +767,7 @@ table.vs { width: 100%; border-collapse: collapse; }
             <h3><span class="qs-n">4</span>Start your first project</h3>
             <p class="qs-note">In a new chat, ask in plain words:</p>
             <div class="code say"><span class="say-label">in a chat</span><span class="cmd" data-copy="Create a sealed Seamless project called Harbor acquisition, then start a Seamless session in it.">Create a sealed Seamless project called Harbor acquisition, then start a Seamless session in it.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
-            <p class="qs-note">When Claude first reaches for a Seamless tool, the app asks for your approval; allow it once or always. From then on, tell Claude what to keep as you work: &ldquo;save that as a decision&rdquo;, or &ldquo;that&rsquo;s a rule for this client&rdquo;.</p>
+            <p class="qs-note">When Claude first reaches for a Seamless tool, the app asks for your approval; allow it once or always. From then on, tell Claude what to keep as you work: &ldquo;save that as a decision&rdquo;, or &ldquo;that&rsquo;s a rule for this client&rdquo;. <a href="#first-chats">More to say</a> is just below.</p>
           </div>
         </li>
         <li class="qs-step rv">
@@ -818,6 +806,135 @@ table.vs { width: 100%; border-collapse: collapse; }
         <p class="leave-keep">Your entries stay in <code>~/.seamless</code>, because removing a program shouldn&rsquo;t delete your work. Add <code>--purge</code> to remove them too.</p>
         <p class="leave-more"><a class="lnk" href="../docs/updating/#uninstall">Uninstalling, in full <svg aria-hidden="true"><use href="#i-arrow"/></svg></a></p>
       </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ VI. FIRST CHATS -->
+<!-- Requests to type in the first few chats, each beside an illustration of
+     what Claude does. The people and matters are the Law desk's (invented);
+     every Seamless tool named is real and does what the reply says. The
+     past-chats search is Claude's own feature, not Seamless's, and the copy
+     says so. The inline script runs the index; without JS every request
+     shows, stacked. -->
+<section class="chapter asks-sec" id="first-chats" data-chapter="first-chats">
+  <div class="wrap">
+    <header class="ch-head ch-head-wide">
+      <p class="ch-mark"><em>vi.</em> first chats</p>
+      <h2 class="h2 rv">What to say in your first few chats.</h2>
+      <p class="lede rv">Plain requests, typed into a chat in the Claude desktop app. Copy one, swap in the name of your own matter, and see what Claude saves. The replies are illustrations, and the tools Claude calls in them are real.</p>
+    </header>
+    <div class="asks" data-asks>
+      <div class="ask-tabs" role="tablist" aria-label="Requests to try" aria-orientation="vertical">
+        <button class="ask-tab active" type="button" role="tab" id="ask-t-load" aria-controls="ask-load" aria-selected="true"><span class="sr-num">01</span>Load a project</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-rule" aria-controls="ask-rule" aria-selected="false" tabindex="-1"><span class="sr-num">02</span>Keep a rule</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-note" aria-controls="ask-note" aria-selected="false" tabindex="-1"><span class="sr-num">03</span>Save a note</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-plan" aria-controls="ask-plan" aria-selected="false" tabindex="-1"><span class="sr-num">04</span>Plan with tasks</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-past" aria-controls="ask-past" aria-selected="false" tabindex="-1"><span class="sr-num">05</span>Bring in past chats</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-changed" aria-controls="ask-changed" aria-selected="false" tabindex="-1"><span class="sr-num">06</span>Ask what changed</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-wrap" aria-controls="ask-wrap" aria-selected="false" tabindex="-1"><span class="sr-num">07</span>Wrap up</button>
+      </div>
+      <div class="ask-panels">
+
+        <div class="ask" id="ask-load" role="tabpanel" aria-labelledby="ask-t-load">
+          <p class="ask-name">Load a project</p>
+          <div class="code say"><span class="say-label">in a chat</span><span class="cmd" data-copy="Load my Harbor acquisition project from Seamless.">Load my Harbor acquisition project from Seamless.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <figure class="chat">
+            <figcaption class="chat-bar"><span>what Claude does</span><span class="tag">an illustration</span></figcaption>
+            <div class="chat-body">
+              <p class="call"><b>session_start</b><span>project: harbor-acquisition</span></p>
+              <p class="msg">Harbor is loaded: two rules, the current decisions, and two open items. The indemnity cap sits at 1x fees as of Oct&nbsp;8, and next up is the escrow agent&rsquo;s KYC list.</p>
+            </div>
+          </figure>
+          <p class="ask-note">A chat starts blank until you ask. Put the instruction from step 5 in a Claude Project and every chat in it does this on its own.</p>
+        </div>
+
+        <div class="ask" id="ask-rule" role="tabpanel" aria-labelledby="ask-t-rule">
+          <p class="ask-name">Keep a rule</p>
+          <div class="code say"><span class="say-label">in a chat</span><span class="cmd" data-copy="Save this to Harbor as a rule: drafts go to the other side as PDFs, never as Word files.">Save this to Harbor as a rule: drafts go to the other side as PDFs, never as Word files.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <figure class="chat">
+            <figcaption class="chat-bar"><span>what Claude does</span><span class="tag">an illustration</span></figcaption>
+            <div class="chat-body">
+              <p class="call"><b>memory_write</b><span>constraint &middot; drafts-out-as-pdf-only</span></p>
+              <p class="msg">Saved as a rule in Harbor. Every chat that loads Harbor reads it before it answers.</p>
+            </div>
+          </figure>
+          <p class="ask-note">Call it a rule when it holds no matter what, and a decision when it might change later. Either way it&rsquo;s one plain file, with the date it was saved.</p>
+        </div>
+
+        <div class="ask" id="ask-note" role="tabpanel" aria-labelledby="ask-t-note">
+          <p class="ask-name">Save a note</p>
+          <div class="code say"><span class="say-label">in a chat</span><span class="cmd" data-copy="Save a summary of this call as a note in Harbor, dated today.">Save a summary of this call as a note in Harbor, dated today.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <figure class="chat">
+            <figcaption class="chat-bar"><span>what Claude does</span><span class="tag">an illustration</span></figcaption>
+            <div class="chat-body">
+              <p class="call"><b>notes_create</b><span>harbor-acquisition &middot; Call with the client&rsquo;s general counsel, Oct&nbsp;9</span></p>
+              <p class="msg">Saved as a note. It has what the client agreed to, the two questions going to their board, and who follows up on each.</p>
+            </div>
+          </figure>
+          <p class="ask-note">Notes are for the long version: a call, a memo, a page of research. Rules and decisions stay short, as entries of their own. Ask about the board later and Claude finds both.</p>
+        </div>
+
+        <div class="ask" id="ask-plan" role="tabpanel" aria-labelledby="ask-t-plan">
+          <p class="ask-name">Plan with tasks</p>
+          <div class="code say"><span class="say-label">in a chat</span><span class="cmd" data-copy="Make a plan for closing Harbor, with tasks in order: the KYC list, then the disclosure schedule, then the signing call.">Make a plan for closing Harbor, with tasks in order: the KYC list, then the disclosure schedule, then the signing call.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <figure class="chat">
+            <figcaption class="chat-bar"><span>what Claude does</span><span class="tag">an illustration</span></figcaption>
+            <div class="chat-body">
+              <p class="call"><b>notes_create</b><span>plan: harbor-closing</span></p>
+              <p class="call"><b>tasks_add</b><span>3 tasks, each waiting on the one before</span></p>
+              <p class="msg">The plan is harbor-closing. The KYC list is ready to start, and the disclosure schedule and the signing call wait their turn.</p>
+            </div>
+          </figure>
+          <p class="ask-then">Then, in any chat later on:</p>
+          <div class="code say"><span class="say-label">in a chat</span><span class="cmd" data-copy="What is next on Harbor?">What is next on Harbor?</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <p class="ask-note">Open items stay in the project, in order, until someone closes them, however many chats later.</p>
+        </div>
+
+        <div class="ask" id="ask-past" role="tabpanel" aria-labelledby="ask-t-past">
+          <p class="ask-name">Bring in past chats</p>
+          <div class="code say"><span class="say-label">in a chat</span><span class="cmd" data-copy="Search my past chats about Harbor and list the decisions we made, with dates. Then save the ones I pick to Seamless.">Search my past chats about Harbor and list the decisions we made, with dates. Then save the ones I pick to Seamless.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <figure class="chat">
+            <figcaption class="chat-bar"><span>what Claude does</span><span class="tag">an illustration</span></figcaption>
+            <div class="chat-body">
+              <p class="call"><b>search past chats</b><span>Harbor &middot; Claude&rsquo;s own tool</span></p>
+              <p class="msg">Across eight chats I found three decisions:<br>1. Escrow goes through Calder Trust, Sept&nbsp;3.<br>2. Lease details go in a disclosure schedule, Sept&nbsp;11.<br>3. Closing no earlier than Nov&nbsp;15, Sept&nbsp;24.<br>Which should I save?</p>
+              <p class="msg me">All three.</p>
+              <p class="call"><b>memory_write</b><span>3 decisions &middot; harbor-acquisition</span></p>
+              <p class="msg">Saved to Harbor, each with the date of the chat it came from.</p>
+            </div>
+          </figure>
+          <p class="ask-note">Searching past chats is Claude&rsquo;s own feature, and it only works when it&rsquo;s turned on in Claude&rsquo;s settings. Without it, paste an old conversation into the chat and ask the same thing.</p>
+        </div>
+
+        <div class="ask" id="ask-changed" role="tabpanel" aria-labelledby="ask-t-changed">
+          <p class="ask-name">Ask what changed</p>
+          <div class="code say"><span class="say-label">in a chat</span><span class="cmd" data-copy="What was the indemnity cap before it changed, and when did it change?">What was the indemnity cap before it changed, and when did it change?</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <figure class="chat">
+            <figcaption class="chat-bar"><span>what Claude does</span><span class="tag">an illustration</span></figcaption>
+            <div class="chat-body">
+              <p class="call"><b>recall</b><span>indemnity cap</span></p>
+              <p class="call"><b>memory_read</b><span>indemnity-cap-2x-fees</span></p>
+              <p class="msg">It was 2x fees, from your call with the client on Aug&nbsp;28. On Oct&nbsp;8 it became 1x fees, after the client&rsquo;s general counsel confirmed by email. Both entries are still on file.</p>
+            </div>
+          </figure>
+          <p class="ask-note">A replaced entry drops out of briefings and search, and stays on disk with what replaced it and when. That&rsquo;s why the question still has an answer.</p>
+        </div>
+
+        <div class="ask" id="ask-wrap" role="tabpanel" aria-labelledby="ask-t-wrap">
+          <p class="ask-name">Wrap up</p>
+          <div class="code say"><span class="say-label">in a chat</span><span class="cmd" data-copy="Before I go, save where we left off on Harbor.">Before I go, save where we left off on Harbor.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <figure class="chat">
+            <figcaption class="chat-bar"><span>what Claude does</span><span class="tag">an illustration</span></figcaption>
+            <div class="chat-body">
+              <p class="call"><b>session_end</b><span>findings</span></p>
+              <p class="msg">Saved. The next chat that loads Harbor starts here: the cap settled at 1x, the KYC list sent, and the disclosure schedule waiting on the rent roll.</p>
+            </div>
+          </figure>
+          <p class="ask-note">Next time, &ldquo;Load my Harbor acquisition project&rdquo; brings this summary back with everything else.</p>
+        </div>
+
+      </div>
     </div>
   </div>
 </section>
@@ -910,6 +1027,7 @@ table.vs { width: 100%; border-collapse: collapse; }
       <div>
         <b>Start</b>
         <a href="#setup">Set it up</a>
+        <a href="#first-chats">What to say first</a>
         <a href="../docs/claude-app/">Technical setup guide</a>
         <a href="../docs/updating/#uninstall">Uninstall</a>
         <a href="../">For developers</a>
@@ -1042,9 +1160,9 @@ table.vs { width: 100%; border-collapse: collapse; }
   window.addEventListener("resize", requestScroll);
   onScroll();
 
-  /* the desk switcher: a WAI-ARIA tablist over the five desks */
-  var box = $("[data-desks]");
-  if (box) {
+  /* the desk switcher and the first-chats index: WAI-ARIA tablists, each
+     panel shown until this hides all but the first */
+  $$("[data-desks], [data-asks]").forEach(function (box) {
     var tabs = $$('[role="tab"]', box);
     var pick = function (tab, focus) {
       tabs.forEach(function (t) {
@@ -1061,15 +1179,17 @@ table.vs { width: 100%; border-collapse: collapse; }
     tabs.forEach(function (t, i) {
       t.addEventListener("click", function () { pick(t, false); });
       t.addEventListener("keydown", function (ev) {
-        var j = ev.key === "ArrowRight" ? i + 1 : ev.key === "ArrowLeft" ? i - 1
-          : ev.key === "Home" ? 0 : ev.key === "End" ? tabs.length - 1 : null;
+        var k = ev.key;
+        var j = k === "ArrowRight" || k === "ArrowDown" ? i + 1
+          : k === "ArrowLeft" || k === "ArrowUp" ? i - 1
+          : k === "Home" ? 0 : k === "End" ? tabs.length - 1 : null;
         if (j === null) return;
         ev.preventDefault();
         pick(tabs[(j + tabs.length) % tabs.length], true);
       });
     });
     tabs.forEach(function (t) { document.getElementById(t.getAttribute("aria-controls")).hidden = t !== tabs[0]; });
-  }
+  });
 
   /* the matter chart: point at a star to read its entry */
   var chart = $("[data-chart]");

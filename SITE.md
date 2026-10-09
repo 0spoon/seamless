@@ -49,7 +49,10 @@ static/home.css         the landing page's own stylesheet: the "knowledge sky"
 static/home.js          the landing page's motion and interactive pieces: the
                         hero sky canvas, word reveals, the chapter rail, the
                         week/orbit/board/folder animations, the gardener card,
-                        console tabs, and the local-only "welcome back"
+                        console tabs, the day-one asks index (the request
+                        index and say-boxes are styled in home.css because
+                        claude-app/'s first-chats section reuses them), and
+                        the local-only "welcome back"
                         briefing (localStorage key seamless.visit)
 static/scenes-player.js animates the verbatim scenes.js transcripts (landing only)
 static/site.css         shared stylesheet for the docs, /compare/ and the

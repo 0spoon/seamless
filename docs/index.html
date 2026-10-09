@@ -171,7 +171,7 @@
 <link rel="preload" as="font" type="font/woff2" href="static/fonts/fraunces-italic.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="static/fonts/instrument-sans.woff2" crossorigin>
 <script>(function(){var d=document.documentElement,t=localStorage.getItem("theme");if(t)d.dataset.theme=t;var o=localStorage.getItem("os");if(o==="macos"||o==="linux")o="unix";if(o!=="unix"&&o!=="windows")o=/Windows/i.test(navigator.userAgent)?"windows":"unix";d.dataset.os=o;d.className+=" js";})();</script>
-<link rel="stylesheet" href="static/home.css?v=bb7f0dfa">
+<link rel="stylesheet" href="static/home.css?v=bc122c78">
 </head>
 <body>
 
@@ -215,6 +215,7 @@
         <a href="#scenes">Demo</a>
         <a href="#fleet">Fleet</a>
         <a href="#quickstart">Install</a>
+        <a href="#asks">What to ask first</a>
         <a href="#faq">FAQ</a>
         <a href="claude-app/">Claude app</a>
         <a href="docs/">Docs</a>
@@ -255,6 +256,7 @@
     <li><a href="#legible" data-rail="legible"><span class="rail-dot"></span><span class="rail-label"><em>v.</em> The folder</span></a></li>
     <li><a href="#console" data-rail="console"><span class="rail-dot"></span><span class="rail-label"><em>vi.</em> The console</span></a></li>
     <li><a href="#quickstart" data-rail="quickstart"><span class="rail-dot"></span><span class="rail-label"><em>vii.</em> Try it</span></a></li>
+    <li><a href="#asks" data-rail="asks"><span class="rail-dot"></span><span class="rail-label"><em>viii.</em> Day one</span></a></li>
   </ol>
   <span class="rail-line" aria-hidden="true"><i></i></span>
 </nav>
@@ -786,7 +788,7 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
             <h3><span class="qs-n">2</span>Open your agent in any repo</h3>
             <div class="code"><span class="p" aria-hidden="true">$</span><span class="cmd" data-copy="cd ~/code/myrepo &amp;&amp; claude">cd ~/code/myrepo &amp;&amp; claude</span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
             <p class="qs-note">Restart the client once after installing. There is nothing to configure: the first session in a git repo registers the project itself, and the agent's context opens with a <code>&lt;seam-briefing&gt;</code> block. Using Codex? Review the hooks once with <code>/hooks</code>, then see <a href="docs/codex-cli/">the Codex guide</a>. Chatting in the Claude desktop app instead? A chat has no hooks, so Claude loads a project when you ask; <a href="claude-app/">here is how that works</a>.</p>
-            <p class="qs-try"><b>A first test.</b> Ask your agent to &ldquo;remember, as a constraint: never force-push main.&rdquo; Then start a fresh session in the same repo and look for the rule in its briefing.</p>
+            <p class="qs-try"><b>A first test.</b> Ask your agent to &ldquo;remember, as a constraint: never force-push main.&rdquo; Then start a fresh session in the same repo and look for the rule in its briefing. <a href="#asks">More to try</a>.</p>
           </div>
         </li>
         <li class="qs-step rv">
@@ -813,6 +815,164 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
         <p class="leave-keep">Your memories stay in <code>~/.seamless</code> and your key in <code>~/.config/seamless</code>, because uninstalling a program shouldn't delete your knowledge. Add <code>--purge</code> to remove them too. Same command on Windows. Updating later is <code>seamlessd update</code>.</p>
         <p class="leave-more"><a class="lnk" href="docs/updating/#uninstall">Update &amp; uninstall, in full <svg aria-hidden="true"><use href="#i-arrow"/></svg></a></p>
       </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ================================================================ VIII. DAY ONE -->
+<!-- Requests to paste on the first day, each beside an illustration of what
+     the agent does with it. The prompts are meant to be copied; the replies
+     are invented, but every tool named in them is a real Seamless MCP tool
+     (or the client's own Bash/Read) and does what the reply says. home.js
+     runs the index as a tablist; without JS every request shows, stacked. -->
+<section class="chapter asks-sec" id="asks" data-chapter="asks">
+  <div class="wrap">
+    <header class="ch-head ch-head-wide">
+      <p class="ch-mark"><em>viii.</em> day one</p>
+      <h2 class="h2 rv">What to ask in your first session.</h2>
+      <p class="lede rv">You talk to your agent the way you already do. Paste any of these into Claude Code or Codex inside a repo, and change the details to your own. The replies are illustrations, the tools in them are real, and everything the agent saves is a file under <code>~/.seamless</code>.</p>
+    </header>
+    <div class="asks" data-asks>
+      <div class="ask-tabs" role="tablist" aria-label="Requests to try" aria-orientation="vertical">
+        <button class="ask-tab active" type="button" role="tab" id="ask-t-rule" aria-controls="ask-rule" aria-selected="true"><span class="sr-num">01</span>Remember a rule</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-note" aria-controls="ask-note" aria-selected="false" tabindex="-1"><span class="sr-num">02</span>Save a note</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-plan" aria-controls="ask-plan" aria-selected="false" tabindex="-1"><span class="sr-num">03</span>Plan with tasks</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-import" aria-controls="ask-import" aria-selected="false" tabindex="-1"><span class="sr-num">04</span>Import past sessions</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-recall" aria-controls="ask-recall" aria-selected="false" tabindex="-1"><span class="sr-num">05</span>Ask what&rsquo;s known</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-change" aria-controls="ask-change" aria-selected="false" tabindex="-1"><span class="sr-num">06</span>Change a decision</button>
+        <button class="ask-tab" type="button" role="tab" id="ask-t-handoff" aria-controls="ask-handoff" aria-selected="false" tabindex="-1"><span class="sr-num">07</span>Hand off</button>
+      </div>
+      <div class="ask-panels">
+
+        <div class="ask" id="ask-rule" role="tabpanel" aria-labelledby="ask-t-rule">
+          <p class="ask-name">Remember a rule</p>
+          <div class="code say"><span class="say-label">prompt</span><span class="cmd" data-copy="Save this to Seamless as a constraint: migrations run before the deploy, never after.">Save this to Seamless as a constraint: migrations run before the deploy, never after.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <div class="term term-sm">
+            <p class="term-bar"><span>claude · ~/code/myapp</span><span class="term-tag">an illustration</span></p>
+            <div class="term-body">
+<p class="t-tool"><b>●</b> memory_write <span class="t-arg">deploy-runs-migrations-first</span></p>
+<p class="t-kv"><span class="k">kind</span> constraint</p>
+<p class="t-kv"><span class="k">description</span> Run migrations before the deploy, never after: the new code assumes the new schema.</p>
+<p class="t-res">wrote memory/myapp/deploy-runs-migrations-first.md</p>
+<p class="t-say">Saved as a constraint. Every new session in this repo gets it in its briefing.</p>
+            </div>
+          </div>
+          <p class="ask-note">Constraints are pinned into every briefing for the repo. Start a fresh session and the rule is there before your first prompt, in Claude Code and Codex alike.</p>
+        </div>
+
+        <div class="ask" id="ask-note" role="tabpanel" aria-labelledby="ask-t-note">
+          <p class="ask-name">Save a note</p>
+          <div class="code say"><span class="say-label">prompt</span><span class="cmd" data-copy="Save what we just worked out about webhook retries as a Seamless note.">Save what we just worked out about webhook retries as a Seamless note.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <div class="term term-sm">
+            <p class="term-bar"><span>claude · ~/code/myapp</span><span class="term-tag">an illustration</span></p>
+            <div class="term-body">
+<p class="t-tool"><b>●</b> notes_create <span class="t-arg">Webhook retries: backoff and idempotency</span></p>
+<p class="t-kv"><span class="k">tags</span> webhooks, payments</p>
+<p class="t-res">wrote notes/myapp/webhook-retries-backoff-and-idempotency.md</p>
+<p class="t-say">Saved the long version as a note: the backoff schedule, why the handler has to be idempotent, and the two approaches we ruled out.</p>
+            </div>
+          </div>
+          <p class="ask-note">Notes hold the long version of something: a design, research, the reasoning behind a call. Memories hold the one-line rule. When a later session searches for retries, both come back.</p>
+        </div>
+
+        <div class="ask" id="ask-plan" role="tabpanel" aria-labelledby="ask-t-plan">
+          <p class="ask-name">Plan with tasks</p>
+          <div class="code say"><span class="say-label">prompt</span><span class="cmd" data-copy="Make a Seamless plan with tasks: move sessions to Redis, then migrate the existing sessions, then update the deploy runbook.">Make a Seamless plan with tasks: move sessions to Redis, then migrate the existing sessions, then update the deploy runbook.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <div class="term term-sm">
+            <p class="term-bar"><span>claude · ~/code/myapp</span><span class="term-tag">an illustration</span></p>
+            <div class="term-body">
+<p class="t-tool"><b>●</b> notes_create <span class="t-arg">Move sessions to Redis</span></p>
+<p class="t-kv"><span class="k">tags</span> plan:sessions-to-redis</p>
+<p class="t-tool"><b>●</b> tasks_add <span class="t-arg">Move session storage to Redis</span></p>
+<p class="t-tool"><b>●</b> tasks_add <span class="t-arg">Migrate existing sessions</span> <span class="t-dim">waits on step 1</span></p>
+<p class="t-tool"><b>●</b> tasks_add <span class="t-arg">Update the deploy runbook</span> <span class="t-dim">waits on step 2</span></p>
+<p class="t-say">The plan is sessions-to-redis: 3 steps, and the first one is ready to claim.</p>
+            </div>
+          </div>
+          <p class="ask-then">Then, in any later session, or in a second agent running beside this one:</p>
+          <div class="code say"><span class="say-label">prompt</span><span class="cmd" data-copy="Pick up the next step of the sessions-to-redis plan.">Pick up the next step of the sessions-to-redis plan.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <p class="ask-note">The agent claims the step before it starts, so another agent asking the same thing is told who holds it. Until the plan is done, every briefing in the repo shows how far along it is.</p>
+        </div>
+
+        <div class="ask" id="ask-import" role="tabpanel" aria-labelledby="ask-t-import">
+          <p class="ask-name">Import past sessions</p>
+          <div class="code say"><span class="say-label">prompt</span><span class="cmd" data-copy="Go through my past Claude Code sessions for this repo in ~/.claude/projects and list the decisions and gotchas worth keeping. Save the ones I pick to Seamless.">Go through my past Claude Code sessions for this repo in ~/.claude/projects and list the decisions and gotchas worth keeping. Save the ones I pick to Seamless.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <div class="term term-sm">
+            <p class="term-bar"><span>claude · ~/code/myapp</span><span class="term-tag">an illustration</span></p>
+            <div class="term-body">
+<p class="t-tool"><b>●</b> Bash <span class="t-arg">ls ~/.claude/projects/-Users-you-code-myapp/</span></p>
+<p class="t-res">41 transcripts, Jun 3 to Oct 8</p>
+<p class="t-tool"><b>●</b> Read <span class="t-arg">…/7c1e9a04-….jsonl</span> <span class="t-dim">and 11 more, newest first</span></p>
+<p class="t-say">Four worth keeping:</p>
+<p class="t-kv"><span class="k">1</span> decision · sessions-stay-in-cookies <span class="t-dim">Sep 30</span></p>
+<p class="t-kv"><span class="k">2</span> gotcha · postgres-timeout-on-cold-start <span class="t-dim">Aug 21</span></p>
+<p class="t-kv"><span class="k">3</span> decision · no-orm-for-reporting-queries <span class="t-dim">Aug 2</span></p>
+<p class="t-kv"><span class="k">4</span> gotcha · ci-cache-keyed-on-lockfile <span class="t-dim">Jul 9</span></p>
+<p class="t-say">Which should I save?</p>
+<p class="t-user">&gt; 1, 2 and 4</p>
+<p class="t-tool"><b>●</b> memory_write <span class="t-arg">sessions-stay-in-cookies</span></p>
+<p class="t-tool"><b>●</b> memory_write <span class="t-arg">postgres-timeout-on-cold-start</span></p>
+<p class="t-tool"><b>●</b> memory_write <span class="t-arg">ci-cache-keyed-on-lockfile</span></p>
+<p class="t-say">Saved 3. Each one says when it was decided and why.</p>
+            </div>
+          </div>
+          <p class="ask-then">Or start from the repo&rsquo;s own history:</p>
+          <div class="code say"><span class="say-label">prompt</span><span class="cmd" data-copy="Read the last three months of git log and list the decisions a new teammate could not get from the code. Save the ones I pick to Seamless.">Read the last three months of git log and list the decisions a new teammate could not get from the code. Save the ones I pick to Seamless.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <p class="ask-note">Seamless doesn&rsquo;t import transcripts by itself. Your agent reads them with its own file tools and saves only what you pick. Codex keeps its sessions in <code>~/.codex/sessions</code>, so on Codex point it there instead.</p>
+        </div>
+
+        <div class="ask" id="ask-recall" role="tabpanel" aria-labelledby="ask-t-recall">
+          <p class="ask-name">Ask what&rsquo;s known</p>
+          <div class="code say"><span class="say-label">prompt</span><span class="cmd" data-copy="What do we know about the rate limiter?">What do we know about the rate limiter?</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <div class="term term-sm">
+            <p class="term-bar"><span>claude · ~/code/myapp</span><span class="term-tag">an illustration</span></p>
+            <div class="term-body">
+<p class="t-tool"><b>●</b> recall <span class="t-arg">rate limiter</span></p>
+<p class="t-kv"><span class="k">memory</span> rate-limit-not-in-memory <span class="t-dim">gotcha · 6d</span></p>
+<p class="t-kv"><span class="k">note</span> load-test-results-september <span class="t-dim">2w</span></p>
+<p class="t-kv"><span class="k">task</span> Rate-limit POST /auth/refresh <span class="t-dim">done</span></p>
+<p class="t-say">The limiter counts in shared storage, because each instance behind the load balancer only sees its own slice of traffic. The September load test is what caught it, and the limit on /auth/refresh shipped last week.</p>
+            </div>
+          </div>
+          <p class="ask-note">One search covers memories, notes, tasks, and what past sessions reported. Often you won&rsquo;t need to ask at all: when a prompt touches something the store knows, the matching memories arrive with the prompt.</p>
+        </div>
+
+        <div class="ask" id="ask-change" role="tabpanel" aria-labelledby="ask-t-change">
+          <p class="ask-name">Change a decision</p>
+          <div class="code say"><span class="say-label">prompt</span><span class="cmd" data-copy="We moved background jobs from Redis to SQS. Save that to Seamless as replacing the old decision.">We moved background jobs from Redis to SQS. Save that to Seamless as replacing the old decision.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <div class="term term-sm">
+            <p class="term-bar"><span>claude · ~/code/myapp</span><span class="term-tag">an illustration</span></p>
+            <div class="term-body">
+<p class="t-tool"><b>●</b> memory_write <span class="t-arg">jobs-on-sqs</span></p>
+<p class="t-kv"><span class="k">kind</span> decision</p>
+<p class="t-kv"><span class="k">supersedes</span> jobs-on-redis</p>
+<p class="t-res">wrote memory/myapp/jobs-on-sqs.md</p>
+<p class="t-say">Saved. jobs-on-redis is out of briefings and search, and its file is still there, marked superseded_by jobs-on-sqs.</p>
+            </div>
+          </div>
+          <p class="ask-note">Nothing is overwritten. Ask &ldquo;what did we use before SQS?&rdquo; next month and the agent can still read the old decision and see when it changed.</p>
+        </div>
+
+        <div class="ask" id="ask-handoff" role="tabpanel" aria-labelledby="ask-t-handoff">
+          <p class="ask-name">Hand off</p>
+          <div class="code say"><span class="say-label">prompt</span><span class="cmd" data-copy="Wrap up for today: record what is done and what is left for the next session.">Wrap up for today: record what is done and what is left for the next session.</span><button class="copy-btn" type="button" aria-label="Copy the request">copy</button></div>
+          <div class="term term-sm">
+            <p class="term-bar"><span>claude · ~/code/myapp</span><span class="term-tag">an illustration</span></p>
+            <div class="term-body">
+<p class="t-tool"><b>●</b> session_end</p>
+<p class="t-kv"><span class="k">findings</span> Burst test passes on every instance. Left: the alert on refresh-token reuse; its task is ready and unclaimed.</p>
+<p class="t-sep">next morning, a fresh session</p>
+<p class="t-inject"><span class="t-tag">&lt;seam-briefing&gt;</span>
+Recent findings:
+- cc/52a41f8a (14h): <mark>Burst test passes on every instance. Left: the alert on refresh-token reuse</mark>; its task is ready and unclaimed.
+<span class="t-dim">…</span>
+<span class="t-tag">&lt;/seam-briefing&gt;</span></p>
+            </div>
+          </div>
+          <p class="ask-note">The next session in the repo opens with the handoff, whichever agent you start. If you forget to ask, the last thing the session said is kept as its finding instead.</p>
+        </div>
+
+      </div>
     </div>
   </div>
 </section>
@@ -926,6 +1086,7 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
       <div>
         <b>Start</b>
         <a href="#quickstart">Install</a>
+        <a href="#asks">What to ask first</a>
         <a href="docs/quickstart/">Quickstart</a>
         <a href="claude-app/">In the Claude app</a>
         <a href="docs/updating/#uninstall">Uninstall</a>
@@ -938,7 +1099,7 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
 <script src="static/scenes.js?v=913912f7"></script>
 <script src="static/scenes-player.js?v=7074d146"></script>
 <script src="static/site.js?v=c88feb8d"></script>
-<script src="static/home.js?v=743d508c"></script>
+<script src="static/home.js?v=9e3f7429"></script>
 <script src="static/webmcp.js?v=c9b44136"></script>
 </body>
 </html>
