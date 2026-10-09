@@ -43,7 +43,8 @@ const DialTimeout = 5 * time.Second
 // every binary that holds the key.
 //
 // timeout is the whole-request deadline; 0 means none (the mcp-proxy bridge,
-// whose tool calls can be LLM-slow). DialTimeout applies either way.
+// whose tool calls can be LLM-slow, and seam hook, whose one deadline rides on
+// its ctx so a dial retry cannot restart it). DialTimeout applies either way.
 //
 // A configured-but-unusable tls.ca_file is an ERROR, never a silent fall back to
 // the system pool: the request would then fail at the TLS handshake and look

@@ -21,12 +21,22 @@ package main
 // arguments, or results. The one stateful thing it carries is the Mcp-Session-Id
 // the daemon mints on initialize -- resending it on every later POST is what keeps
 // the connection binding alive, so session_start inheritance works across calls.
+//
+// It outlives a daemon restart (an automatic update performs one): a failed
+// dial is retried (dialretry.go), and the old Mcp-Session-Id is still served
+// afterwards, because the session-id manager the daemon's transport keeps
+// (mcp-go's default; internal/mcp Handler sets no other) checks the id's shape,
+// not whether this process minted it. What the restart does lose is the
+// daemon's in-memory connection state: a session_start binding (calls fall back
+// to the agent-process binding, which lives in the session row) and a lab_open
+// lab.
 
 import (
 	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -35,6 +45,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -46,6 +57,12 @@ import (
 // server.HeaderKeySessionID). The daemon mints it on initialize and requires it
 // on every subsequent request; the bridge captures and replays it.
 const headerSessionID = "Mcp-Session-Id"
+
+// proxyDialBudget is how long the bridge re-dials a daemon it cannot dial
+// before it answers the request with an error. It spans an update's restart
+// (about 2s on macOS) with room to spare; past it the daemon is down rather
+// than restarting, and the client is better served by an error it can act on.
+const proxyDialBudget = 30 * time.Second
 
 // mcpProxyOpts carries the flags for `seam mcp-proxy`.
 type mcpProxyOpts struct {
@@ -73,8 +90,12 @@ Register it with a stdio client, e.g. the local Codex host:
 
   codex mcp add seamless -- <abs seam> mcp-proxy --config <abs seamless.yaml>
 
-If seamlessd is unreachable the bridge exits nonzero with the reason on stderr,
-so the client surfaces a failed server rather than hanging.`)
+It rides out a daemon restart: while seamlessd cannot be dialed, a request is
+retried for up to 30s and then answered with a JSON-RPC error. A request that
+may have reached the daemon is never sent twice, since a tool call may already
+have run; it is answered with an error instead. Either way the bridge keeps
+serving, because a stdio client does not restart a server that exits. Once
+serving, it exits only when stdin closes or stdout breaks.`)
 
 func runMCPProxy(ctx context.Context, e *env, o *mcpProxyOpts, _ []string) error {
 	// --config is config.Load's documented $SEAMLESS_CONFIG override, moved out of
@@ -98,6 +119,7 @@ func runMCPProxy(ctx context.Context, e *env, o *mcpProxyOpts, _ []string) error
 		return err
 	}
 	b := newBridge(cfg.ServerURL()+"/api/mcp", cfg.MCP.APIKey, client)
+	b.stderr = e.stderr
 	// The client that spawned this bridge is the agent whose SessionStart hook
 	// created its ambient session; naming it on every request is what binds the
 	// connection to that session. Resolved once: the parent does not change for
@@ -116,8 +138,10 @@ type bridge struct {
 	endpoint     string
 	apiKey       string
 	client       *http.Client
-	sessionID    string // Mcp-Session-Id from initialize, replayed on later POSTs
-	agentProcess string // agentproc identity of the client that spawned the bridge; "" = unknown
+	retry        *dialRetry // dial-phase retry policy (dialretry.go); tests swap its clock
+	stderr       io.Writer  // where a failure nothing waits on is reported; MCP clients log it
+	sessionID    string     // Mcp-Session-Id from initialize, replayed on later POSTs
+	agentProcess string     // agentproc identity of the client that spawned the bridge; "" = unknown
 }
 
 // newBridge takes its HTTP client rather than building one: the TLS trust the
@@ -136,12 +160,16 @@ func newBridge(endpoint, apiKey string, client *http.Client) *bridge {
 			},
 		}
 	}
-	return &bridge{endpoint: endpoint, apiKey: apiKey, client: client}
+	return &bridge{
+		endpoint: endpoint, apiKey: apiKey, client: client,
+		retry: newDialRetry(proxyDialBudget), stderr: io.Discard,
+	}
 }
 
 // run reads newline-delimited JSON-RPC from r and relays each frame's reply to w
-// until stdin closes (EOF -> nil). A transport failure reaching the daemon is
-// fatal and returned, so the CLI exits nonzero with the reason on stderr.
+// until stdin closes (EOF -> nil). A failure reaching the daemon is answered
+// in-band and the loop goes on (see forward); only a broken stdin or stdout, or
+// a cancelled ctx, ends it with an error.
 func (b *bridge) run(ctx context.Context, r io.Reader, w io.Writer) error {
 	// ReadBytes rather than a Scanner: a tool-call frame (e.g. memory_write with a
 	// long body) can exceed a Scanner's default token cap, and ReadBytes has none.
@@ -201,8 +229,26 @@ func setStatelessHeaders(h http.Header, frame []byte) {
 	}
 }
 
-// forward POSTs one JSON-RPC frame to the daemon and relays the reply to w.
+// forward relays one JSON-RPC frame to the daemon and the daemon's reply to w.
+//
+// A failure between the bridge and the daemon does not end the bridge: an MCP
+// client does not restart a stdio server that exits, so exiting would take the
+// tools away for the rest of the client's session. A request is answered with a
+// JSON-RPC error naming the cause instead; a notification or a response, which
+// nothing waits on, is reported on stderr. Only a failed write to w (the client
+// is gone) or a cancelled ctx is returned.
 func (b *bridge) forward(ctx context.Context, frame []byte, w io.Writer) error {
+	err := b.exchange(ctx, frame, w)
+	if err == nil || errors.Is(err, errWriteStdout) || ctx.Err() != nil {
+		return err
+	}
+	return b.answerFailure(w, frame, err)
+}
+
+// exchange POSTs one frame and relays the reply to w. An error means no reply
+// was relayed (or, wrapping errWriteStdout, that relaying it failed); forward
+// decides who hears about it.
+func (b *bridge) exchange(ctx context.Context, frame []byte, w io.Writer) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.endpoint, bytes.NewReader(frame))
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
@@ -223,11 +269,13 @@ func (b *bridge) forward(ctx context.Context, frame []byte, w io.Writer) error {
 	}
 	setStatelessHeaders(req.Header, frame)
 
-	resp, err := b.client.Do(req)
+	resp, err := b.retry.do(b.client, req)
 	if err != nil {
-		// A transport failure means the daemon is unreachable: the bridge cannot
-		// serve, so this is fatal rather than a per-message hiccup.
-		return fmt.Errorf("cannot reach seamlessd at %s (is the daemon running?): %w", b.endpoint, err)
+		if errors.Is(err, errNotSent) {
+			return fmt.Errorf("cannot reach seamlessd at %s (is the daemon running?): %w", b.endpoint, err)
+		}
+		return fmt.Errorf("lost the connection to seamlessd at %s after sending the request; "+
+			"it was not re-sent, because it may already have run: %w", b.endpoint, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -243,15 +291,12 @@ func (b *bridge) forward(ctx context.Context, frame []byte, w io.Writer) error {
 		// to relay -- writing an empty line would corrupt the stdio framing.
 		return nil
 	case resp.StatusCode < 200 || resp.StatusCode >= 300:
-		// A non-2xx is normally a transport/protocol fault (bad content type,
-		// invalid/terminated session, server error) the bridge cannot recover
-		// from per-message: fail so the client restarts and re-initializes rather
-		// than hangs. The exception is a JSON-RPC error answering the request:
-		// the stateless revision (2026-07-28) sends its refusals that way -- an
-		// unsupported protocol version is a 400 naming the versions to fall back
-		// to -- and the client must read it to negotiate down, so it is relayed
-		// as the reply. Failing instead would restart the client into the same
-		// refusal forever.
+		// A JSON-RPC error answering the request is the reply: the stateless
+		// revision (2026-07-28) sends its refusals that way -- an unsupported
+		// protocol version is a 400 naming the versions to fall back to -- and
+		// the client must read it to negotiate down. Any other non-2xx (bad
+		// content type, unauthorized, oversized body, server error) is a failed
+		// exchange, which forward answers in-band.
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody)) //nolint:errcheck // best-effort read of an error body for the message; a partial read still helps
 		if isJSONRPCError(body) {
 			return writeFrame(w, body)
@@ -261,14 +306,70 @@ func (b *bridge) forward(ctx context.Context, frame []byte, w io.Writer) error {
 
 	mediaType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type")) //nolint:errcheck // an absent or unparseable content type just falls through to the JSON path
 	if mediaType == "text/event-stream" {
-		return relaySSE(resp.Body, w)
+		replied, err := relaySSE(resp.Body, w)
+		switch {
+		case errors.Is(err, errWriteStdout):
+			return err
+		case replied:
+			// The reply reached the client, so the exchange is complete even if
+			// the stream broke after it; answering again would send its id twice.
+			return nil
+		case err == nil:
+			// A clean end with no reply still leaves the client waiting on it.
+			err = io.ErrUnexpectedEOF
+		}
+		return b.lostReply(err)
 	}
 	// application/json: a single JSON-RPC reply object.
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("read response: %w", err)
+		return b.lostReply(err)
 	}
 	return writeFrame(w, body)
+}
+
+// lostReply words a reply that broke off after the daemon had the request.
+func (b *bridge) lostReply(err error) error {
+	return fmt.Errorf("lost the reply from seamlessd at %s; the request may already have run: %w", b.endpoint, err)
+}
+
+// answerFailure reports a failed exchange to the client that sent frame. A
+// request gets a JSON-RPC error carrying its id, since the client is waiting on
+// that id. A notification or a response (to a server-initiated request) has no
+// reply to give, so its failure goes to stderr.
+func (b *bridge) answerFailure(w io.Writer, frame []byte, cause error) error {
+	var msg struct {
+		ID     json.RawMessage `json:"id"`
+		Method string          `json:"method"`
+	}
+	isRequest := json.Unmarshal(frame, &msg) == nil && msg.Method != "" &&
+		len(msg.ID) > 0 && string(msg.ID) != "null"
+	if !isRequest {
+		prefix := "seam mcp-proxy"
+		if msg.Method != "" {
+			prefix += ": " + msg.Method
+		}
+		fmt.Fprintf(b.stderr, "%s: %v\n", prefix, cause)
+		return nil
+	}
+	reply, err := json.Marshal(jsonRPCFailure{
+		JSONRPC: mcp.JSONRPC_VERSION,
+		ID:      msg.ID,
+		Error:   mcp.NewJSONRPCErrorDetails(mcp.INTERNAL_ERROR, cause.Error(), nil),
+	})
+	if err != nil {
+		return fmt.Errorf("encode error reply: %w", err)
+	}
+	return writeFrame(w, reply)
+}
+
+// jsonRPCFailure is the error reply the bridge writes for a request the daemon
+// did not answer. The id is the request's own bytes, so it matches whatever type
+// the client chose.
+type jsonRPCFailure struct {
+	JSONRPC string                  `json:"jsonrpc"`
+	ID      json.RawMessage         `json:"id"`
+	Error   mcp.JSONRPCErrorDetails `json:"error"`
 }
 
 // maxErrorBody caps how much of a non-2xx reply the bridge reads: enough for
@@ -284,6 +385,10 @@ func isJSONRPCError(body []byte) bool {
 	return json.Unmarshal(body, &msg) == nil && msg.JSONRPC == "2.0" && len(msg.Error) > 0
 }
 
+// errWriteStdout marks a failed write to the client: the one failure the bridge
+// cannot answer in-band, because the client is gone.
+var errWriteStdout = errors.New("write stdout")
+
 // writeFrame relays one JSON-RPC message as a single stdio frame: trimmed to one
 // line, newline-terminated, per the stdio transport contract (no embedded
 // newlines). An empty message writes nothing.
@@ -293,16 +398,18 @@ func writeFrame(w io.Writer, msg []byte) error {
 		return nil
 	}
 	if _, err := w.Write(append(msg, '\n')); err != nil {
-		return fmt.Errorf("write stdout: %w", err)
+		return fmt.Errorf("%w: %w", errWriteStdout, err)
 	}
 	return nil
 }
 
-// relaySSE relays the JSON-RPC messages carried in a text/event-stream reply.
-// The synchronous Seamless tools never upgrade to SSE, so this is defensive: the
-// streamable-HTTP server can still choose it, and each event's data payload is
-// one JSON-RPC message.
-func relaySSE(body io.Reader, w io.Writer) error {
+// relaySSE relays the JSON-RPC messages carried in a text/event-stream reply,
+// and reports whether one of them was the reply itself -- the message with no
+// method; the others are notifications or server requests riding the same
+// stream. The synchronous Seamless tools never upgrade to SSE, so this is
+// defensive: the streamable-HTTP server can still choose it, and each event's
+// data payload is one JSON-RPC message.
+func relaySSE(body io.Reader, w io.Writer) (replied bool, err error) {
 	sc := bufio.NewScanner(body)
 	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	var data []string
@@ -310,16 +417,20 @@ func relaySSE(body io.Reader, w io.Writer) error {
 		if len(data) == 0 {
 			return nil
 		}
-		msg := strings.Join(data, "\n")
+		msg := []byte(strings.Join(data, "\n"))
 		data = data[:0]
-		return writeFrame(w, []byte(msg))
+		if err := writeFrame(w, msg); err != nil {
+			return err
+		}
+		replied = replied || isReply(msg)
+		return nil
 	}
 	for sc.Scan() {
 		line := sc.Text()
 		switch {
 		case line == "": // event boundary
 			if err := flush(); err != nil {
-				return err
+				return replied, err
 			}
 		case strings.HasPrefix(line, "data:"):
 			data = append(data, strings.TrimPrefix(line[len("data:"):], " "))
@@ -327,7 +438,20 @@ func relaySSE(body io.Reader, w io.Writer) error {
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return fmt.Errorf("read sse: %w", err)
+		return replied, fmt.Errorf("read sse: %w", err)
 	}
-	return flush()
+	// Not `return replied, flush()`: Go leaves unspecified whether replied is
+	// read before or after the call that may set it, and a reply in the final,
+	// unterminated event would then be answered a second time.
+	err = flush()
+	return replied, err
+}
+
+// isReply reports whether msg is a JSON-RPC response: an id and no method.
+func isReply(msg []byte) bool {
+	var m struct {
+		ID     json.RawMessage `json:"id"`
+		Method string          `json:"method"`
+	}
+	return json.Unmarshal(msg, &m) == nil && m.Method == "" && len(m.ID) > 0
 }

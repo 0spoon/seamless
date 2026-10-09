@@ -97,10 +97,25 @@ var hookClients = []string{"claude-code", "codex"}
 // for.
 var hookIdentityParams = []string{"host", "repo_root", "main_root", "origin", "agent_process"}
 
+// hookTimeout bounds a hook's whole forward: every attempt, the waits between
+// them, and relaying the reply. It was the one attempt's whole-request deadline
+// before the dial retry existed, and it is still the hook's worst case: the
+// retry spends from it rather than adding to it.
+const hookTimeout = 10 * time.Second
+
+// hookDialBudget is how long a hook re-dials a daemon that cannot be dialed
+// (dialretry.go): long enough to span an update's restart, about 2s on macOS.
+// It sits inside hookTimeout, so an attempt that connects at its very end still
+// has 5s to be served. The price is that a daemon that is down for good delays
+// every hook by this much before it fails open.
+const hookDialBudget = 5 * time.Second
+
 // hookOpts carries the flags for `seam hook`.
 type hookOpts struct {
 	config string // --config: abs seamless.yaml the installer bakes in (see bindHook)
 	client string // --client: canonical agent CLI discriminator; "" => absent/Claude Code
+
+	retry *dialRetry // not a flag: nil is newDialRetry(hookDialBudget); tests swap the clock
 }
 
 // bindHook registers --config and --client. install-hooks writes --config into
@@ -132,7 +147,9 @@ on every Write/Edit, so it is pre-filtered locally: a non-plan file never reache
 the network.
 
 A runtime failure (unreadable stdin, no config, server down) is reported on
-stderr and exits 0 -- a hook must never block the session it serves. An unknown
+stderr and exits 0 -- a hook must never block the session it serves. A daemon
+that cannot be dialed (restarting after an update) is retried for up to 5s
+first; a payload that may have reached it is never sent twice. An unknown
 event or client is an install/configuration bug and exits 1, never 2.`)
 
 func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
@@ -189,6 +206,10 @@ func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 	if len(q) > 0 {
 		ep += "?" + q.Encode()
 	}
+	// One deadline over the whole forward, retries and the relay included (see
+	// hookTimeout); cancelling the parent ctx still ends a retry wait at once.
+	ctx, cancel := context.WithTimeout(ctx, hookTimeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.ServerURL()+ep, bytes.NewReader(payload))
 	if err != nil {
 		fmt.Fprintln(e.stderr, "seam hook:", err)
@@ -197,14 +218,23 @@ func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 	req.Header.Set("Authorization", "Bearer "+cfg.MCP.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	client, err := cfg.HTTPClient(10 * time.Second)
+	// No per-request timeout on the client: ctx carries the hook's deadline, and
+	// a client timeout would start over on every retry.
+	client, err := cfg.HTTPClient(0)
 	if err != nil {
 		// Same degradation as a transport failure: a hook must never block the
 		// agent, so the reason goes to stderr and the turn continues.
 		fmt.Fprintln(e.stderr, "seam hook:", err)
 		return nil
 	}
-	resp, err := client.Do(req)
+	retry := o.retry
+	if retry == nil {
+		retry = newDialRetry(hookDialBudget)
+	}
+	// Only a dial-phase failure is retried. A payload that may have reached the
+	// daemon is never sent again: session-start, a plan capture, a prompt record
+	// would each be applied twice.
+	resp, err := retry.do(client, req)
 	if err != nil {
 		fmt.Fprintln(e.stderr, "seam hook:", err)
 		return nil

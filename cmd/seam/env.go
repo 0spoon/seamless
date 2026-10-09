@@ -56,7 +56,8 @@ func newEnv() *env {
 // private CA either verifies everywhere or the install half-works in a way that
 // reads as an intermittent network fault. config.DialTimeout is the connection
 // deadline it applies; the argument to HTTPClient is the whole-request one
-// (0 = none, for the mcp-proxy bridge whose tool calls can be LLM-slow).
+// (0 = none: the mcp-proxy bridge, whose tool calls can be LLM-slow, and seam
+// hook, whose one deadline rides on its ctx so a dial retry cannot restart it).
 
 // healthTimeout bounds a /healthz probe: it pings SQLite and returns, so a
 // slower answer is a wedged daemon, not a busy one.

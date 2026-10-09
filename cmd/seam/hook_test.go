@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -141,6 +145,85 @@ func TestRunHook_NoClientFlagOmitsQueryParam(t *testing.T) {
 	require.Equal(t, "/api/hooks/session-start", (*got).URL.Path)
 	require.False(t, (*got).URL.Query().Has("client"),
 		"no --client => no client param, so the daemon defaults to Claude Code")
+}
+
+// hookEnvAt is a stub env whose config points seam hook at addr, with a
+// user-prompt-submit payload on stdin: an event whose identity params need no
+// git reads.
+func hookEnvAt(addr string) (*env, *bytes.Buffer, *bytes.Buffer) {
+	e, out, errb := stubEnv()
+	e.stdin = strings.NewReader(`{"session_id":"s","cwd":"/w","prompt":"hi"}`)
+	e.loadConfig = func() (config.Config, error) {
+		cfg := config.Defaults()
+		cfg.Addr = addr
+		cfg.MCP.APIKey = "k"
+		return cfg, nil
+	}
+	return e, out, errb
+}
+
+// promptHooks answers the user-prompt-submit hook with a fixed reply, or hangs
+// up after reading it once hangUpAfterRead is set, counting what it read.
+func promptHooks(hits *atomic.Int32, hangUpAfterRead bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		hits.Add(1)
+		if hangUpAfterRead {
+			hangUp(w)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"continue":true}`))
+	})
+}
+
+// A hook that fires while an update restarts the daemon still lands: refused
+// while the port is closed, delivered once the new daemon listens, and read by
+// it exactly once.
+func TestRunHook_RidesOutARestart(t *testing.T) {
+	addr := deadAddr(t)
+	var hits atomic.Int32
+	clk := &fakeClock{onWait: func(n int) {
+		if n == 2 {
+			serveAt(t, addr, promptHooks(&hits, false))
+		}
+	}}
+	e, out, errb := hookEnvAt(addr)
+	require.NoError(t, runHook(context.Background(), e, &hookOpts{retry: clk.policy(hookDialBudget)}, []string{"user-prompt-submit"}))
+	require.Equal(t, `{"continue":true}`, out.String())
+	require.Empty(t, errb.String())
+	require.Equal(t, int32(1), hits.Load())
+	require.Len(t, clk.recorded(), 2)
+}
+
+// The hook's retry budget is 5s on the production backoff: nine refused dials,
+// waits that sum to exactly the budget, and then the hook fails open -- the
+// reason on stderr, nothing on stdout, exit 0.
+func TestRunHook_DialBudgetIsFiveSeconds(t *testing.T) {
+	clk := &fakeClock{}
+	e, out, errb := hookEnvAt(deadAddr(t))
+	require.NoError(t, runHook(context.Background(), e, &hookOpts{retry: clk.policy(hookDialBudget)}, []string{"user-prompt-submit"}))
+	require.Empty(t, out.String())
+	require.Contains(t, errb.String(), "seam hook: request not sent after 9 attempts over 5s")
+	require.Equal(t, 5*time.Second, clk.waited())
+	require.Equal(t, 5*time.Second, hookDialBudget)
+	require.Less(t, hookDialBudget, hookTimeout, "an attempt that connects at the end of the budget still has time to be served")
+}
+
+// A payload the daemon read before the connection dropped is never sent again:
+// the hook fails open on the first failure, with nothing retried.
+func TestRunHook_NeverResendsAfterSending(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(promptHooks(&hits, true))
+	t.Cleanup(srv.Close)
+	clk := &fakeClock{}
+	e, out, errb := hookEnvAt(strings.TrimPrefix(srv.URL, "http://"))
+	require.NoError(t, runHook(context.Background(), e, &hookOpts{retry: clk.policy(hookDialBudget)}, []string{"user-prompt-submit"}))
+	require.Empty(t, out.String())
+	require.Contains(t, errb.String(), "seam hook: ")
+	require.NotContains(t, errb.String(), errNotSent.Error(), "the payload was sent")
+	require.Equal(t, int32(1), hits.Load())
+	require.Empty(t, clk.recorded())
 }
 
 // The pin that keeps the CLI's copy of the event table honest against the

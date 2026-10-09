@@ -442,6 +442,11 @@ These are client-launched helpers, not interactive commands.
   installer registers it as Seamless's default policy so the bearer key remains
   in the 0600 Seamless config. Current Codex also supports direct Streamable
   HTTP; the bridge is a key-handling choice, not a Codex transport requirement.
+  It rides out a daemon restart: while seamlessd cannot be dialed it retries a
+  request for up to 30s, then answers it with a JSON-RPC error. A request that
+  may already have reached the daemon is never re-sent - it is answered with an
+  error - and the bridge keeps serving either way, since a stdio client does not
+  restart a server that exits.
 - `mcp-headers` prints the request headers as a JSON object for Claude Code's
   `headersHelper`: the Authorization header, plus this machine's hostname and
   the agent process that launched it (`X-Seamless-Host`,
@@ -468,8 +473,10 @@ daemon selects its payload adapter.
 Two behaviours matter if you are debugging a hook:
 
 - **Failures do not block the session.** A missing config, an unreachable
-  daemon, or an unreadable stdin is reported on stderr and exits 0. An unknown
-  event name or present-but-invalid `--client` value is an install/configuration
+  daemon, or an unreadable stdin is reported on stderr and exits 0. A daemon
+  that cannot be dialed - restarting after an update - is retried for up to 5s
+  first, inside the hook's 10s overall deadline; a payload that may already have
+  reached it is never sent twice. An unknown event name or present-but-invalid `--client` value is an install/configuration
   bug and exits 1; it never silently becomes Claude Code.
 - **`post-tool-use` pre-filters locally.** It fires machine-wide on every
   `Write`/`Edit`, so the CLI drops everything that is not an `ExitPlanMode`
