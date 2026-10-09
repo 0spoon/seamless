@@ -655,3 +655,52 @@ func DeleteSetting(ctx context.Context, db *sql.DB, key string) error {
 func RepoProjectMap(ctx context.Context, db *sql.DB) (map[string]string, error) {
 	return repoMapMirror(ctx, db)
 }
+
+// SettingUpdateConfig is the settings key holding the console's update
+// override: a JSON-encoded config.UpdateOverride. Unlike the briefing and
+// features rows it does not simply win over the file/env values: the merge
+// (internal/update) lets the more restrictive setting win, so an explicit
+// file/env false locks the console toggle off. This package only stores the
+// row and hands it back.
+const SettingUpdateConfig = "update_config"
+
+// UpdateOverride returns the stored console update override and whether a row
+// exists. A missing or blank row is (zero, false, nil). Unlike BriefingConfig it
+// decodes over nothing: a field the row does not carry stays nil, "no override
+// for that toggle", and the merge with the file/env values lives in
+// internal/update.
+//
+// A corrupt row is an error. Callers log it and fall back to the file/env
+// values -- failure-soft, like the briefing and features readers -- so a bad
+// row can neither take a surface down nor switch update checks on.
+func UpdateOverride(ctx context.Context, db *sql.DB) (config.UpdateOverride, bool, error) {
+	raw, found, err := GetSetting(ctx, db, SettingUpdateConfig)
+	if err != nil {
+		return config.UpdateOverride{}, false, err
+	}
+	if !found || strings.TrimSpace(raw) == "" {
+		return config.UpdateOverride{}, false, nil
+	}
+	var o config.UpdateOverride
+	if err := json.Unmarshal([]byte(raw), &o); err != nil {
+		return config.UpdateOverride{}, false, fmt.Errorf("store.UpdateOverride: decode: %w", err)
+	}
+	return o, true, nil
+}
+
+// SetUpdateOverride persists o as the console update override. A nil field is
+// left out of the row and overrides nothing. Callers decide what may be
+// stored; this only encodes and stores.
+func SetUpdateOverride(ctx context.Context, db *sql.DB, o config.UpdateOverride) error {
+	raw, err := json.Marshal(o)
+	if err != nil {
+		return fmt.Errorf("store.SetUpdateOverride: %w", err)
+	}
+	return SetSetting(ctx, db, SettingUpdateConfig, string(raw))
+}
+
+// ClearUpdateOverride removes the console update override, handing the update
+// settings back to file/env. Clearing twice is a no-op.
+func ClearUpdateOverride(ctx context.Context, db *sql.DB) error {
+	return DeleteSetting(ctx, db, SettingUpdateConfig)
+}

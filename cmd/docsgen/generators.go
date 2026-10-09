@@ -379,15 +379,43 @@ func configRows(v reflect.Value, prefix string) ([]string, error) {
 			rows = append(rows, nested...)
 			continue
 		}
-		rows = append(rows, fmt.Sprintf("| `%s` | %s | %s |\n", key, fv.Type(), formatDefault(fv)))
+		rows = append(rows, fmt.Sprintf("| `%s` | %s | %s |\n", key, configType(fv.Type()), formatDefault(fv)))
 	}
 	return rows, nil
 }
 
+// durationType is config.Duration, which the table names for how it is
+// written rather than for the int64 it is.
+var durationType = reflect.TypeFor[config.Duration]()
+
+// configType renders a key's Type column: the Go type (string, int, []int),
+// except where the Go spelling would mislead someone writing YAML. A
+// config.Duration is written as 6h, so it reads "duration". A pointer is an
+// optional key -- unset is a state of its own, which the build or another
+// setting decides -- so *bool reads "bool, optional".
+func configType(t reflect.Type) string {
+	switch {
+	case t == durationType:
+		return "duration"
+	case t.Kind() == reflect.Pointer:
+		return configType(t.Elem()) + ", optional"
+	default:
+		return t.String()
+	}
+}
+
 // formatDefault renders a default value for the table. A zero value prints as a
 // dash rather than `""` or `0`: the useful statement is "no default", and an
-// empty-looking code span reads like a typo.
+// empty-looking code span reads like a typo. An optional (pointer) key whose
+// default is nil prints "unset" instead: that is a state with a meaning of its
+// own, not the absence of a default.
 func formatDefault(v reflect.Value) string {
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return "unset"
+		}
+		return formatDefault(v.Elem())
+	}
 	if v.IsZero() {
 		return "-"
 	}
@@ -401,6 +429,8 @@ func formatDefault(v reflect.Value) string {
 		}
 		return "`[" + strings.Join(parts, ", ") + "]`"
 	default:
+		// %v honors fmt.Stringer, which is how a config.Duration prints as 6h
+		// rather than as its nanosecond count.
 		return fmt.Sprintf("`%v`", v.Interface())
 	}
 }

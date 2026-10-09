@@ -444,6 +444,11 @@ const (
 
 	// Project isolation: the owner moved a project's agent-facing fence.
 	EventProjectIsolationChanged EventKind = "project.isolation.changed" // (payload: slug, from, to, families + parent detached by a tighten, by)
+
+	// Background update check (internal/update). Payload values are parsed
+	// X.Y.Z versions and fixed install-kind words, never release-API text.
+	EventUpdateAvailable EventKind = "update.available" // a newer installable release was seen (item_id: the version; payload: version, current, kind); latched once per version via RecordOnce
+	EventUpdateApplied   EventKind = "update.applied"   // the daemon started on a different version than the last one (item_id: the new version; payload: from, to, direction); recorded after the state file is written
 )
 
 // Event is one entry in the append-only log. Payload carries kind-specific

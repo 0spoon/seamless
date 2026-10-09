@@ -3,9 +3,11 @@ package main
 import (
 	"maps"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -128,6 +130,7 @@ func TestGenerateConfigCoversExample(t *testing.T) {
 		"llm.provider", "llm.openai.chat_model", "llm.ollama.base_url", "llm.anthropic.chat_model",
 		"gardener.enabled", "gardener.session_idle_minutes",
 		"capture.allowed_ports", "plan_capture.enabled",
+		"update.check", "update.check_interval",
 	} {
 		require.Contains(t, md, "| `"+key+"` |", "key %s is missing from the table", key)
 	}
@@ -135,8 +138,39 @@ func TestGenerateConfigCoversExample(t *testing.T) {
 	require.Contains(t, md, "| `addr` | string | `127.0.0.1:8081` |")
 	require.Contains(t, md, "| `mcp.api_key` | string | - |", "a key with no default says so")
 	require.Contains(t, md, "| `capture.allowed_ports` | []int | `[80, 443]` |")
+	require.Contains(t, md, "| `update.check` | bool, optional | unset |",
+		"an optional key's unset default is a state of its own, not a missing default")
+	require.Contains(t, md, "| `update.check_interval` | duration | `6h` |",
+		"a duration reads as it is written, not as a config.Duration of nanoseconds")
 	require.Contains(t, md, "```yaml", "the example file ships verbatim")
 	require.NotContains(t, md, "| `sourcePath` |", "unexported bookkeeping is not a config key")
+}
+
+// TestConfigTypeAndDefault pins the Type and Default cells for the kinds the
+// real config does not exercise yet: a SET optional key renders its value the
+// way a plain key would (a zero one included, as a dash), and a zero duration
+// is a dash like any other zero.
+func TestConfigTypeAndDefault(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    any
+		wantType string
+		wantDflt string
+	}{
+		{"unset optional bool", (*bool)(nil), "bool, optional", "unset"},
+		{"set optional bool", new(true), "bool, optional", "`true`"},
+		{"set optional false", new(false), "bool, optional", "-"},
+		{"duration", config.Duration(90 * time.Minute), "duration", "`1h30m`"},
+		{"zero duration", config.Duration(0), "duration", "-"},
+		{"plain int", 60, "int", "`60`"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := reflect.ValueOf(tt.value)
+			require.Equal(t, tt.wantType, configType(v.Type()))
+			require.Equal(t, tt.wantDflt, formatDefault(v))
+		})
+	}
 }
 
 func TestGenerateUnknown(t *testing.T) {

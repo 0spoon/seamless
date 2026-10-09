@@ -70,6 +70,7 @@ type Config struct {
 	Gardener    Gardener    `yaml:"gardener"`
 	Capture     Capture     `yaml:"capture"`
 	PlanCapture PlanCapture `yaml:"plan_capture"`
+	Update      Update      `yaml:"update"`
 
 	// sourcePath records which config file was loaded (empty = defaults only).
 	sourcePath string `yaml:"-"`
@@ -547,6 +548,8 @@ func Defaults() Config {
 		},
 		Capture:     Capture{AllowedPorts: defaultAllowedPorts()},
 		PlanCapture: PlanCapture{Enabled: true, AutoTask: true, InjectRelated: true},
+		// Check stays nil: unset means the build decides (internal/update).
+		Update: Update{CheckInterval: Duration(DefaultUpdateCheckInterval)},
 	}
 }
 
@@ -638,12 +641,14 @@ func LoadFrom(path string) (Config, error) {
 	return cfg, nil
 }
 
-// explicitNullPath returns the first YAML key explicitly assigned null. Config
-// has no nullable fields: a null scalar decoded over Defaults can otherwise
-// preserve or erase a value depending on its Go type, making a present value
-// indistinguishable from absence. Syntax, duplicate-key, and trailing-document
-// errors are left to the strict concrete decode below so diagnostics stay
-// canonical.
+// explicitNullPath returns the first YAML key explicitly assigned null. No
+// Config key gives null a meaning: a null scalar decoded over Defaults can
+// otherwise preserve or erase a value depending on its Go type, making a
+// present value indistinguishable from absence. That includes the optional
+// pointer keys (update.check): leaving the key out is how they say "unset", so
+// a null would only be a second spelling of it. Syntax, duplicate-key, and
+// trailing-document errors are left to the strict concrete decode below so
+// diagnostics stay canonical.
 func explicitNullPath(data []byte) string {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	var doc yaml.Node
@@ -766,6 +771,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if err := c.Console.Validate(); err != nil {
+		return err
+	}
+	if err := c.Update.Validate(); err != nil {
 		return err
 	}
 	if c.Briefing.HardCapMultiplier > 0 && c.Budgets.MaxBriefingTokens > math.MaxInt/c.Briefing.HardCapMultiplier {
@@ -911,6 +919,12 @@ func (c *Config) applyEnv() error {
 	if err := envBool("SEAMLESS_PLAN_CAPTURE_INJECT_RELATED", &c.PlanCapture.InjectRelated); err != nil {
 		return err
 	}
+	if err := envBoolPtr("SEAMLESS_UPDATE_CHECK", &c.Update.Check); err != nil {
+		return err
+	}
+	if err := envDuration("SEAMLESS_UPDATE_CHECK_INTERVAL", &c.Update.CheckInterval); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1022,6 +1036,38 @@ func envBool(key string, dst *bool) error {
 		return fmt.Errorf("config: env %s: %w", key, err)
 	}
 	*dst = b
+	return nil
+}
+
+// envBoolPtr is envBool for an optional key, whose nil means "unset". An unset
+// variable leaves dst alone (a nil stays nil, a file value stands); a set one
+// points dst at the parsed value; a set-but-unparseable one is an error, never
+// false.
+func envBoolPtr(key string, dst **bool) error {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return nil
+	}
+	b, err := strconv.ParseBool(strings.TrimSpace(v))
+	if err != nil {
+		return fmt.Errorf("config: env %s: %w", key, err)
+	}
+	*dst = &b
+	return nil
+}
+
+// envDuration overlays a duration through ParseDuration, so the environment
+// reads exactly what the file does: "6h" or a bare 0, never a bare "30".
+func envDuration(key string, dst *Duration) error {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return nil
+	}
+	d, err := ParseDuration(v)
+	if err != nil {
+		return fmt.Errorf("config: env %s: %w", key, err)
+	}
+	*dst = d
 	return nil
 }
 

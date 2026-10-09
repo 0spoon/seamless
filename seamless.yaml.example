@@ -302,3 +302,19 @@ plan_capture:
   # memories to the planning agent as additionalContext.
   # env: SEAMLESS_PLAN_CAPTURE_INJECT_RELATED
   inject_related: true
+
+# Update check. The daemon asks GitHub's releases API whether a newer Seamless
+# release exists -- one anonymous request that carries no identifiers -- and
+# tells you when one does. Nothing is installed automatically.
+update:
+  # Unset (the default) means on for release builds and off for builds from
+  # source. false means zero update traffic: no request to GitHub at all. The
+  # key is left commented out because seamlessd releases before this one reject
+  # config keys they do not know, so setting it pins this file to this release
+  # or newer.
+  # env: SEAMLESS_UPDATE_CHECK
+  # check: false
+  # Time between checks, as a Go duration (6h, 90m, 1h30m) from 1h to 720h. A
+  # bare number is refused rather than guessed at: write 6h, not 6.
+  # env: SEAMLESS_UPDATE_CHECK_INTERVAL
+  check_interval: 6h
