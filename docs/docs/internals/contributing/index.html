@@ -252,9 +252,12 @@ handful of rules that are worth knowing before you write a line.</p>
 targets.</p>
 <h2 id="the-edit-test-loop-make-install">The edit-test loop: make install</h2>
 <p><code>make install</code> (macOS-only; it renders the launchd plist from <code>deploy/launchd/</code>)
-is also the dev loop. When the rendered plist is unchanged - the common case -
-it skips the launchd bootout/bootstrap and kickstarts the service in place, so
-its marginal cost over <code>make build</code> is two file copies.</p>
+is also the dev loop. It reloads the service with a launchd bootout/bootstrap
+every time, even when the rendered plist is unchanged: each build is a new
+binary, and kickstarting the loaded job in place after its binary was swapped
+runs it against the code-signing identity launchd cached, which macOS 26 kills,
+leaving the daemon down for launchd's 10s throttle. Its marginal cost over
+<code>make build</code> is two file copies and a restart of about a second.</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make build      <span class="c1"># compile only; nothing live changes</span>
 </span></span><span class="line"><span class="cl">make install    <span class="c1"># ...and now it does</span>
 </span></span><span class="line"><span class="cl">make logs       <span class="c1"># follow ~/.seamless/seamlessd.log</span>

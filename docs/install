@@ -693,8 +693,13 @@ EOF
 	# because the binary underneath did change.
 	cmp -s "$TMP/$LABEL.plist" "$plist" 2>/dev/null || cat "$TMP/$LABEL.plist" >"$plist"
 
-	# bootout is asynchronous: the label lingers for a moment and bootstrapping
-	# too soon fails with "Bootstrap failed: 5: Input/output error". Retry.
+	# bootout is asynchronous: it returns before the old daemon has exited, the
+	# label lingers until it has, and bootstrapping too soon fails with
+	# "Bootstrap failed: 5: Input/output error". Retry every 0.1s, so a daemon
+	# that takes a few dozen ms to drain costs one retry instead of a whole
+	# second on every install and update. The 100 tries (10s and up) outlast
+	# launchd's 5s exit timeout, after which a daemon that ignored SIGTERM is
+	# SIGKILLed and its label freed.
 	#
 	# The plist sets RunAtLoad, so a bootstrap that succeeded has already
 	# started the new binary. Kicking it anyway kills the process launchd
@@ -709,13 +714,13 @@ EOF
 	launchctl bootout "gui/$uid/$LABEL" 2>/dev/null || true
 	booted=0
 	i=0
-	while [ "$i" -lt 10 ]; do
+	while [ "$i" -lt 100 ]; do
 		if launchctl bootstrap "gui/$uid" "$plist" 2>/dev/null; then
 			booted=1
 			break
 		fi
 		i=$((i + 1))
-		sleep 1
+		sleep 0.1
 	done
 	[ "$booted" = 1 ] || launchctl kickstart -k "gui/$uid/$LABEL" 2>/dev/null || true
 	launchctl print "gui/$uid/$LABEL" >/dev/null 2>&1 ||

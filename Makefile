@@ -481,8 +481,13 @@ console-chrome: build
 	$(BIN_DIR)/$(BINARY) console-open --browser "Google Chrome"
 
 # Boot the (freshly rendered) $(SVC_PLIST): evict any old instance, bootstrap
-# with retry (bootout is async, so the label lingers briefly and bootstrapping
-# too soon fails with "Bootstrap failed: 5: Input/output error"), and verify.
+# with retry, and verify. bootout is asynchronous: it returns before the old
+# daemon has exited, the label lingers until it has, and bootstrapping too soon
+# fails with "Bootstrap failed: 5: Input/output error". The retry runs every
+# 0.1s, so a daemon that takes a few dozen ms to drain costs one retry rather
+# than a whole second per install; the 100 tries (10s and up) outlast launchd's
+# 5s exit timeout, after which a daemon that ignored SIGTERM is SIGKILLed and
+# its label freed.
 #
 # The plist sets RunAtLoad, so a bootstrap that succeeds has already started the
 # daemon -- kickstart is the fallback for the path where it did not (a wedged job
@@ -500,15 +505,15 @@ console-chrome: build
 # retries, but only once the 10s throttle interval elapses -- so the daemon
 # returns ~10s late (blowing _wait-healthy) and every install leaves a crash
 # report. bootout/bootstrap re-registers the job against the new binary, so the
-# first spawn survives and the restart costs ~2s. Go binaries are adhoc
-# linker-signed with no CMS blob, which is what the constraint rejects; nothing
-# here can be signed away.
+# first spawn survives and the restart costs about a second, most of it the
+# daemon's own startup. Go binaries are adhoc linker-signed with no CMS blob,
+# which is what the constraint rejects; nothing here can be signed away.
 _reload-service:
 	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
 	@booted=0; \
-	for i in 1 2 3 4 5 6 7 8 9 10; do \
+	for i in $$(seq 1 100); do \
 	    if launchctl bootstrap gui/$(UID) $(SVC_PLIST) 2>/dev/null; then booted=1; break; fi; \
-	    sleep 1; \
+	    sleep 0.1; \
 	done; \
 	[ $$booted -eq 1 ] || launchctl kickstart -k gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
 	@launchctl print gui/$(UID)/$(SVC_LABEL) >/dev/null 2>&1 \
