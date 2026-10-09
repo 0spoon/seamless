@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/arctop/seamless/internal/config"
 	"github.com/arctop/seamless/internal/update"
 	"github.com/stretchr/testify/require"
 )
@@ -463,6 +464,69 @@ func TestReportUpdateCheck_RateLimitHint(t *testing.T) {
 	err := reportUpdateCheck(context.Background(), io.Discard, f, "linux", "0.6.0", "0.6.0", nil)
 	require.ErrorIs(t, err, update.ErrRateLimited)
 	require.ErrorContains(t, err, "SEAMLESS_VERSION")
+}
+
+// The daemon's rows come from its own records, so --check prints them even
+// when the release list cannot be read: after a failed or paused update is
+// when the owner needs them, and the network may well be why.
+func TestReportUpdateCheck_DaemonRowsWithoutTheReleaseList(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+	client := srv.Client()
+	client.CheckRedirect = update.HTTPSOnlyRedirect
+	f := &update.Fetcher{Client: client, URL: srv.URL, Now: time.Now}
+
+	now := time.Now()
+	dir := t.TempDir()
+	require.NoError(t, update.SaveState(dir, autoRecord(now, func(s *update.State) {
+		s.Paused = &update.Pause{Reason: update.PauseRollbacks, Versions: []update.Version{v073, v074}, At: now.Add(-time.Hour)}
+	})))
+	cfg := config.Defaults()
+	cfg.DataDir = dir
+	view := loadUpdateView(context.Background(), cfg, nil)
+
+	var buf bytes.Buffer
+	err := reportUpdateCheck(context.Background(), &buf, f, "linux", "0.7.2", "0.7.2+abc1234", &view)
+	require.ErrorIs(t, err, update.ErrUnavailable)
+	out := buf.String()
+	for _, want := range []string{
+		"current  0.7.2+abc1234",
+		"newest   unknown -- the release list could not be read",
+		"mode     notify -- automatic updates paused themselves",
+		"paused   since ",
+	} {
+		require.Contains(t, out, want)
+	}
+}
+
+// With the release list read, the daemon's rows follow the verdict.
+func TestReportUpdateCheck_DaemonRowsFollowTheVerdict(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(releaseListJSON))
+	}))
+	defer srv.Close()
+	client := srv.Client()
+	client.CheckRedirect = update.HTTPSOnlyRedirect
+	f := &update.Fetcher{Client: client, URL: srv.URL, Now: time.Now}
+
+	now := time.Now()
+	dir := t.TempDir()
+	require.NoError(t, update.SaveState(dir, autoRecord(now, func(s *update.State) {
+		s.Releases = append(s.Releases, signed(v073, now.Add(-48*time.Hour)))
+	})))
+	cfg := config.Defaults()
+	cfg.DataDir = dir
+	view := loadUpdateView(context.Background(), cfg, nil)
+
+	var buf bytes.Buffer
+	require.NoError(t, reportUpdateCheck(context.Background(), &buf, f, "linux", "0.5.4", "0.5.4", &view))
+	out := buf.String()
+	status := strings.Index(out, "update available")
+	target := strings.Index(out, "target   v0.7.3")
+	require.Positive(t, status, out)
+	require.Greater(t, target, status, "the daemon's rows come after the verdict:\n%s", out)
 }
 
 // These use TLS servers because fetchInstaller refuses plain http outright --

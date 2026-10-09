@@ -138,6 +138,7 @@ func doctor(args []string) error {
 	checks = append(checks, featureSkillsCheck(db, cfg))
 	checks = append(checks, gardenerCheck(cfg))
 	checks = append(checks, updatesCheck(context.Background(), cfg, db, time.Now()))
+	checks = append(checks, updateConfirmChecks(cfg)...)
 
 	return reportChecks(checks)
 }

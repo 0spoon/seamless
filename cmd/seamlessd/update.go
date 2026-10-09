@@ -572,8 +572,8 @@ func fetchInstallerWith(client *http.Client, url string) (string, error) {
 	return string(body), nil
 }
 
-// cliUpdateView is the update view `update --check` adds its mode and
-// last-check rows from, or nil when no config loads (the check itself still
+// cliUpdateView is the update view `update --check` adds the daemon's rows
+// from (updateCheckRows), or nil when no config loads (the check itself still
 // runs). configPath is --config, "" for the usual search. The database is
 // opened read-only and only to read the console's override: a newer CLI must
 // never migrate a database an older daemon serves.
@@ -597,8 +597,11 @@ func cliUpdateView(ctx context.Context, configPath string) *updateView {
 // installable release for goos with the running build, printing a short
 // verdict. current is the bare version that is compared; display is what the
 // "current" row shows (it carries +commit). view, when set, adds what the
-// daemon's update check is doing (mode, last check). It changes nothing, and
-// it asks regardless of update.check: running it is the owner asking.
+// daemon's update check and automatic updates are doing (updateCheckRows),
+// and those rows print even when the release list cannot be read: they come
+// from the daemon's own records, and a failed or paused update is when the
+// owner needs them. It changes nothing, and it asks regardless of
+// update.check: running it is the owner asking.
 //
 // "Newest" is the highest version the list holds once drafts, prereleases,
 // irregular tags and releases still uploading their assets are dropped
@@ -608,9 +611,17 @@ func reportUpdateCheck(ctx context.Context, w io.Writer, f *update.Fetcher, goos
 	page, err := f.Fetch(ctx, "")
 	if err != nil {
 		if errors.Is(err, update.ErrRateLimited) {
-			return fmt.Errorf("seamlessd.update: %w (try again later, or pin a version: SEAMLESS_VERSION=x.y.z seamlessd update)", err)
+			err = fmt.Errorf("seamlessd.update: %w (try again later, or pin a version: SEAMLESS_VERSION=x.y.z seamlessd update)", err)
+		} else {
+			err = fmt.Errorf("seamlessd.update: %w", err)
 		}
-		return fmt.Errorf("seamlessd.update: %w", err)
+		if view != nil {
+			fmt.Fprintf(w, "\n%s %s\n", bold("Seamless"), dim("update --check"))
+			fieldRowTo(w, "current", display)
+			fieldRowTo(w, "newest", yellow("unknown")+dim(" -- the release list could not be read"))
+			updateCheckRows(w, *view, time.Now())
+		}
+		return err
 	}
 
 	fmt.Fprintf(w, "\n%s %s\n", bold("Seamless"), dim("update --check"))
