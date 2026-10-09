@@ -30,6 +30,14 @@ It refuses to start at all under `role: client`, before it opens a file or a
 port: a client install has no daemon of its own by definition, and serving one
 would give the machine a second, empty corpus its own hooks never write to.
 
+One daemon per data dir: `serve` takes an exclusive lock on
+`<data_dir>/seamlessd.lock` before it opens the database, and records its PID
+there. A second `serve` on the same data dir waits up to 30s for the holder to
+exit, then fails naming the lock and the holder's PID without touching the
+database. The operating system drops the lock when the holder exits, however it
+exits; never delete the file. On a file system that cannot lock, `serve` warns
+and runs unguarded, as earlier releases did.
+
 With `tls.cert_file` and `tls.key_file` both set, the listener is **https**
 with a TLS 1.2 floor, and the console session cookie is marked `Secure`. One
 without the other is refused when the config loads. Outermost in the handler
@@ -90,7 +98,7 @@ Checks stop early if config or the database cannot be loaded at all.
 | `server_url` | Fetches `/healthz` through the advertised URL. Not answering is **info** (the daemon is often stopped while doctor runs); a `421` is a **fail** naming the Host header it just refused, which means the allowlist and the advertised name disagree. A derived URL says so. |
 | `tls` | Off, or the certificate's expiry (a warning from 30 days out, nothing auto-renews) and whether its SANs cover the host of `server_url` - the one that fails at the client's handshake with a message that names no file on the server. |
 | `database` | Path, schema version, and table count. Opens and migrates if needed. |
-| `schema version` | An **info** line pairing what the database has applied with what this binary compiles - `v25 applied / v25 compiled`. A database *ahead* of the binary warns: it was written by a newer `seamlessd`, which is also why an archive from it would be refused. |
+| `schema version` | An **info** line pairing what the database has applied with what this binary compiles - `v25 applied / v25 compiled`. A database *ahead* of the binary warns: it was migrated by a newer `seamlessd` (a downgrade, or an update rollback that could not restore the pre-update database). Run that newer release again (`seamlessd update`), or import a backup taken before it (`seamlessd import`). `serve` logs the same warning at startup, and an archive from such a database would be refused. |
 | `repo map` | Warns when mapped paths belonging to **this** host name directories that no longer exist on disk. A moved repo adopts its project at its next session start; a moved-and-renamed repo needs the printed `map-repo` override, and `unmap-repo --stale` clears the dead entries. Rows belonging to other hosts are counted and reported as not verifiable from here - never stat'd, never treated as missing. |
 | `remote sessions` | An **info** line: which other machines used this daemon in the last 24 hours, and how many daemon-side captures were skipped for them. `none in 24h` on a single-machine install. |
 | `mcp_tools` | On a server install, fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in. On a `role: client` install it is the live count instead: `tools/list` against the server, judged against that server's effective feature state. |

@@ -50,6 +50,16 @@ type ExportOptions struct {
 
 	// Host overrides the recorded source host. Empty means os.Hostname.
 	Host string
+
+	// TmpDir is where the export stages: the database snapshot is written into
+	// a fresh seamless-export-* directory under it, streamed into the archive,
+	// and removed before Export returns, so it needs room for one full copy of
+	// seam.db. Empty means the OS default (os.TempDir), which is often a small
+	// RAM-backed tmpfs; a caller snapshotting a large database names a directory
+	// on a real disk instead, such as one beside the data dir. It must already
+	// exist: a missing TmpDir is an error, never a quiet fallback to the very
+	// default the caller chose to avoid.
+	TmpDir string
 }
 
 // Export writes a complete archive of the instance at opts.DataDir to opts.Out
@@ -84,7 +94,7 @@ func Export(ctx context.Context, opts ExportOptions) (Manifest, error) {
 		host = h
 	}
 
-	tmpDir, err := os.MkdirTemp("", "seamless-export-")
+	tmpDir, err := os.MkdirTemp(opts.TmpDir, "seamless-export-")
 	if err != nil {
 		return Manifest{}, fmt.Errorf("archive.Export: temp dir: %w", err)
 	}

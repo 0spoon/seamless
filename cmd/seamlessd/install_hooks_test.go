@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,10 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/arctop/seamless/internal/config"
+	"github.com/arctop/seamless/internal/core"
 	"github.com/arctop/seamless/internal/features"
 	"github.com/arctop/seamless/internal/hooks"
 	agentskills "github.com/arctop/seamless/internal/skills"
@@ -700,4 +703,158 @@ func TestRunInstallHooks_ServerURLRefusesAnExistingConfig(t *testing.T) {
 	after, err2 := os.ReadFile(cfgPath)
 	require.NoError(t, err2)
 	require.Equal(t, body, string(after))
+}
+
+// rewindSchema makes db look like a database an older release last served:
+// schema_migrations stops at applied. Only the version bookkeeping is rewound,
+// which is all effectiveFeatures can see -- it asks the version and reads two
+// tables every schema has had since migration 001.
+func rewindSchema(t *testing.T, db *sql.DB, applied int) {
+	t.Helper()
+	_, err := db.ExecContext(context.Background(), `DELETE FROM schema_migrations WHERE version > ?`, applied)
+	require.NoError(t, err)
+}
+
+// schemaVersionAt reads the applied schema version without migrating.
+func schemaVersionAt(t *testing.T, dbPath string) int {
+	t.Helper()
+	db, err := store.OpenExisting(dbPath)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, db.Close()) }()
+	v, err := store.SchemaVersion(db)
+	require.NoError(t, err)
+	return v
+}
+
+// addTrial records one trial: the data migration 022's grandfather clause looks
+// for before it keeps research on.
+func addTrial(t *testing.T, db *sql.DB) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := store.EnsureProject(ctx, db, "lab", "Lab")
+	require.NoError(t, err)
+	require.NoError(t, store.CreateTrial(ctx, db, core.Trial{
+		ID: "01TRIALGRANDFATHER", Lab: "boot-race", Title: "a trial the owner already recorded",
+		Outcome: core.OutcomePass, ProjectSlug: "lab", CreatedAt: time.Now().UTC(),
+	}))
+}
+
+// install-hooks runs while the OLD daemon still serves the database -- the
+// installers restart the service only afterwards -- so it reads the stored
+// toggles without migrating anything, and for a database from before migration
+// 022 it still answers with what 022 is about to seed.
+func TestEffectiveFeatures_ReadsWithoutMigrating(t *testing.T) {
+	ctx := context.Background()
+	beforeGrandfather := featuresGrandfatherVersion - 4 // 018: v0.4.9, the last release without it
+	tests := []struct {
+		name    string
+		applied int
+		setup   func(t *testing.T, db *sql.DB)
+		want    bool
+	}{
+		{name: "current, no override", applied: store.LatestSchemaVersion()},
+		{
+			name: "current, research switched on in the console", applied: store.LatestSchemaVersion(),
+			setup: func(t *testing.T, db *sql.DB) {
+				require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Research: true}))
+			},
+			want: true,
+		},
+		{
+			// 022 has run, so whatever it was going to seed is already a row.
+			name: "older but past 022, with trials", applied: featuresGrandfatherVersion + 1, setup: addTrial,
+		},
+		{
+			name: "before 022, with trials: research is about to be kept on", applied: beforeGrandfather,
+			setup: addTrial, want: true,
+		},
+		{name: "before 022, without trials", applied: beforeGrandfather},
+		{
+			// 022 seeds only where no override row exists at all, even a blank one.
+			name: "before 022, with trials and an override row already present", applied: beforeGrandfather,
+			setup: func(t *testing.T, db *sql.DB) {
+				addTrial(t, db)
+				require.NoError(t, store.SetSetting(ctx, db, store.SettingFeaturesConfig, " "))
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dataDir := t.TempDir()
+			dbPath := filepath.Join(dataDir, "seam.db")
+			db, err := store.Open(dbPath)
+			require.NoError(t, err)
+			if tt.setup != nil {
+				tt.setup(t, db)
+			}
+			rewindSchema(t, db, tt.applied)
+			require.NoError(t, db.Close())
+
+			var got config.Features
+			out := captureStdout(t, func() error {
+				got = effectiveFeatures(config.Config{DataDir: dataDir})
+				return nil
+			})
+			require.NotContains(t, out, "warning", "a readable database of any age is no reason to warn")
+			require.Equal(t, tt.want, got.Research)
+			require.Equal(t, tt.applied, schemaVersionAt(t, dbPath), "install-hooks must never migrate the database")
+		})
+	}
+}
+
+// Failure-soft: a database that cannot be read costs a warning, never the
+// install, and is left exactly as it was found.
+func TestEffectiveFeatures_UnreadableDatabaseFallsBackUntouched(t *testing.T) {
+	dataDir := t.TempDir()
+	dbPath := filepath.Join(dataDir, "seam.db")
+	garbage := []byte("not a SQLite database, and nothing may migrate one over it\n")
+	require.NoError(t, os.WriteFile(dbPath, garbage, 0o600))
+
+	var got config.Features
+	out := captureStdout(t, func() error {
+		got = effectiveFeatures(config.Config{DataDir: dataDir, Features: config.Features{Research: true}})
+		return nil
+	})
+	require.Contains(t, out, "warning:")
+	require.Contains(t, out, "using the file/env features config")
+	require.True(t, got.Research, "the file/env base is the fallback")
+	after, err := os.ReadFile(dbPath)
+	require.NoError(t, err)
+	require.Equal(t, garbage, after)
+}
+
+// End to end, the upgrade the installer performs over a release from before
+// migration 022: the old daemon's database is read as it stands, a trial user's
+// research skill is kept, and the schema is left for the new daemon to migrate.
+func TestRunInstallHooks_UpgradeFromBefore022KeepsResearchWithoutMigrating(t *testing.T) {
+	home := t.TempDir()
+	codexHome := t.TempDir()
+	tmp := t.TempDir()
+	dataDir := filepath.Join(tmp, "data")
+	cfgPath := filepath.Join(tmp, "seamless.yaml")
+	require.NoError(t, os.WriteFile(cfgPath,
+		[]byte("data_dir: "+dataDir+"\nmcp:\n  api_key: \"test-key\"\n"), 0o600))
+	t.Setenv("SEAMLESS_CONFIG", cfgPath)
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("CODEX_HOME", codexHome)
+
+	dbPath := filepath.Join(dataDir, "seam.db")
+	db, err := store.Open(dbPath)
+	require.NoError(t, err)
+	addTrial(t, db)
+	rewindSchema(t, db, featuresGrandfatherVersion-4)
+	require.NoError(t, db.Close())
+
+	out := captureStdout(t, func() error {
+		return runInstallHooks([]string{
+			"--client", "codex", "--codex-hooks", filepath.Join(tmp, "hooks.json"),
+			"--mcp=false", "--seam", "/opt/seam", "--url", "http://127.0.0.1:8081",
+		})
+	})
+	require.Contains(t, out, "research  installed")
+	require.NotContains(t, out, "feature toggles")
+	require.FileExists(t, filepath.Join(codexHome, "skills", agentskills.ResearchName, "SKILL.md"))
+	require.Equal(t, featuresGrandfatherVersion-4, schemaVersionAt(t, dbPath),
+		"the old daemon's schema is the new daemon's to migrate")
 }

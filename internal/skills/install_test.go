@@ -241,3 +241,141 @@ func TestAssets_ArePortableCodexSkills(t *testing.T) {
 		}
 	}
 }
+
+// Delivered answers what an unattended update asks before it re-runs the
+// installer: would the re-run KEEP this skill, or ADD it? Each case builds one
+// on-disk state, asks Delivered, then lets Install confirm the answer -- a
+// fresh install (ActionInstalled) is exactly "not delivered".
+func TestDelivered_AgreesWithWhatInstallWouldDo(t *testing.T) {
+	install := func(t *testing.T, client Client, opts Options) Result {
+		t.Helper()
+		result, err := Install(client, opts)
+		require.NoError(t, err)
+		return result
+	}
+	tests := []struct {
+		name         string
+		setup        func(t *testing.T, client Client, opts Options)
+		wantOnboard  bool
+		wantResearch bool
+	}{
+		{name: "never installed"},
+		{
+			name:        "installed",
+			setup:       func(t *testing.T, c Client, o Options) { install(t, c, o) },
+			wantOnboard: true, wantResearch: true,
+		},
+		{
+			name: "onboard used: it removed itself and left the marker",
+			setup: func(t *testing.T, c Client, o Options) {
+				root := install(t, c, o).Root
+				require.NoError(t, os.RemoveAll(filepath.Join(root, OnboardName)))
+			},
+			wantOnboard: true, wantResearch: true,
+		},
+		{
+			name: "onboard from before the marker: the directory alone",
+			setup: func(t *testing.T, c Client, o Options) {
+				root := install(t, c, o).Root
+				require.NoError(t, os.Remove(filepath.Join(root, OnboardMarker)))
+			},
+			wantOnboard: true, wantResearch: true,
+		},
+		{
+			name: "research deleted by the owner",
+			setup: func(t *testing.T, c Client, o Options) {
+				root := install(t, c, o).Root
+				require.NoError(t, os.RemoveAll(filepath.Join(root, ResearchName)))
+			},
+			wantOnboard: true,
+		},
+		{
+			name: "research removed by a run with its feature off",
+			setup: func(t *testing.T, c Client, o Options) {
+				install(t, c, o)
+				o.DisabledSkills = []string{ResearchName}
+				require.Equal(t, ActionRemoved, install(t, c, o).Research)
+			},
+			wantOnboard: true,
+		},
+		{
+			name: "uninstalled: Remove takes the packages and the marker",
+			setup: func(t *testing.T, c Client, o Options) {
+				install(t, c, o)
+				_, err := Remove(c, o, false)
+				require.NoError(t, err)
+			},
+		},
+	}
+	for _, client := range []Client{ClientClaude, ClientCodex} {
+		for _, tt := range tests {
+			t.Run(string(client)+"/"+tt.name, func(t *testing.T) {
+				home := t.TempDir()
+				opts := Options{HomeDir: home, CodexHome: filepath.Join(home, "codex-profile")}
+				if tt.setup != nil {
+					tt.setup(t, client, opts)
+				}
+
+				onboard, err := Delivered(client, opts, OnboardName)
+				require.NoError(t, err)
+				require.Equal(t, tt.wantOnboard, onboard, "onboard")
+				research, err := Delivered(client, opts, ResearchName)
+				require.NoError(t, err)
+				require.Equal(t, tt.wantResearch, research, "research")
+
+				// Install is the ground truth: not delivered means a re-run adds it.
+				result := install(t, client, opts)
+				require.Equal(t, !tt.wantOnboard, result.Onboard == ActionInstalled, "onboard: %s", result.Onboard)
+				require.Equal(t, !tt.wantResearch, result.Research == ActionInstalled, "research: %s", result.Research)
+			})
+		}
+	}
+}
+
+// Delivered only looks: on an untouched home it creates nothing, and one
+// client's delivery says nothing about the other's root.
+func TestDelivered_ReadOnlyAndPerClient(t *testing.T) {
+	home := t.TempDir()
+	opts := Options{HomeDir: home}
+	for _, name := range Published() {
+		got, err := Delivered(ClientClaude, opts, name)
+		require.NoError(t, err)
+		require.False(t, got, name)
+	}
+	entries, err := os.ReadDir(home)
+	require.NoError(t, err)
+	require.Empty(t, entries, "a read-only question writes nothing")
+
+	_, err = Install(ClientClaude, opts)
+	require.NoError(t, err)
+	for _, name := range Published() {
+		claude, err := Delivered(ClientClaude, opts, name)
+		require.NoError(t, err)
+		require.True(t, claude, name)
+		codex, err := Delivered(ClientCodex, opts, name)
+		require.NoError(t, err)
+		require.False(t, codex, "Claude's %s says nothing about Codex's root", name)
+	}
+}
+
+func TestDelivered_RejectsWhatItCannotAnswer(t *testing.T) {
+	opts := Options{HomeDir: t.TempDir()}
+	tests := []struct {
+		name   string
+		client Client
+		opts   Options
+		skill  string
+		want   string
+	}{
+		{"unknown skill", ClientClaude, opts, "seam-unknown", "valid values are seam-onboard, seam-research"},
+		{"unknown client", Client("gemini"), opts, ResearchName, "valid values are claude, codex"},
+		{"no home", ClientClaude, Options{}, OnboardName, "empty user home"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Delivered(tt.client, tt.opts, tt.skill)
+			require.ErrorContains(t, err, tt.want)
+			require.False(t, got)
+		})
+	}
+}

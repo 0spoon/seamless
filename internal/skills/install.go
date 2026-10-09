@@ -178,6 +178,52 @@ func Installed(client Client, opts Options, name string) (string, bool, error) {
 	return target, present, nil
 }
 
+// Delivered reports whether the maintained skill name has already been delivered
+// to client's skill root: the read-only answer to "would re-running the
+// installer KEEP this skill rather than ADD it?". An unattended update asks it
+// before re-running the installer, because an update never adds a skill the
+// owner removed. Only opts.HomeDir and opts.CodexHome are read; the opt-outs and
+// DisabledSkills describe one run, not what is on disk.
+//
+// The answer follows what Install does with each package:
+//
+//   - seam-research is recurring. Install puts it back whenever it is missing,
+//     so only its package directory counts: present is delivered, and absent is
+//     not, whether the owner deleted it, a run with its feature off removed it,
+//     or it was never installed -- in every case a re-run would add it.
+//   - seam-onboard is one-shot. The package directory OR the delivery marker
+//     (OnboardMarker) counts: with the marker and no directory the skill ran and
+//     removed itself, and Install reports ActionAlreadyDelivered instead of
+//     reinstalling it; with the directory a re-run only refreshes it. With
+//     neither it is not delivered: a re-run would install it fresh, as it does
+//     after Remove, which deletes both.
+//
+// Presence is Lstat-based, exactly as Install decides it. Any other name is an
+// error naming the valid values.
+func Delivered(client Client, opts Options, name string) (bool, error) {
+	if !slices.Contains(Published(), name) {
+		return false, fmt.Errorf("skills.Delivered: invalid skill %q: valid values are %s",
+			name, strings.Join(Published(), ", "))
+	}
+	root, err := Root(client, opts)
+	if err != nil {
+		return false, err
+	}
+	present, err := exists(filepath.Join(root, name))
+	if err != nil {
+		return false, fmt.Errorf("skills.Delivered %s: %w", client, err)
+	}
+	if present || name != OnboardName {
+		return present, nil // a recurring skill is its package directory alone
+	}
+	// The one-shot skill without its directory: delivered if it left the marker.
+	marker, err := exists(filepath.Join(root, OnboardMarker))
+	if err != nil {
+		return false, fmt.Errorf("skills.Delivered %s: %w", client, err)
+	}
+	return marker, nil
+}
+
 // Remove deletes (or previews) the maintained skill packages and onboarding
 // marker for one client. It never touches other packages in the skill root.
 func Remove(client Client, opts Options, dryRun bool) (Removal, error) {

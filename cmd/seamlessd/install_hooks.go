@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -192,10 +193,20 @@ func runInstallHooks(args []string) error {
 //
 // install-hooks runs outside the daemon, so it reads the row straight from the
 // database -- but only when one already exists: a machine that has never run
-// seamlessd has no database and therefore no override, and creating (and
-// migrating) one here would be a side effect of wiring up a client. On an
-// existing database store.Open applies pending migrations, the same as every
-// other subcommand that opens it (doctor, import, family, map-repo).
+// seamlessd has no database and therefore no override, and creating one here
+// would be a side effect of wiring up a client. It opens an existing one with
+// store.OpenExisting and never migrates it: the curl installer runs install-hooks
+// BEFORE it restarts the service (the config bootstrap has to come first), so on
+// an upgrade the database is still being served by the OLD daemon, and migrating
+// it here would change the schema under a running binary that does not know the
+// new one. The new daemon migrates it on its first start.
+//
+// Reading without migrating is exact as long as no pending migration writes the
+// row, and only migration 022 ever has: a database from before it (releases up
+// to v0.4.9) gets 022's one-time seeding mirrored read-only
+// (featuresGrandfatherPending), or upgrading from such a release would remove
+// seam-research from an installation the new daemon is about to keep research
+// on for.
 //
 // It is failure-soft by contract, like every other reader of this row: an
 // unreadable database or a corrupt row warns and falls back to the file/env base
@@ -205,20 +216,55 @@ func effectiveFeatures(cfg config.Config) config.Features {
 	if _, err := os.Lstat(dbPath); err != nil {
 		return cfg.Features // no database yet -> no stored override
 	}
-	db, err := store.Open(dbPath)
+	db, err := store.OpenExisting(dbPath)
 	if err != nil {
 		fmt.Printf("%s cannot open %s to read the feature toggles (%v)\n%s%s\n",
 			yellow("warning:"), tildePath(dbPath), err, fieldCont, dim("using the file/env features config"))
 		return cfg.Features
 	}
 	defer func() { _ = db.Close() }()
-	effective, _, err := store.FeaturesConfig(context.Background(), db, cfg.Features)
+	ctx := context.Background()
+	effective, overridden, err := store.FeaturesConfig(ctx, db, cfg.Features)
+	if err == nil && !overridden {
+		var seeds bool
+		seeds, err = featuresGrandfatherPending(ctx, db)
+		if seeds {
+			effective.Research = true
+		}
+	}
 	if err != nil {
 		fmt.Printf("%s cannot read the stored feature toggles (%v)\n%s%s\n",
 			yellow("warning:"), err, fieldCont, dim("using the file/env features config"))
 		return cfg.Features
 	}
 	return effective
+}
+
+// featuresGrandfatherVersion is migration 022 (022_features_grandfather.sql),
+// the only migration that writes the stored features override.
+const featuresGrandfatherVersion = 22
+
+// featuresGrandfatherPending reports whether migration 022 has yet to run on db
+// and will seed research on when it does. The query is the migration's whole
+// predicate -- the database holds trials and no override row exists -- read
+// instead of applied; an applied migration is never edited, so this copy cannot
+// drift from it. Both tables date from migration 001, so the probe is safe on
+// every schema an installed seamlessd can have left.
+func featuresGrandfatherPending(ctx context.Context, db *sql.DB) (bool, error) {
+	applied, err := store.SchemaVersion(db)
+	if err != nil {
+		return false, err
+	}
+	if applied >= featuresGrandfatherVersion {
+		return false, nil
+	}
+	const q = `SELECT EXISTS (SELECT 1 FROM trials)
+	           AND NOT EXISTS (SELECT 1 FROM settings WHERE key = ?)`
+	var seeds bool
+	if err := db.QueryRowContext(ctx, q, store.SettingFeaturesConfig).Scan(&seeds); err != nil {
+		return false, fmt.Errorf("probe migration %d's grandfather clause: %w", featuresGrandfatherVersion, err)
+	}
+	return seeds, nil
 }
 
 // disabledFeatureSkills names the client-side skills whose optional feature is

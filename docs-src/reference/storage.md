@@ -19,6 +19,7 @@ it by hand, and what happens if you delete it.
   <div class="doc-tree">
     <div class="tree-root"><code>~/.seamless/</code><span class="tree-note">Owner-only local data directory</span></div>
     <div class="tree-branch"><code>seam.db</code><span class="tree-note">Indexes, sessions, tasks, trials, events, and embeddings</span></div>
+    <div class="tree-branch"><code>seamlessd.lock</code><span class="tree-note">serve's one-daemon lock; holds the holder's PID (never delete it)</span></div>
     <div class="tree-branch"><code>memory/</code><span class="tree-note">Durable memory tree</span></div>
     <div class="tree-leaf"><code>_global/{name}.md</code><span class="tree-note">Machine-wide memories</span></div>
     <div class="tree-leaf"><code>{project}/{name}.md</code><span class="tree-note">One project memory per file</span></div>

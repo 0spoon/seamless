@@ -17,6 +17,7 @@ it by hand, and what happens if you delete it.
 On-disk layout
 ~/.seamless/ Owner-only local data directory
 seam.db Indexes, sessions, tasks, trials, events, and embeddings
+seamlessd.lock serve's one-daemon lock; holds the holder's PID (never delete it)
 memory/ Durable memory tree
 _global/{name}.md Machine-wide memories
 {project}/{name}.md One project memory per file

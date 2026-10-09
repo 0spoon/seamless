@@ -464,3 +464,82 @@ func TestExport_LongNameUsesPAXNotGNU(t *testing.T) {
 	require.Equal(t, tar.FormatPAX, e.hdr.Format, "a long name must extend via PAX, not GNU")
 	require.Equal(t, int64(0o600), e.hdr.Mode)
 }
+
+// stagingProbe is an Export destination that, on the first write it receives,
+// records what is staged under dir: the archive is streamed while the database
+// snapshot still sits in the staging directory.
+type stagingProbe struct {
+	dir      string
+	buf      bytes.Buffer
+	probed   bool
+	staged   []string // seamless-export-* directories under dir at the first write
+	snapshot bool     // whether the one staging directory held the snapshot
+}
+
+func (p *stagingProbe) Write(b []byte) (int, error) {
+	if !p.probed {
+		p.probed = true
+		p.staged, _ = filepath.Glob(filepath.Join(p.dir, "seamless-export-*"))
+		if len(p.staged) == 1 {
+			_, err := os.Stat(filepath.Join(p.staged[0], DBName))
+			p.snapshot = err == nil
+		}
+	}
+	return p.buf.Write(b)
+}
+
+// The staging directory holds a full copy of the database, so where it goes is
+// the caller's choice: a large snapshot must not have to fit on a small
+// RAM-backed /tmp. It lands under TmpDir (the OS default when empty) while the
+// archive is written, and is gone when Export returns.
+func TestExport_StagesTheSnapshotUnderTmpDir(t *testing.T) {
+	tests := []struct {
+		name     string
+		explicit bool // pass the parent as TmpDir, rather than as the OS default
+	}{
+		{name: "TmpDir names the parent", explicit: true},
+		{name: "empty TmpDir keeps the OS default"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := seedInstance(t)
+			parent := t.TempDir()
+			opts := ExportOptions{DataDir: dir, Host: "h"}
+			if tt.explicit {
+				opts.TmpDir = parent
+			} else {
+				// os.TempDir reads TMPDIR on Unix and TMP/TEMP on Windows.
+				for _, key := range []string{"TMPDIR", "TMP", "TEMP"} {
+					t.Setenv(key, parent)
+				}
+			}
+			probe := &stagingProbe{dir: parent}
+			opts.Out = probe
+
+			_, err := Export(context.Background(), opts)
+			require.NoError(t, err)
+			require.True(t, probe.probed)
+			require.Len(t, probe.staged, 1, "exactly one staging dir, under %s", parent)
+			require.True(t, probe.snapshot, "the database snapshot is staged there")
+
+			left, err := os.ReadDir(parent)
+			require.NoError(t, err)
+			require.Empty(t, left, "the staging dir is removed before Export returns")
+			require.Contains(t, entryNames(readArchive(t, bytes.NewReader(probe.buf.Bytes()))), DBName)
+		})
+	}
+}
+
+// A TmpDir that does not exist is an error, never a silent fallback to the OS
+// default the caller chose to avoid; nor does Export create it.
+func TestExport_MissingTmpDirIsAnError(t *testing.T) {
+	dir := seedInstance(t)
+	missing := filepath.Join(t.TempDir(), "absent")
+
+	var buf bytes.Buffer
+	_, err := Export(context.Background(), ExportOptions{DataDir: dir, Out: &buf, Host: "h", TmpDir: missing})
+	require.ErrorIs(t, err, os.ErrNotExist)
+	require.ErrorContains(t, err, missing)
+	require.Zero(t, buf.Len(), "a failed export writes nothing")
+	require.NoDirExists(t, missing)
+}

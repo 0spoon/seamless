@@ -234,6 +234,26 @@ func runServe(args []string) error {
 	serverURL := cfg.ServerURL()
 	logger := slog.Default()
 
+	// One daemon per data dir, decided before anything touches it: a second
+	// serve must never migrate, reconcile, or adopt anything under the one
+	// already serving, and without this it did all three before failing to bind.
+	// Deferred ahead of db.Close, so the lock outlives the database handle.
+	dirLock, err := lockDataDir(context.Background(), cfg.DataDir, func(lock, holder string) {
+		slog.Info("data dir in use; waiting for the daemon that holds it to exit",
+			"lock", lock, "holder", holder, "wait", dataDirLockWait)
+	})
+	switch {
+	case errors.Is(err, errLockUnsupported):
+		// Refusing to serve would leave a data dir on such a mount unusable;
+		// serving without the guard is what every earlier release did.
+		slog.Warn("data dir lock unavailable on this file system; a second daemon on this data dir will not be refused",
+			"data_dir", cfg.DataDir, "err", err)
+	case err != nil:
+		return fmt.Errorf("seamlessd.serve: %w", err)
+	default:
+		defer func() { _ = dirLock.Close() }()
+	}
+
 	db, err := store.Open(cfg.DBPath())
 	if err != nil {
 		return fmt.Errorf("seamlessd.serve: %w", err)
@@ -241,6 +261,13 @@ func runServe(args []string) error {
 	defer func() { _ = db.Close() }()
 	if v, verr := store.SchemaVersion(db); verr == nil {
 		slog.Info("database ready", "path", cfg.DBPath(), "schema_version", v)
+		// store.Open applies nothing to a database AHEAD of this binary and
+		// serves it anyway; say so in the same words doctor uses.
+		if compiled := store.LatestSchemaVersion(); v > compiled {
+			slog.Warn("database schema is newer than this seamlessd",
+				"schema_version", v, "compiled_schema_version", compiled,
+				"cause", schemaAheadCause, "fix", schemaAheadFix)
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

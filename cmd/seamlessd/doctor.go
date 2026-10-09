@@ -248,6 +248,46 @@ func chmodRepairCommand(mode, path string) string {
 	return fmt.Sprintf("chmod %s '%s'", mode, strings.ReplaceAll(target, "'", "'\"'\"'"))
 }
 
+// schemaAheadCause and schemaAheadFix are the one diagnosis of a database whose
+// applied schema is NEWER than the migrations this binary compiles. serve's
+// startup WARN and doctor's schema check both print them, so the two can never
+// name different causes or different fixes.
+//
+// With automatic updates the state has two origins: the owner deliberately went
+// back to an older release (a SEAMLESS_VERSION pin), or an update rolled back to
+// the old binary without restoring the database the new one had already
+// migrated. The remedy is the same either way: run a binary that knows the
+// schema again, or put back the database from before the migration. The fix
+// names seamlessd import rather than a specific file, because the backup may be
+// one the owner exported by hand as well as one an update took.
+const (
+	schemaAheadCause = "this database was migrated by a newer seamlessd (a downgrade, or an update rollback that could not restore the pre-update database)"
+	schemaAheadFix   = "run that newer release again (seamlessd update), or import a backup taken before it (seamlessd import)"
+)
+
+// schemaVersionCheck pairs what the database has APPLIED with what this binary
+// COMPILES. doctor's own store.Open has already migrated forward by the time it
+// runs, so "applied < compiled" is unreachable here and the interesting case is
+// the other one: a database migrated by a NEWER seamlessd. store.Open applies
+// nothing to it and opens it anyway, which is why serve runs on it under the
+// same warning, but this build cannot understand it by migrating -- the
+// migrations that produced it are not in it -- which is also why an archive
+// from it is refused here. Info rather than ok, because the pair is a fact to
+// read, not a condition to pass.
+func schemaVersionCheck(db *sql.DB) check {
+	const name = "schema version"
+	applied, err := store.SchemaVersion(db)
+	if err != nil {
+		return check{statusWarn, name, "cannot read schema_migrations: " + err.Error()}
+	}
+	compiled := store.LatestSchemaVersion()
+	detail := fmt.Sprintf("v%d applied / v%d compiled", applied, compiled)
+	if applied > compiled {
+		return check{statusWarn, name, detail + " -- " + schemaAheadCause + "; " + schemaAheadFix}
+	}
+	return check{statusInfo, name, detail}
+}
+
 // repoMapCheck reports dangling repo_map entries -- mapped paths that no longer
 // exist on disk. A repo moved without a rename heals itself at its next session
 // start (RegisterProjectForCWD adopts the project once every owner of the
@@ -261,28 +301,6 @@ func chmodRepairCommand(mode, path string) string {
 // dangling -- and a same-named checkout here would report a stale mapping as
 // healthy, which is worse. The unnamed ("") host bucket counts as local: it is
 // the pre-host-scoping legacy mirror of THIS machine, not an unknown one.
-// schemaVersionCheck pairs what the database has APPLIED with what this binary
-// COMPILES. doctor's own store.Open has already migrated forward by the time it
-// runs, so "applied < compiled" is unreachable here and the interesting case is
-// the other one: a database written by a NEWER seamlessd, which this build
-// cannot understand by migrating (the migrations that produced it are not in it)
-// and which is the same refusal an archive from that machine would hit. Info
-// rather than ok, because the pair is a fact to read, not a condition to pass.
-func schemaVersionCheck(db *sql.DB) check {
-	const name = "schema version"
-	applied, err := store.SchemaVersion(db)
-	if err != nil {
-		return check{statusWarn, name, "cannot read schema_migrations: " + err.Error()}
-	}
-	compiled := store.LatestSchemaVersion()
-	detail := fmt.Sprintf("v%d applied / v%d compiled", applied, compiled)
-	if applied > compiled {
-		return check{statusWarn, name, detail +
-			" -- this database was written by a newer seamlessd; upgrade (seamlessd update) before reading or exporting it"}
-	}
-	return check{statusInfo, name, detail}
-}
-
 func repoMapCheck(db *sql.DB) check {
 	ctx, cancel := context.WithTimeout(context.Background(), codexActivityTimeout)
 	defer cancel()

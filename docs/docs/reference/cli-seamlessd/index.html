@@ -253,6 +253,13 @@ listened on - a configured <code>server_url</code> still wins over both.</p>
 <p>It refuses to start at all under <code>role: client</code>, before it opens a file or a
 port: a client install has no daemon of its own by definition, and serving one
 would give the machine a second, empty corpus its own hooks never write to.</p>
+<p>One daemon per data dir: <code>serve</code> takes an exclusive lock on
+<code>&lt;data_dir&gt;/seamlessd.lock</code> before it opens the database, and records its PID
+there. A second <code>serve</code> on the same data dir waits up to 30s for the holder to
+exit, then fails naming the lock and the holder's PID without touching the
+database. The operating system drops the lock when the holder exits, however it
+exits; never delete the file. On a file system that cannot lock, <code>serve</code> warns
+and runs unguarded, as earlier releases did.</p>
 <p>With <code>tls.cert_file</code> and <code>tls.key_file</code> both set, the listener is <strong>https</strong>
 with a TLS 1.2 floor, and the console session cookie is marked <code>Secure</code>. One
 without the other is refused when the config loads. Outermost in the handler
@@ -344,7 +351,7 @@ Checks stop early if config or the database cannot be loaded at all.</p>
 </tr>
 <tr>
 <td><code>schema version</code></td>
-<td>An <strong>info</strong> line pairing what the database has applied with what this binary compiles - <code>v25 applied / v25 compiled</code>. A database <em>ahead</em> of the binary warns: it was written by a newer <code>seamlessd</code>, which is also why an archive from it would be refused.</td>
+<td>An <strong>info</strong> line pairing what the database has applied with what this binary compiles - <code>v25 applied / v25 compiled</code>. A database <em>ahead</em> of the binary warns: it was migrated by a newer <code>seamlessd</code> (a downgrade, or an update rollback that could not restore the pre-update database). Run that newer release again (<code>seamlessd update</code>), or import a backup taken before it (<code>seamlessd import</code>). <code>serve</code> logs the same warning at startup, and an archive from such a database would be refused.</td>
 </tr>
 <tr>
 <td><code>repo map</code></td>
