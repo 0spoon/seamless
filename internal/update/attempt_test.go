@@ -591,13 +591,22 @@ func TestValidAttemptID(t *testing.T) {
 func TestSpawnRequest_Validate(t *testing.T) {
 	good := SpawnRequest{AttemptID: newAttemptID(t), From: Version{0, 7, 2}, To: Version{0, 7, 3}, Why: WhyAuto}
 	require.NoError(t, good.Validate())
+
+	// The owner may pin an older release or reinstall the running one by hand.
+	manual := good
+	manual.Why = WhyManual
+	manual.From, manual.To = good.To, good.From
+	require.NoError(t, manual.Validate(), "a manual downgrade")
+	manual.To = manual.From
+	require.NoError(t, manual.Validate(), "a manual reinstall")
+
 	for name, mutate := range map[string]func(r *SpawnRequest){
 		"no attempt id":     func(r *SpawnRequest) { r.AttemptID = "" },
 		"an argument":       func(r *SpawnRequest) { r.AttemptID = strings.Repeat("0", 15) + " --url=evil" },
 		"no from":           func(r *SpawnRequest) { r.From = Version{} },
 		"no to":             func(r *SpawnRequest) { r.To = Version{} },
 		"no why":            func(r *SpawnRequest) { r.Why = "" },
-		"an unknown why":    func(r *SpawnRequest) { r.Why = "manual" },
+		"an unknown why":    func(r *SpawnRequest) { r.Why = "cron" },
 		"an auto downgrade": func(r *SpawnRequest) { r.From, r.To = r.To, r.From },
 		"an auto reinstall": func(r *SpawnRequest) { r.To = r.From },
 	} {

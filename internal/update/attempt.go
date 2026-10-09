@@ -66,13 +66,20 @@ func AttemptHistoryPath(dataDir string) string {
 // name.
 func LockPath(dataDir string) string { return filepath.Join(StateDir(dataDir), "update.lock") }
 
-// WhyAuto is the why of an attempt the daemon's checker started to install a
-// newer release. A why is a fixed word, never free text, so it may sit in an
-// event payload as is.
-const WhyAuto = "auto"
+// Why an attempt runs. A why is a fixed word, never free text, so it may sit
+// in an event payload as is.
+const (
+	// WhyAuto is an attempt the daemon's checker started to install a newer
+	// release. It only ever moves forward.
+	WhyAuto = "auto"
+	// WhyManual is an attended `seamlessd update` the owner ran by hand. The
+	// daemon never spawns one, so no pending spawn ever matches it, and it may
+	// move in either direction: an owner may pin an older release.
+	WhyManual = "manual"
+)
 
 // whys lists every why this release writes.
-var whys = []string{WhyAuto}
+var whys = []string{WhyAuto, WhyManual}
 
 // Stage is the step of plan 2.2 an attempt is in, or stopped in. A finished
 // attempt's stage is where it stopped: StageDone for a success and only then,
@@ -151,13 +158,14 @@ func (s Stage) PreSwap() bool {
 // Readers ignore fields they do not know, read missing ones as zero, and keep
 // a stage or why they do not know as is. Writers are strict, readers are not.
 type Attempt struct {
-	// ID is the checker's ULID for the attempt, SpawnRequest.AttemptID.
+	// ID is the attempt's ULID: the checker's SpawnRequest.AttemptID for an
+	// attempt it spawned, minted by `seamlessd update` itself for a manual one.
 	ID string `json:"id"`
 	// From is the version the daemon ran when the attempt began; To is the
 	// release it installs.
 	From Version `json:"from"`
 	To   Version `json:"to"`
-	// Why the attempt runs: WhyAuto.
+	// Why the attempt runs: WhyAuto or WhyManual.
 	Why string `json:"why"`
 	// StartedAt is when the updater took the lock, HeartbeatAt its latest
 	// write, and FinishedAt when it recorded the outcome (zero while it runs).
@@ -468,7 +476,7 @@ type SpawnRequest struct {
 	AttemptID string  // ValidAttemptID
 	From      Version // the version the daemon runs
 	To        Version // the release to install
-	Why       string  // WhyAuto
+	Why       string  // a why this release knows; the checker spawns WhyAuto
 }
 
 // Validate refuses a request no updater should start for. The attempt id
