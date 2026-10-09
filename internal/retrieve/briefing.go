@@ -144,7 +144,9 @@ func (s *Service) briefingFor(ctx context.Context, project string, in BriefingIn
 	// prompt-matched RELEVANT section (they inherit the parent's task context,
 	// so no index/findings/tasks sections). The matcher is skipped entirely
 	// when no constraints are in scope: the child briefing renders only with
-	// constraints >= 1, so there would be nothing to attach the section to.
+	// constraints >= 1, so there would be nothing to attach the section to. The
+	// update notice is never asked for here: it is an owner action the parent
+	// session already carries, not news a child can act on.
 	if in.AgentType != "" {
 		var relevant []promptHit
 		if len(constraints) > 0 {
@@ -223,9 +225,34 @@ func (s *Service) briefingFor(ctx context.Context, project string, in BriefingIn
 		findings: findings, ready: ready, siblings: siblings,
 		siblingMems: siblingMems, stages: stages, plans: rollups,
 		pendingPlans: pending, isolation: iso,
+		// Asked for only past the nothing-to-inject return above: the notice
+		// rides on a briefing, it never makes an empty one non-empty.
+		notice:   s.updateNoticeLine(ctx, in.Host),
 		momentum: features.Enabled(s.effectiveFeatures(ctx), features.Momentum),
 	}, cfg)
 	return text, ids, nil
+}
+
+// updateNoticeMaxRunes caps the update-notice line. A notice is one sentence
+// and a command, far below it; the cap is defense in depth against a provider
+// that returns a paragraph.
+const updateNoticeMaxRunes = 300
+
+// updateNoticeLine asks the update-notice provider for the line a main-session
+// briefing on host carries: the sanitized text plus its newline, or "" when no
+// provider is installed or it has nothing to say. The text is untrusted to the
+// briefing whoever builds it, so it goes through sanitizeField -- flattened to
+// one line, injection phrases stripped, capped -- and a result the scrub
+// empties renders nothing rather than a blank line.
+func (s *Service) updateNoticeLine(ctx context.Context, host string) string {
+	if s.updateNotice == nil {
+		return ""
+	}
+	text := sanitizeField(s.updateNotice(ctx, host), updateNoticeMaxRunes)
+	if text == "" {
+		return ""
+	}
+	return text + "\n"
 }
 
 // effectiveBriefing resolves the briefing knobs for one assembly: the file/env
@@ -662,13 +689,15 @@ type briefingSections struct {
 	plans        []store.PlanRollup // active plans (a plan-tagged task set), pinned after stages
 	pendingPlans []core.Note        // captured, not-yet-approved CC plans (budget-participating)
 	isolation    core.Isolation     // the project's fence state; open renders no line
+	notice       string             // sanitized update-notice line ("" = none), pinned under the isolation line
 	momentum     bool               // momentum feature on: near-done plan lines carry the finish-line emphasis
 }
 
 // assembleBriefing packs the grouped sections against the token budget. The
-// pinned content -- the header line, the isolation line, the Constraints
-// section (both tiers), the Stages section, the active-plan rollups with their
-// trailer, and the footer -- is counted first and never dropped.
+// pinned content -- the header line, the isolation line, the update notice,
+// the Constraints section (both tiers), the Stages section, the active-plan
+// rollups with their trailer, and the footer -- is counted first and never
+// dropped.
 // Budget-competing rows then pack in render order -- situation before library:
 // pending plan lines > conventions > recent findings > ready tasks > memory
 // index > sibling findings > sibling memories -- so budget priority and render
@@ -773,12 +802,18 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	// cannot see WHY its briefing carries no global memories or no family would
 	// go looking for both. Open projects render nothing and pay nothing.
 	isoLine := isolationLine(sec.isolation)
-	used := estTokens(headLine(len(findings))) + estTokens(isoLine) +
+	// The update notice follows it, pinned the same way: its cost is reserved
+	// before any budget-competing row packs, so none can squeeze it out, and
+	// sitting at the head keeps it inside the prefix both hardTruncate and the
+	// Codex hook cap preserve. No provider, or nothing to say, renders nothing
+	// and pays nothing (estTokens("") is 0).
+	used := estTokens(headLine(len(findings))) + estTokens(isoLine) + estTokens(sec.notice) +
 		estTokens(constraintsSec.String()) +
 		estTokens(stagesSec) + estTokens(pinnedPlans) + estTokens(tail.String())
 
 	var body strings.Builder
 	body.WriteString(isoLine)
+	body.WriteString(sec.notice)
 	body.WriteString(constraintsSec.String())
 	body.WriteString(stagesSec)
 

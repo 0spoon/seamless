@@ -6,6 +6,7 @@
 package retrieve
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"regexp"
@@ -30,7 +31,24 @@ type Service struct {
 	logger     *slog.Logger
 
 	corpus *corpusCache // prompt-matcher IDF corpus, cached per project scope
+
+	// updateNotice supplies the main-session briefing's update-notice line
+	// (SetUpdateNotice); nil, the default, renders none.
+	updateNotice UpdateNoticeFunc
 }
+
+// UpdateNoticeFunc returns the one-line Seamless update notice for a briefing
+// assembled for a session on host -- "" means the daemon's own machine, otherwise
+// the host name BriefingInput.Host carries -- or "" when there is nothing to say.
+// It must be cheap: it runs on every briefing assembly.
+//
+// A local caller names the daemon's machine (config.Hostname, lowercased)
+// rather than sending "": the SessionStart hook and MCP session_start both fall
+// back to it, and only the console preview passes "". So a provider reads both
+// "" and the daemon's own host name as local. Whatever it returns is untrusted
+// text to the briefing: it renders only after sanitizeField has flattened it to
+// one line, stripped injection phrases, and capped it at updateNoticeMaxRunes.
+type UpdateNoticeFunc func(ctx context.Context, host string) string
 
 // New builds a retrieval Service. embedder may be nil, in which case recall uses
 // FTS only and the semantic paths are skipped. Briefing knobs start at their
@@ -65,6 +83,11 @@ func (s *Service) SetSearchConfig(c config.Search) { s.search = c }
 // (see effectiveFeatures), so a Settings toggle applies to the next briefing
 // without a restart.
 func (s *Service) SetFeaturesConfig(c config.Features) { s.features = c }
+
+// SetUpdateNotice installs the provider (nil = no notice, the default). Like the
+// other setters it is wiring-time configuration: call it before the Service
+// assembles briefings.
+func (s *Service) SetUpdateNotice(fn UpdateNoticeFunc) { s.updateNotice = fn }
 
 // injectionRe strips imperative prompt-injection phrases from any free-prose
 // field lifted out of stored content and shown to an agent as trusted context.
