@@ -347,6 +347,32 @@ older code.
   bridge; a disabled entry, stale binary/config path, or project override is a
   client-configuration problem even while `/healthz` is green.
 
+## `seamlessd update` refuses the release with a signature error
+
+**What is happening.** In v0.6.0 Seamless moved from github.com/0spoon/seamless
+to github.com/arctop/seamless, and every release since is signed by the new
+repository's release workflow. A binary older than v0.5.4 trusts only the old
+repository's signature, so its `seamlessd update` rejects every release after
+the move. It stops with `refusing to run ...: sigstore verification: ...`,
+and the error names `github.com/arctop/seamless`. Nothing is installed or
+changed. v0.5.4 and later accept both signatures, so this happens at most once.
+
+**Fix.** Re-run the installer one-liner once. It installs the latest release
+with its own signature check and keeps your config and `~/.seamless`:
+
+```bash
+curl -fsSL https://thereisnospoon.org/install | sh    # macOS, Linux
+```
+
+```powershell
+irm https://thereisnospoon.org/install.ps1 | iex      # Windows
+```
+
+After that, `seamlessd update` works again (`seamlessd version` shows what you
+have). Installed with Homebrew from the old `0spoon/tap`? That install does not
+use `seamlessd update`; switch taps once as
+[Install & deploy](https://thereisnospoon.org/docs/install/#homebrew) describes.
+
 ## `memory_write` says the name is held by a superseded memory
 
 **What is happening.** A superseded or archived memory leaves every index but
