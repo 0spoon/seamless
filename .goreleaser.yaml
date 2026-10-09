@@ -143,24 +143,36 @@ homebrew_casks:
     binaries:
       - seamlessd
       - seam
-    url:
-      verified: github.com/arctop/seamless
+    # No url.verified: Homebrew 7 deprecated the parameter, goreleaser
+    # v2.18.1+ no longer writes it, and `goreleaser check` fails on it.
     caveats: |
       Connect your agent clients (hooks, MCP registration, skills):
         seamlessd install-hooks
       Then start the daemon (it bootstraps config + key on first run):
         seamlessd serve
       Quickstart: https://thereisnospoon.org/docs/quickstart/
-    # The release binaries are not signed/notarized, so Gatekeeper would
-    # quarantine them; strip the attribute on install, as the goreleaser cask
-    # docs prescribe for unsigned binaries.
-    hooks:
-      post:
-        install: |
-          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/seamlessd"]
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/seam"]
-          end
+    # The release binaries are not signed/notarized, and Homebrew always
+    # quarantines cask downloads on macOS, so Gatekeeper would refuse to run
+    # them; strip the attribute after install, as the goreleaser cask docs
+    # prescribe for unsigned binaries. This is a declarative postflight_steps
+    # stanza, not hooks.post.install: that renders a Ruby `postflight` block,
+    # which Homebrew 7 deprecates with a warning on every install, and
+    # goreleaser (through v2.18.3) has no steps option yet -- see
+    # goreleaser/goreleaser#6870; move this to hooks.post.install_steps once
+    # PR #6873 ships. custom_block is pasted verbatim at the top of the cask
+    # (Homebrew loads it there; only `brew style` would reorder it), and the
+    # rendered cask goes through goreleaser's template engine again, so
+    # Homebrew's {{staged_path}} token is spelled {{ "{{staged_path}}" }}.
+    # must_succeed: false keeps the old hook's never-fail-the-install
+    # behaviour (xattr -dr exits 0 when the attribute is already absent).
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr",
+              args:         ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/seamlessd", "{{ "{{staged_path}}" }}/seam"],
+              must_succeed: false
+        end
+      end
 
 changelog:
   sort: asc
