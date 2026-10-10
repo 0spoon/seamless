@@ -11,9 +11,9 @@ package main
 //   - linux: a transient user service of its own, from systemd-run. systemd
 //     stops the whole cgroup of seamless.service, Setsid children included
 //     (memory linux-updater-detach-systemd-run-transient-service).
-//   - windows: a per-user on-demand Scheduled Task, else a detached child.
-//     Task Scheduler's stop ends only the task's own process (memory
-//     windows-updater-detach-under-task-scheduler).
+//   - windows: a detached child, else a per-user on-demand Scheduled Task.
+//     Task Scheduler's stop ends only the task's own process, so both outlive
+//     it (memory windows-updater-detach-under-task-scheduler).
 //   - any other OS: no spawner, so the daemon only notifies.
 //
 // Every spawner runs the seamlessd on disk with updaterArgs, the contract
@@ -211,8 +211,33 @@ func systemdRunFailure(out []byte, err error) error {
 	return withFirstLine(fmt.Errorf("%s: %w", why, err), out)
 }
 
-// Windows: the per-user on-demand update task (memory
+// Windows: a detached child, else the per-user on-demand update task (memory
 // windows-updater-detach-under-task-scheduler).
+
+// childElseTask is the Windows spawn order, apart from its system calls so its
+// tests run on any OS: child starts the updater as a detached process, and
+// task, the update task, runs only when child fails. A start through the task
+// is a warning naming why the child failed; both failing is one error naming
+// both. A child that fails once ctx is done -- the daemon is shutting down --
+// is final: it started nothing, and the task would start nothing either, since
+// runHandoff gives up on /Create at once and /Run is never sent, while that
+// /Create, left running, could still register the task. ctx never holds the
+// child back, as on darwin: CreateProcess has started it or failed when it
+// returns.
+func childElseTask(ctx context.Context, logger *slog.Logger, child, task func() error) error {
+	childErr := child()
+	if childErr == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return fmt.Errorf("seamlessd.spawn: a detached process: %w", childErr)
+	}
+	if err := task(); err != nil {
+		return fmt.Errorf("seamlessd.spawn: a detached process: %w; the update task: %w", childErr, err)
+	}
+	logger.Warn("update: the updater could not start as a detached process, so the update task starts it", "err", childErr)
+	return nil
+}
 
 // updateTaskPrefix names the update task, SeamlessUpdate-<SID>: task names are
 // machine-wide, and the owner's SID keeps each user's apart.
@@ -251,7 +276,7 @@ const updateTaskTemplate = `<?xml version="1.0" encoding="UTF-16"?>
 </Task>
 `
 
-// updateTaskPlan is the Windows primary path as data: register the task from
+// updateTaskPlan is the Windows fallback as data: register the task from
 // its definition with schtasks, CIM-free (it works from any token, an SSH
 // one included), then run it.
 type updateTaskPlan struct {
@@ -301,7 +326,7 @@ func utf16WithBOM(s string) []byte {
 	return out
 }
 
-// The Windows fallback's CreateProcess flags and the error it retries on,
+// The detached child's CreateProcess flags and the error it retries on,
 // Windows' own values (update_spawn_windows_test.go holds them to
 // x/sys/windows): no console window, a process group of its own, out of the
 // daemon's job.
@@ -315,12 +340,12 @@ const (
 	errAccessDenied = syscall.Errno(5) // ERROR_ACCESS_DENIED
 )
 
-// withoutBreakaway decides the fallback's one retry. CreateProcess refuses
-// CREATE_BREAKAWAY_FROM_JOB with ERROR_ACCESS_DENIED when the daemon's job
-// does not allow breakaway at that moment -- Task Scheduler toggles its job's
-// SILENT_BREAKAWAY_OK -- and that job has no KILL_ON_JOB_CLOSE, so a child left
-// in it survives the task's stop just the same (2.01). It returns the flags to
-// retry with, or false when there is no retry.
+// withoutBreakaway decides the detached child's one retry. CreateProcess
+// refuses CREATE_BREAKAWAY_FROM_JOB with ERROR_ACCESS_DENIED when the daemon's
+// job does not allow breakaway at that moment -- Task Scheduler toggles its
+// job's SILENT_BREAKAWAY_OK -- and that job has no KILL_ON_JOB_CLOSE, so a
+// child left in it survives the task's stop just the same (2.01). It returns
+// the flags to retry with, or false when there is no retry.
 func withoutBreakaway(flags uint32, err error) (uint32, bool) {
 	if flags&createBreakawayFromJob == 0 || !errors.Is(err, errAccessDenied) {
 		return flags, false

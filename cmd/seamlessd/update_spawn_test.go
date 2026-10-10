@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -241,6 +244,74 @@ func TestWithoutBreakaway(t *testing.T) {
 	}
 	require.Equal(t, uint32(0x09000200), uint32(detachedChildFlags),
 		"CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB")
+}
+
+// TestChildElseTask holds the Windows spawn order on every OS: the detached
+// child first, the update task only when the child fails, and no task once the
+// daemon is shutting down.
+func TestChildElseTask(t *testing.T) {
+	childErr := errors.New(`fork/exec C:\Seamless\seamlessd.exe: Access is denied`)
+	taskErr := errors.New("schtasks /Create: exit status 1: ERROR: Access is denied")
+	const warning = "update: the updater could not start as a detached process, so the update task starts it"
+	tests := []struct {
+		name         string
+		shuttingDown bool
+		child, task  error    // what each attempt returns
+		calls        []string // the attempts made, in order
+		wantErr      string   // "" when the updater started
+		wantWarn     bool
+	}{
+		{"the child starts: the task never runs", false, nil, taskErr, []string{"child"}, "", false},
+		{"the child fails and the task starts it: nil and one warning", false, childErr, nil, []string{"child", "task"}, "", true},
+		{
+			"both fail: one error naming both", false, childErr, taskErr, []string{"child", "task"},
+			"seamlessd.spawn: a detached process: " + childErr.Error() + "; the update task: " + taskErr.Error(), false,
+		},
+		{"shutting down: the child still starts", true, nil, taskErr, []string{"child"}, "", false},
+		{
+			"shutting down: a failed child is final and the task never runs", true, childErr, nil, []string{"child"},
+			"seamlessd.spawn: a detached process: " + childErr.Error(), false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.shuttingDown {
+				cancel()
+			}
+			var logs bytes.Buffer
+			var calls []string
+			err := childElseTask(ctx, slog.New(slog.NewJSONHandler(&logs, nil)),
+				func() error { calls = append(calls, "child"); return tt.child },
+				func() error { calls = append(calls, "task"); return tt.task })
+			require.Equal(t, tt.calls, calls)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tt.wantErr)
+				require.ErrorIs(t, err, childErr)
+				if len(calls) == 2 {
+					require.ErrorIs(t, err, taskErr)
+				}
+			}
+
+			var records []map[string]any
+			for dec := json.NewDecoder(&logs); dec.More(); {
+				var rec map[string]any
+				require.NoError(t, dec.Decode(&rec))
+				records = append(records, rec)
+			}
+			if !tt.wantWarn {
+				require.Empty(t, records, "only a start through the task logs; a failure is returned, never also logged")
+				return
+			}
+			require.Len(t, records, 1)
+			require.Equal(t, "WARN", records[0]["level"])
+			require.Equal(t, warning, records[0]["msg"])
+			require.Equal(t, childErr.Error(), records[0]["err"], "the warning says why the child did not start")
+		})
+	}
 }
 
 func TestNewUpdateSpawner(t *testing.T) {

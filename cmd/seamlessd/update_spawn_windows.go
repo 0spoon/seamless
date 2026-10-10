@@ -21,51 +21,47 @@ func handoffProcAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{CreationFlags: createNoWindow}
 }
 
-// osUpdateSpawner is Windows' spawner: the per-user update task, else a
-// detached child.
+// osUpdateSpawner is Windows' spawner: the updater as a detached child, else
+// from the per-user update task (childElseTask).
 func osUpdateSpawner(t spawnTarget, logger *slog.Logger) update.Spawner {
-	return taskSpawner{target: t, log: logger}
+	return windowsSpawner{target: t, log: logger}
 }
 
-// taskSpawner starts the updater from the per-user on-demand task
-// SeamlessUpdate-<SID>, registered afresh for each attempt, and falls back to
-// a detached child of the daemon. Task Scheduler's stop -- Stop-ScheduledTask,
-// schtasks /End -- ends only the Seamless task's own process, `serve`, and
-// both paths survived it (2.01, Windows 11, S4U stand-in): the task's updater
-// is no descendant of the daemon at all, and the child leaves the daemon's
-// job when it may and outlives it when it may not.
-type taskSpawner struct {
+// windowsSpawner starts the updater as a detached child of the daemon, and
+// from the per-user on-demand task SeamlessUpdate-<SID>, registered afresh for
+// each attempt, only when the child cannot start. Task Scheduler's stop --
+// Stop-ScheduledTask, schtasks /End -- ends only the Seamless task's own
+// process, `serve`, and both survived it (2.01, Windows 11, S4U stand-in): the
+// child leaves the daemon's job when it may and outlives it when it may not,
+// and the task's updater is no descendant of the daemon at all. The child goes
+// first on the same spike's evidence: the service was healthy 0.81s into the
+// restart, against 5.81s through the task; it has no window (CREATE_NO_WINDOW),
+// where an InteractiveToken task running the console seamlessd.exe may show
+// one; and CreateProcess has started it or failed when it returns, while
+// schtasks /Run exits 0 for a task that then never runs (0x41303), a non-start
+// that reaches no fallback. The task gains nothing on the job either: its
+// updater lands in the daemon's.
+type windowsSpawner struct {
 	target spawnTarget
 	log    *slog.Logger
 }
 
-// Spawn starts req's updater. nil means schtasks /Run accepted the task or
-// the child process exists.
-func (s taskSpawner) Spawn(ctx context.Context, req update.SpawnRequest) error {
+// Spawn starts req's updater. nil means the child process exists or, the child
+// having failed, schtasks /Run accepted the update task.
+func (s windowsSpawner) Spawn(ctx context.Context, req update.SpawnRequest) error {
 	if err := req.Validate(); err != nil {
 		return fmt.Errorf("seamlessd.spawn: %w", err)
 	}
 	args := s.target.args(req)
-	taskErr := s.runTask(ctx, args)
-	if taskErr == nil {
-		return nil
-	}
-	if ctx.Err() != nil {
-		// Shutting down mid hand-off: the task may still start, and a child
-		// on top of it would be a second updater.
-		return fmt.Errorf("seamlessd.spawn: the update task: %w", taskErr)
-	}
-	if err := startDetachedChild(s.target.exe, args); err != nil {
-		return fmt.Errorf("seamlessd.spawn: the update task: %w; a detached process: %w", taskErr, err)
-	}
-	s.log.Warn("update: the update task did not start the updater, so it runs as a detached process", "err", taskErr)
-	return nil
+	return childElseTask(ctx, s.log,
+		func() error { return startDetachedChild(s.target.exe, args) },
+		func() error { return s.runTask(ctx, args) })
 }
 
-// runTask registers the update task from a definition written to the update
-// state dir -- never logs/, which holds only attempt logs -- removes the file,
-// and runs the task.
-func (s taskSpawner) runTask(ctx context.Context, args []string) error {
+// runTask is the fallback: it registers the update task from a definition
+// written to the update state dir -- never logs/, which holds only attempt
+// logs -- removes the file, and runs the task.
+func (s windowsSpawner) runTask(ctx context.Context, args []string) error {
 	sid, err := currentUserSID()
 	if err != nil {
 		return err
@@ -122,11 +118,11 @@ func taskArguments(args []string) string {
 	return strings.Join(quoted, " ")
 }
 
-// startDetachedChild starts exe with args as the fallback: no console window,
-// a process group of its own, out of the daemon's job (detachedChildFlags),
-// once more without leaving the job when the job refuses (withoutBreakaway).
-// Its stdio is NUL, never a pipe the daemon would have to drain; the daemon
-// reaps it.
+// startDetachedChild starts exe with args as the primary path: no console
+// window, a process group of its own, out of the daemon's job
+// (detachedChildFlags), once more without leaving the job when the job refuses
+// (withoutBreakaway). Its stdio is NUL, never a pipe the daemon would have to
+// drain; the daemon reaps it.
 func startDetachedChild(exe string, args []string) error {
 	flags := uint32(detachedChildFlags)
 	for {

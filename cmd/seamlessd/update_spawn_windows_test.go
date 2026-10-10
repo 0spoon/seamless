@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// The fallback's flags, the error it retries on, and the job limit the
+// The detached child's flags, the error it retries on, and the job limit the
 // self-check refuses are mirrored as plain constants so their tests run on any
 // OS; these are the values Windows defines.
 func TestWindowsConstantsMatchTheOS(t *testing.T) {
