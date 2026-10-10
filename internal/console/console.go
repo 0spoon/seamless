@@ -4,7 +4,9 @@
 // actions: archiving a memory, approving a plan, force-releasing a task's claim
 // lock, asking the gardener for proposals (request/split) and resolving them
 // (apply/dismiss/retarget), saving or resetting the briefing settings, and
-// switching the background update check or asking it to check now.
+// steering updates: switching the background update check and automatic
+// updates, asking it to check now, installing the newest release now, and
+// resuming automatic updates after they paused themselves.
 // Access is guarded by the same static bearer key as the MCP surface: a browser
 // trades the key for a cookie at /console/login, and the seam CLI presents the
 // key as a bearer token.
@@ -82,10 +84,11 @@ type Config struct {
 	// on the Home health strip and in Settings -> Your setup. Empty omits it.
 	Version string
 	// Updates is the background update check (*update.Checker in the daemon):
-	// Settings -> Updates, the health strip's version fact, and the one-day
-	// "updated" banner read it, and the Updates POSTs steer it. nil means this
-	// process runs no update check (tests, tools): the section says so, its
-	// POSTs answer with an error flash, and the strip keeps the plain version.
+	// Settings -> Updates, the health strip's version fact, the one-day
+	// "updated" banner and the automatic-update trouble banner read it, and
+	// the Updates POSTs steer it. nil means this process runs no update check
+	// (tests, tools): the section says so, its POSTs answer with an error
+	// flash, and the strip keeps the plain version.
 	Updates UpdatesView
 	// Level is the file/env console level base (config.Console.Level): how much
 	// of the console the owner sees. The effective level is this plus the
@@ -248,6 +251,9 @@ func (s *Service) Register(mux *http.ServeMux) {
 	post("POST /console/settings/updates", formBodySmall, s.settingsUpdatesSave)
 	post("POST /console/settings/updates/reset", formBodySmall, s.settingsUpdatesReset)
 	post("POST /console/settings/updates/check", formBodySmall, s.settingsUpdatesCheck)
+	post("POST /console/settings/updates/auto", formBodySmall, s.settingsUpdatesAuto)
+	post("POST /console/settings/updates/apply", formBodySmall, s.settingsUpdatesApply)
+	post("POST /console/settings/updates/resume", formBodySmall, s.settingsUpdatesResume)
 	handle("GET /console/events", s.auth(s.sse))
 	handle("GET /console/events/{id}", s.auth(s.eventDetail))
 	// Anything under /console/ no route above claims: the styled 404 inside the

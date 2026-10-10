@@ -11,19 +11,24 @@ import (
 )
 
 // The console's view of the background update check: Settings > Updates
-// (settings_updates.go), the Home health strip's version fact, the one-day
-// "updated" banner every page carries, and the two update event kinds.
+// (settings_updates.go, with automatic updates in updates_auto.go), the Home
+// health strip's version fact, the one-day "updated" banner and the trouble
+// banner every page carries, and the update event kinds.
 //
 // Every version and link these surfaces render is a parsed update.Version or
 // update.ReleaseURL -- never text from the release API (constraint
 // update-surfaces-render-parsed-versions-only).
 
 // UpdatesView is what the console needs from the background update check
-// (*update.Checker in the daemon).
+// (*update.Checker in the daemon). CheckNow, ApplyNow and Resume are
+// Settings > Updates' "Check now", "Update now" and "Resume automatic
+// updates"; Refresh republishes the status after a switch is stored.
 type UpdatesView interface {
 	Status() update.Status
 	CheckNow(ctx context.Context) (update.Status, error)
 	Refresh(ctx context.Context) (update.Status, error)
+	ApplyNow(ctx context.Context) (update.Status, error)
+	Resume(ctx context.Context) (update.Status, error)
 }
 
 // The daemon's checker is the one production UpdatesView.
@@ -62,31 +67,54 @@ type updateBanner struct {
 	Ago, At string
 	// NotesURL is the release page of To (update.ReleaseURL).
 	NotesURL string
+	// CodexHooks reports that Codex's hooks.json changed with the update:
+	// Codex skips changed hooks until the owner re-approves them in its
+	// /hooks, so the banner says so.
+	CodexHooks bool
+	// Rewire reports that the attempt which brought To applied with warnings:
+	// the banner names seamlessd install-hooks, which re-wires the agents. It
+	// is the attempt's flag, never its error text.
+	Rewire bool
 }
 
-// updateBannerAt builds the banner, or nil when this process runs no update
-// check or the daemon did not upgrade within the last day.
-func (s *Service) updateBannerAt(now time.Time) *updateBanner {
-	if s.cfg.Updates == nil {
-		return nil
-	}
-	u := recentUpgrade(s.cfg.Updates.Status(), now)
+// updateBannerFor builds the banner from st, or nil when the daemon did not
+// upgrade within the last day.
+func updateBannerFor(st update.Status, now time.Time) *updateBanner {
+	u := recentUpgrade(st, now)
 	if u == nil {
 		return nil
 	}
-	return &updateBanner{
+	b := &updateBanner{
 		To: u.To.String(), From: u.From.String(),
 		Ago: agoPhrase(u.At), At: ts(u.At),
-		NotesURL: update.ReleaseURL(u.To),
+		NotesURL:   update.ReleaseURL(u.To),
+		CodexHooks: u.CodexHooks,
 	}
+	if a := st.LastAttempt; a != nil && a.Outcome == update.OutcomeApplied && a.Warnings && a.To == u.To {
+		b.Rewire = true
+	}
+	return b
+}
+
+// updateChrome builds the update banners every page carries: the one-day
+// "updated" banner and the trouble banner. Both are nil when this process runs
+// no update check.
+func (s *Service) updateChrome(now time.Time) (*updateBanner, *updateAlert) {
+	if s.cfg.Updates == nil {
+		return nil, nil
+	}
+	st := s.cfg.Updates.Status()
+	return updateBannerFor(st, now), updateAlertFor(st, now)
 }
 
 // versionFact is the health strip's version statement. With no update check in
 // this process it is today's plain build version, linked to Your setup. With
-// one it links to Settings > Updates and says the one thing the owner may act
-// on: a newer release while checks are on (warn), else an upgrade within the
-// last day (ok), else the plain version. ok is false when there is no version
-// to state at all.
+// one it links to Settings > Updates and says the one thing the owner may want
+// to know: an update under way, else a newer release while checks are on --
+// warn when installing it is the owner's call, neutral when this install
+// installs it by itself or the owner's own hold skips it -- else an upgrade
+// within the last day (ok), else the plain version. ok is false when there is
+// no version to state at all.
 func (s *Service) versionFact(now time.Time) (healthFact, bool) {
 	version := strings.TrimSpace(s.cfg.Version)
 	if s.cfg.Updates == nil {
@@ -96,12 +124,20 @@ func (s *Service) versionFact(now time.Time) (healthFact, bool) {
 		return healthFact{Icon: "info", Text: "version " + version, Href: "/console/settings?s=setup"}, true
 	}
 	st := s.cfg.Updates.Status()
+	if a := st.Applying; a != nil {
+		return healthFact{
+			Icon: "refresh-cw", Href: updatesSectionHref,
+			Text:  "v" + a.From.String() + " -- updating to v" + a.To.String(),
+			Title: "Updating to v" + a.To.String() + ": " + stageWords(a.Stage),
+		}, true
+	}
 	if cur, ok := st.Current(); ok && st.Settings.Check && st.Available && st.Newest != nil {
 		newest := st.Newest.Version.String()
+		tone, then := newestFate(st, now)
 		return healthFact{
-			Icon: "refresh-cw", Tone: "warn", Href: updatesSectionHref,
+			Icon: "refresh-cw", Tone: tone, Href: updatesSectionHref,
 			Text:  "v" + cur.String() + " -- v" + newest + " available",
-			Title: "Seamless v" + newest + " was published " + day(st.Newest.PublishedAt) + "; updating is your call",
+			Title: "Seamless v" + newest + " was published " + day(st.Newest.PublishedAt) + "; " + then,
 		}, true
 	}
 	if u := recentUpgrade(st, now); u != nil {
@@ -118,6 +154,43 @@ func (s *Service) versionFact(now time.Time) (healthFact, bool) {
 		return healthFact{}, false
 	}
 	return healthFact{Icon: "info", Text: "version " + version, Href: updatesSectionHref}, true
+}
+
+// newestFate says what becomes of the newest release, for the version fact's
+// hover, with the tone that goes with it. Where this install updates itself
+// (ModeAuto) it installs by itself -- and when -- unless automatic updates
+// skip it: the owner's own hold is no news (neutral), while a block or a
+// missing checksums bundle leaves it to the owner (warn). Anywhere else
+// installing it is the owner's call (warn).
+func newestFate(st update.Status, now time.Time) (tone, then string) {
+	newest := st.Newest.Version
+	if mode, _ := st.Mode(); mode != update.ModeAuto {
+		if st.Paused != nil && selfUpdating(st) && st.Settings.Auto {
+			return "warn", "automatic updates paused themselves, so updating is your call"
+		}
+		return "warn", "updating is your call"
+	}
+	if h := st.Hold; h != nil && newest.Compare(h.Through) <= 0 {
+		return "", "this install went back from v" + h.From.String() + ", so automatic updates skip it until they are resumed"
+	}
+	for _, b := range st.Blocked {
+		if b.Version == newest {
+			return "warn", "automatic updates skip it (" + blockWords(b.Reason) + "), so updating to it is your call"
+		}
+	}
+	if !st.Newest.ChecksumsBundle {
+		return "warn", "it carries no signed checksums bundle, so updating to it is your call"
+	}
+	switch target := st.Target; {
+	case target != nil && target.Version == newest && st.Waiting != "":
+		return "", "it installs by itself: " + st.Waiting
+	case target != nil && target.Version == newest:
+		return "", "it installs by itself within a minute"
+	case st.Settings.MinAge > 0 && st.Newest.PublishedAt.Add(st.Settings.MinAge).After(now):
+		return "", "it installs by itself once it is " + config.Duration(st.Settings.MinAge).String() + " old"
+	default:
+		return "", "it installs by itself"
+	}
 }
 
 // updateAvailableSummary is the ledger line of an update.available event,
@@ -152,6 +225,51 @@ func updateAppliedSummary(p map[string]any) string {
 		line += " (from v" + from.String() + ")"
 	}
 	return line
+}
+
+// updateStartedSummary is the ledger line of an update.started event: the
+// daemon handed an update to its updater. It names who asked from the fixed
+// why word and the versions once they parse.
+func updateStartedSummary(p map[string]any) string {
+	to, ok := update.Parse(payloadStr(p, "to"))
+	if !ok {
+		return "an update started"
+	}
+	line := "update to v" + to.String() + " started"
+	switch payloadStr(p, "why") {
+	case update.WhyAuto:
+		line = "automatic " + line
+	case update.WhyNow:
+		line = "Update now: " + line
+	}
+	if from, ok := update.Parse(payloadStr(p, "from")); ok {
+		line += " (from v" + from.String() + ")"
+	}
+	return line
+}
+
+// updateFailedSummary is the ledger line of an update.failed event: an update
+// the daemon started did not apply. It is built from the parsed target version
+// and the fixed outcome word only -- the event never carries the updater's
+// error text, and the line never names a stage or a path.
+func updateFailedSummary(p map[string]any) string {
+	to, ok := update.Parse(payloadStr(p, "to"))
+	if !ok {
+		return "an update did not apply"
+	}
+	line := "the update to v" + to.String()
+	switch payloadStr(p, "outcome") {
+	case update.OutcomeRolledBack:
+		return line + " rolled back"
+	case update.OutcomeFailed:
+		return line + " failed"
+	case update.OutcomeBroken:
+		return line + " could not be rolled back cleanly"
+	case update.OutcomeInterrupted:
+		return line + " was interrupted"
+	default:
+		return line + " did not apply"
+	}
 }
 
 // intervalPhrase renders a check interval for "every ...": "6 hours", "hour",

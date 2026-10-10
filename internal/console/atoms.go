@@ -212,7 +212,7 @@ func bandLine(bd band) template.HTML {
 // Severity classes. Four, deliberately: a stream row's left edge is scanned, not
 // read, and more than four colors stops being a scan.
 const (
-	sevDanger = "danger" // something went wrong: agent-reported mishaps, hook failures
+	sevDanger = "danger" // something went wrong: agent-reported mishaps, hook failures, failed updates
 	sevInject = "inject" // context reached an agent
 	sevWrite  = "write"  // durable knowledge was created
 	sevSystem = "system" // everything else: lifecycle, curation, transport
@@ -228,7 +228,7 @@ const (
 // -- visually distinct under evtTone -- collapse into one neutral class.
 func evtSev(kind string) string {
 	switch kind {
-	case "agent.mishap", "hook.error":
+	case "agent.mishap", "hook.error", "update.failed":
 		return sevDanger
 	case "retrieval.injected":
 		return sevInject

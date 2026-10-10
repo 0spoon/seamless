@@ -772,6 +772,9 @@ func TestSettingsSections_EveryPostReturnsToItsSection(t *testing.T) {
 		{"/console/settings/updates", "check=off", "/console/settings?s=updates&error="},
 		{"/console/settings/updates/reset", "", "/console/settings?s=updates&error="},
 		{"/console/settings/updates/check", "", "/console/settings?s=updates&error="},
+		{"/console/settings/updates/auto", "auto=off", "/console/settings?s=updates&error="},
+		{"/console/settings/updates/apply", "", "/console/settings?s=updates&error="},
+		{"/console/settings/updates/resume", "", "/console/settings?s=updates&error="},
 	} {
 		rr := postForm(mux, tc.path, tc.body)
 		require.Equal(t, http.StatusSeeOther, rr.Code, "%s %s", tc.path, tc.body)

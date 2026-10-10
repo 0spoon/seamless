@@ -84,12 +84,28 @@
     {{/* For a day after the daemon upgraded, every page says so. A banner, not
          a toast: the tab's live stream is reconnecting right after the
          restart. Built from parsed versions and the constant release URL only
-         (updates.go). "Got it" hides it for this browser tab, keyed by the
-         version (shell.js), so a newer update shows again. */}}
+         (updates.go), plus two fixed notes: Codex's hooks changed with the
+         update, and an update that applied with warnings. "Got it" hides it
+         for this browser tab, keyed by the version (shell.js), so a newer
+         update shows again. */}}
     {{with .UpdateBanner}}<div class="section notice update-banner" id="update-banner" role="note" data-update-banner="{{.To}}">
-      <p class="update-banner-copy">{{icon "refresh-cw"}}<span><strong>Seamless updated to v{{.To}}</strong> (from v{{.From}}) <span title="{{.At}}">{{.Ago}}</span>.</span></p>
+      <p class="update-banner-copy">{{icon "refresh-cw"}}<span><strong>Seamless updated to v{{.To}}</strong> (from v{{.From}}) <span title="{{.At}}">{{.Ago}}</span>.{{if .CodexHooks}} Its Codex hooks changed: Codex skips them until you re-approve them in Codex&rsquo;s <span class="mono">/hooks</span>.{{end}}{{if .Rewire}} The installer reported warnings: run <span class="mono">seamlessd install-hooks</span> to re-wire your agents.{{end}}</span></p>
       <div class="update-banner-acts">
         <a class="btn small" href="{{.NotesURL}}" target="_blank" rel="noopener">Release notes</a>
+        <button class="btn small" type="button" data-update-banner-dismiss>Got it</button>
+      </div>
+    </div>{{end}}
+    {{/* While automatic updates are in trouble -- they paused themselves, or
+         the last update the daemon started did not apply -- every page says
+         so for a week, pointing to Settings > Updates. Fixed words and parsed
+         versions only (updates_auto.go): never the attempt's error text, which
+         stays in that section. "Got it" rides the update banner's per-tab
+         dismissal (data-update-banner), keyed by the failure or the pause, so
+         a newer one shows again. */}}
+    {{with .UpdateAlert}}<div class="section notice update-alert{{if .Danger}} is-danger{{end}}" id="update-alert" role="alert" data-update-banner="{{.Key}}">
+      <p class="update-alert-copy">{{icon "triangle-alert"}}<span><strong>{{.Head}}</strong> {{.Line}}</span></p>
+      <div class="update-alert-acts">
+        <a class="btn small" href="/console/settings?s=updates">Settings &rsaquo; Updates</a>
         <button class="btn small" type="button" data-update-banner-dismiss>Got it</button>
       </div>
     </div>{{end}}

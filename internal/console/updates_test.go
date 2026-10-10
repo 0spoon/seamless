@@ -26,16 +26,44 @@ import (
 // fakeUpdates is the console's UpdatesView in tests. Refresh re-reads the
 // stored override and merges it over base exactly as the checker does
 // (update.Effective), so a save or reset round-trips through the real store
-// and the real precedence rule; CheckNow answers through checkNow.
+// and the real precedence rule; CheckNow, ApplyNow and Resume answer through
+// checkNow, applyNow and resume.
 type fakeUpdates struct {
 	mu         sync.Mutex
 	db         *sql.DB
 	base       config.Update
 	status     update.Status
 	checkNow   func(update.Status) (update.Status, error) // nil: the status, no error
+	applyNow   func(update.Status) (update.Status, error) // nil: the status, no error
+	resume     func(update.Status) (update.Status, error) // nil: lifts the hold and the pause
 	refreshErr error
 
-	checks, refreshes int
+	checks, refreshes, applies, resumes int
+}
+
+func (f *fakeUpdates) ApplyNow(context.Context) (update.Status, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.applies++
+	if f.applyNow == nil {
+		return f.status, nil
+	}
+	st, err := f.applyNow(f.status)
+	f.status = st
+	return st, err
+}
+
+func (f *fakeUpdates) Resume(context.Context) (update.Status, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.resumes++
+	if f.resume == nil {
+		f.status.Hold, f.status.Paused = nil, nil
+		return f.status, nil
+	}
+	st, err := f.resume(f.status)
+	f.status = st
+	return st, err
 }
 
 func (f *fakeUpdates) Status() update.Status {
@@ -531,6 +559,9 @@ func TestUpdatesPosts_NoUpdateCheckHere(t *testing.T) {
 		{"/console/settings/updates", "check=off"},
 		{"/console/settings/updates/reset", ""},
 		{"/console/settings/updates/check", ""},
+		{"/console/settings/updates/auto", "auto=off"},
+		{"/console/settings/updates/apply", ""},
+		{"/console/settings/updates/resume", ""},
 	} {
 		param, msg := locationOf(t, postForm(mux, tc.path, tc.body))
 		require.Equal(t, "error", param, tc.path)
@@ -542,7 +573,7 @@ func TestUpdatesPosts_NoUpdateCheckHere(t *testing.T) {
 
 // The Updates POSTs ride the console's write guard: a cookie write must prove
 // same-origin like every other, and a refused one reaches neither the store
-// nor the checker.
+// nor the checker -- Update now and Resume included.
 func TestUpdatesPosts_CookieWritesNeedSameOrigin(t *testing.T) {
 	st := releaseStatus(time.Now())
 	db, mux, fake := newUpdatesConsole(t, config.Update{}, &st)
@@ -553,7 +584,8 @@ func TestUpdatesPosts_CookieWritesNeedSameOrigin(t *testing.T) {
 		set(req)
 		return do(mux, req)
 	}
-	for _, path := range []string{"/console/settings/updates", "/console/settings/updates/reset", "/console/settings/updates/check"} {
+	for _, path := range []string{"/console/settings/updates", "/console/settings/updates/reset", "/console/settings/updates/check",
+		"/console/settings/updates/auto", "/console/settings/updates/apply", "/console/settings/updates/resume"} {
 		for name, set := range map[string]func(*http.Request){
 			"another local port": func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "same-site") },
 			"a foreign origin": func(r *http.Request) {
@@ -568,13 +600,19 @@ func TestUpdatesPosts_CookieWritesNeedSameOrigin(t *testing.T) {
 	checks, refreshes := fake.counts()
 	require.Zero(t, checks)
 	require.Zero(t, refreshes)
+	require.Zero(t, fake.applies, "a refused Update now reaches no checker")
+	require.Zero(t, fake.resumes)
 	_, found := storedOverride(t, db)
 	require.False(t, found)
 
-	// The console's own form, same origin, goes through.
-	rr := send("/console/settings/updates", func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "same-origin") })
-	param, _ := locationOf(t, rr)
-	require.Equal(t, "notice", param)
+	// The console's own forms, same origin, go through.
+	sameOrigin := func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "same-origin") }
+	for _, path := range []string{"/console/settings/updates", "/console/settings/updates/apply", "/console/settings/updates/resume"} {
+		param, _ := locationOf(t, send(path, sameOrigin))
+		require.Equal(t, "notice", param, path)
+	}
+	require.Equal(t, 1, fake.applies)
+	require.Equal(t, 1, fake.resumes)
 }
 
 // The Home health strip's version fact follows the update check: a newer

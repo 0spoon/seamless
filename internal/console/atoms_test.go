@@ -80,6 +80,8 @@ func TestEvtSev_OneMappingForEveryStream(t *testing.T) {
 	tests := map[string]string{
 		"agent.mishap":       sevDanger,
 		"hook.error":         sevDanger,
+		"update.failed":      sevDanger,
+		"update.started":     sevSystem,
 		"retrieval.injected": sevInject,
 		"memory.written":     sevWrite,
 		"note.written":       sevWrite,
@@ -107,7 +109,7 @@ func TestEvtSev_OneMappingForEveryStream(t *testing.T) {
 func TestInteractionsJSMirrorsSeverityMapping(t *testing.T) {
 	js := string(interactionsJS)
 	require.Contains(t, js, "function rowSev(kind, isError)")
-	for _, kind := range []string{"agent.mishap", "hook.error", "retrieval.injected", "memory.written", "note.written", "trial.recorded"} {
+	for _, kind := range []string{"agent.mishap", "hook.error", "update.failed", "retrieval.injected", "memory.written", "note.written", "trial.recorded"} {
 		require.Contains(t, js, "'"+kind+"'", "interactions.js must classify %q", kind)
 	}
 	for _, sev := range []string{sevDanger, sevInject, sevWrite, sevSystem} {

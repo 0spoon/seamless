@@ -102,6 +102,10 @@ type pageData struct {
 	// UpdateBanner is set on every page for a day after the daemon upgraded
 	// (updates.go); nil otherwise, and whenever no update check runs here.
 	UpdateBanner *updateBanner
+	// UpdateAlert is set on every page while automatic updates are in
+	// trouble -- paused, or the last update the daemon started did not apply
+	// (updates_auto.go); nil otherwise, and whenever no update check runs here.
+	UpdateAlert *updateAlert
 	// ReturnPath is this page's own URL (flash params stripped), for forms that
 	// change presentation state and come back here -- the banner's switch.
 	ReturnPath string
@@ -181,7 +185,8 @@ func levelBannerFor(id string, current level) *levelBanner {
 
 // withChrome fills the per-request chrome every layout-wrapped page shares: the
 // effective features, the level and the screens it offers, the sidebar
-// sections and badges, the host, and the one-day "updated" banner.
+// sections and badges, the host, the one-day "updated" banner and the
+// automatic-update trouble banner.
 func (s *Service) withChrome(ctx context.Context, pd pageData) pageData {
 	pd.Features = s.effectiveFeatures(ctx)
 	lvl := s.consoleLevel(ctx)
@@ -199,7 +204,7 @@ func (s *Service) withChrome(ctx context.Context, pd pageData) pageData {
 		}
 		pd.LevelBanner = levelBannerFor(id, pd.Level)
 	}
-	pd.UpdateBanner = s.updateBannerAt(time.Now())
+	pd.UpdateBanner, pd.UpdateAlert = s.updateChrome(time.Now())
 	pd.Host = s.host
 	pd.HostName = s.hostName
 	return pd
@@ -334,6 +339,8 @@ func evtTone(kind string) string {
 		return "warn"
 	case kind == "update.applied":
 		return "ok"
+	case kind == "update.failed":
+		return "warn"
 	case strings.HasPrefix(kind, "memory.read"), strings.HasPrefix(kind, "memory.written"), strings.HasPrefix(kind, "note."):
 		return "ok"
 	default:
@@ -380,6 +387,8 @@ var eventLabels = map[string]string{
 	"settings.level_changed":     "Console level changed",
 	"update.available":           "Update available",
 	"update.applied":             "Version changed", // a downgrade too; the summary says which
+	"update.started":             "Update started",
+	"update.failed":              "Update failed",
 }
 
 // evtLabel names an event kind for a reader. An unlisted kind is spelled out
@@ -428,7 +437,7 @@ func evtIcon(kind string) string {
 		return "map"
 	case kind == "gamification.record_broken":
 		return "trophy"
-	case kind == "agent.mishap", kind == "hook.error":
+	case kind == "agent.mishap", kind == "hook.error", kind == "update.failed":
 		return "triangle-alert"
 	case kind == "memory.written", kind == "note.written":
 		return "pencil"

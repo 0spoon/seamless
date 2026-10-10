@@ -326,7 +326,7 @@
   // Overview ledger. Four classes only: the left edge is scanned, not read.
   function rowSev(kind, isError) {
     if (isError) return 'danger';
-    if (kind === 'agent.mishap' || kind === 'hook.error') return 'danger';
+    if (kind === 'agent.mishap' || kind === 'hook.error' || kind === 'update.failed') return 'danger';
     if (kind === 'retrieval.injected') return 'inject';
     if (kind === 'memory.written' || kind === 'note.written' || kind === 'trial.recorded') return 'write';
     return 'system';
