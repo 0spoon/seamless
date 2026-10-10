@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/arctop/seamless/internal/console"
+	"github.com/arctop/seamless/internal/hooks"
 )
 
 // activityT0 is when every tracker in these tests is built.
@@ -41,18 +42,19 @@ func activityHeldHandler(entered chan<- struct{}, release <-chan struct{}) http.
 	})
 }
 
-// activityRouteMux is the daemon's route table as far as the exemptions go: the
-// console's real registration, plus the two routes runServe mounts itself
-// (main.go), restated because runServe's mux is out of a test's reach.
+// activityRouteMux is the daemon's real route table (daemonRoutes, the one
+// runServe serves), with the routes runServe mounts itself stubbed and the
+// hook handler's and the console's own registrations real.
 func activityRouteMux(t *testing.T) *http.ServeMux {
 	t.Helper()
 	svc, err := console.New(console.Config{})
 	require.NoError(t, err)
-	mux := http.NewServeMux()
-	mux.Handle("/healthz", http.NotFoundHandler())
-	mux.Handle("/api/mcp", http.NotFoundHandler())
-	svc.Register(mux)
-	return mux
+	return daemonRoutes{
+		healthz: http.NotFoundHandler(), mcp: http.NotFoundHandler(),
+		a2a: http.NotFoundHandler(), agentCard: http.NotFoundHandler(),
+		hooks:   hooks.NewHandler(hooks.Config{PlansDir: t.TempDir()}),
+		console: svc,
+	}.mux()
 }
 
 // The exemptions follow the mux rather than a guess at it. Each row names the
@@ -106,6 +108,13 @@ func TestActivityTracker_ExemptionsFollowTheRoutes(t *testing.T) {
 		{"health by POST", http.MethodPost, "/healthz", "/healthz", true},
 		{"health with a query", http.MethodGet, "/healthz?probe=1", "/healthz", true},
 		{"health with a trailing slash", http.MethodGet, "/healthz/", "", false},
+
+		// The rest of runServe's routes are ordinary requests and count.
+		{"root redirect", http.MethodGet, "/", "GET /{$}", false},
+		{"a2a call", http.MethodPost, "/api/a2a", "/api/a2a", false},
+		{"agent card", http.MethodGet, "/.well-known/agent-card.json", "/.well-known/agent-card.json", false},
+		{"session-start hook", http.MethodPost, "/api/hooks/session-start", "POST /api/hooks/session-start", false},
+		{"post-tool-use hook", http.MethodPost, "/api/hooks/post-tool-use", "POST /api/hooks/post-tool-use", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.target, nil)
@@ -290,12 +299,13 @@ func TestActivityTracker_PanicGivesItsCountBack(t *testing.T) {
 	}
 }
 
-// Wired inside the host guard, a request the guard refuses never reaches the
-// tracker, while the same request under an allowed Host counts.
+// In the handler the daemon serves (daemonHandler), the tracker sits inside the
+// host guard: a request the guard refuses never reaches it, while the same
+// request under an allowed Host counts.
 func TestActivityTracker_InsideTheHostGuard(t *testing.T) {
 	clock := newActivityClock(activityT0)
 	tr := newActivityTracker(clock.now)
-	h := hostGuard("127.0.0.1:8081", nil, tr.wrap(okHandler()))
+	h := daemonHandler("127.0.0.1:8081", nil, tr, okHandler())
 	end := activityT0.Add(time.Minute)
 	clock.set(end)
 

@@ -14,9 +14,11 @@ import (
 // otherwise are not counted at all (activityExempt).
 
 // activityTracker counts the requests in flight and stamps when the most recent
-// one finished. It wraps the mux INSIDE the host guard -- hostGuard(bind, extra,
-// tracker.wrap(mux)) -- so a request the guard refuses never counts: a rebound
-// page knocking on the port is not someone using the daemon.
+// one finished. It wraps the routes INSIDE the host guard (daemonHandler,
+// main.go), so a request the guard refuses never counts: a rebound page
+// knocking on the port is not someone using the daemon. runServe builds one,
+// wraps its routes with it and hands its snapshot to the update checker
+// (updateCheckerDeps); both must be the same tracker.
 type activityTracker struct {
 	now      func() time.Time
 	inFlight atomic.Int64
@@ -88,8 +90,9 @@ func (a *activityTracker) snapshot() (inFlight int64, last time.Time) {
 	return inFlight, time.Unix(0, a.last.Load()).UTC()
 }
 
-// activityExempt reports whether a request is left out of the count. Three
-// routes would otherwise make the numbers lie:
+// activityExempt reports whether a request is left out of the count. Of the
+// routes runServe serves (daemonRoutes), three would otherwise make the
+// numbers lie:
 //
 //   - GET /console/events is the console's live feed, and GET /api/mcp is an
 //     MCP client's standing notification stream (mcp-go, legacy protocol).

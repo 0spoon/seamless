@@ -343,10 +343,17 @@ func runServe(args []string) error {
 	if err != nil {
 		return fmt.Errorf("seamlessd.serve: instance id: %w", err)
 	}
+	// The request-activity tracker (activity.go) wraps the routes below
+	// (daemonHandler), and the automatic update reads its snapshot to tell
+	// whether anything is using the daemon. It is built here because the
+	// checker takes it at construction; its clock starts a few milliseconds
+	// before the listener does, which is nothing against the 90 seconds of
+	// quiet the deadline waits for.
+	activity := newActivityTracker(time.Now)
 	// The background update check (internal/update): built here, started only
 	// once the listener is bound, so a daemon that cannot bind never records
 	// itself as running. The briefing asks it for the update notice.
-	upd := newUpdateChecker(cfg, db, rec, instance, logger)
+	upd := newUpdateChecker(cfg, db, rec, instance, activity, logger)
 	ret.SetUpdateNotice(upd.Notice)
 
 	// Gardener: propose-only maintenance, exposed to the gardener_apply MCP tool
@@ -431,27 +438,21 @@ func runServe(args []string) error {
 		slog.Info("gardener disabled")
 	}
 
-	mux := http.NewServeMux()
-	// Redirect the bare root to the console; {$} matches only "/" so other
-	// unmatched paths still return 404.
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/console/", http.StatusFound)
-	})
-	mux.HandleFunc("/healthz", healthzHandler(db, instance, upd.Status))
-	mux.Handle("/api/mcp", mcpSrv.Handler())
-	mux.Handle("/api/a2a", a2aSrv.Handler())
-	// The agent card is public discovery metadata (RFC 8615); the endpoint it
-	// names is what demands the bearer key.
-	mux.Handle("/.well-known/agent-card.json", a2aSrv.CardHandler())
-	hooksH.Register(mux)
-	consoleSrv.Register(mux)
+	mux := daemonRoutes{
+		healthz:   healthzHandler(db, instance, upd.Status),
+		mcp:       mcpSrv.Handler(),
+		a2a:       a2aSrv.Handler(),
+		agentCard: a2aSrv.CardHandler(),
+		hooks:     hooksH,
+		console:   consoleSrv,
+	}.mux()
 
-	// Host allowlist outermost, so a rebound request is refused before it can
-	// reach even an unauthenticated route (see netguard.go). The effective list
-	// is allowed_hosts plus the host of server_url, so naming the daemon is all
-	// it takes to arm the guard -- including on a wildcard bind.
+	// Host allowlist outermost, then the activity tracker, then the routes
+	// (daemonHandler). The effective list is allowed_hosts plus the host of
+	// server_url, so naming the daemon is all it takes to arm the guard --
+	// including on a wildcard bind.
 	tlsOn := cfg.TLSEnabled()
-	srv := newHTTPServer(ctx, bind, hostGuard(bind, cfg.AllowedHostsEffective(), mux))
+	srv := newHTTPServer(ctx, bind, daemonHandler(bind, cfg.AllowedHostsEffective(), activity, mux))
 	if tlsOn {
 		// TLS 1.2 floor: everything below it is either broken or obsolete, and
 		// nothing that speaks to this daemon (Go, curl, a browser) needs it.
@@ -555,6 +556,53 @@ func applyServeEnv(cfgPath, logFile string) (func(), error) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, f),
 		&slog.HandlerOptions{Level: slog.LevelInfo})))
 	return func() { _ = f.Close() }, nil
+}
+
+// routeRegistrar mounts its own routes on a mux (the hook handler, the
+// console).
+type routeRegistrar interface {
+	Register(mux *http.ServeMux)
+}
+
+// daemonRoutes is every route runServe serves. It is split from runServe so a
+// test can build the real route table: activity_test.go checks the activity
+// tracker's exemptions (activityExempt) against these registrations, not
+// against a copy of them that could drift.
+type daemonRoutes struct {
+	healthz, mcp, a2a, agentCard http.Handler
+	hooks, console               routeRegistrar
+}
+
+// mux registers the routes on a new mux.
+func (d daemonRoutes) mux() *http.ServeMux {
+	mux := http.NewServeMux()
+	// Redirect the bare root to the console; {$} matches only "/" so other
+	// unmatched paths still return 404.
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/console/", http.StatusFound)
+	})
+	mux.Handle("/healthz", d.healthz)
+	mux.Handle("/api/mcp", d.mcp)
+	mux.Handle("/api/a2a", d.a2a)
+	// The agent card is public discovery metadata (RFC 8615); the endpoint it
+	// names is what demands the bearer key.
+	mux.Handle("/.well-known/agent-card.json", d.agentCard)
+	d.hooks.Register(mux)
+	d.console.Register(mux)
+	return mux
+}
+
+// daemonHandler is what the daemon serves: the Host allowlist outermost, so a
+// rebound request is refused before it can reach even an unauthenticated
+// route (see netguard.go); inside it the activity tracker; inside that the
+// routes. The tracker sits inside the guard so a request the guard refuses
+// never counts: a page in the owner's browser knocking on the port under a
+// rebound name is not someone using the daemon, and counting it would let any
+// web page hold off an automatic update. Everything the guard lets through
+// counts unless activityExempt says otherwise, a request the bearer check then
+// refuses included; update.Decide allows for a client looping on a bad key.
+func daemonHandler(bind string, allowedHosts []string, activity *activityTracker, routes http.Handler) http.Handler {
+	return hostGuard(bind, allowedHosts, activity.wrap(routes))
 }
 
 // newHTTPServer builds the daemon's HTTP server. Requests inherit ctx as their
