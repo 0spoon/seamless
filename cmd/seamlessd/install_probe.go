@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"unicode/utf16"
 
 	"github.com/arctop/seamless/internal/update"
@@ -41,6 +42,11 @@ type installProbeEnv struct {
 	// taskXML returns the Scheduled Task's definition (`schtasks /Query /TN
 	// Seamless /XML`); an error means the task is absent or unreadable.
 	taskXML func() ([]byte, error)
+	// parentImage names this process's parent's executable, without its
+	// directory, and isCurrentUser reports whether a Scheduled Task principal
+	// names the user this process runs as: the Windows half of gate 9.
+	parentImage   func() (string, error)
+	isCurrentUser func(account string) (bool, error)
 }
 
 // realInstallProbeEnv reads the live process and machine.
@@ -53,9 +59,12 @@ func realInstallProbeEnv() installProbeEnv {
 		readFile: os.ReadFile,
 		sameFile: sameFile,
 		writable: dirWritable,
-		taskXML: func() ([]byte, error) {
+		// Read once: the service probe and gate 9 both parse it.
+		taskXML: sync.OnceValues(func() ([]byte, error) {
 			return exec.Command("schtasks", "/Query", "/TN", scheduledTask, "/XML").Output()
-		},
+		}),
+		parentImage:   parentImageName,
+		isCurrentUser: isCurrentUser,
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		env.home = home
@@ -190,16 +199,21 @@ func absentOrErr(sp update.ServiceProbe, err error) update.ServiceProbe {
 	return sp
 }
 
+// taskSchedulerImage is the executable Task Scheduler runs in: a task's
+// process is a child of the svchost.exe hosting the Schedule service.
+const taskSchedulerImage = "svchost.exe"
+
 // probeSupervised reports whether this process is the service's own instance,
 // not a release binary someone started by hand next to it.
 //
 //   - darwin: launchd names the job in XPC_SERVICE_NAME and is the parent
 //     (ppid 1) of a job it spawned.
-//   - linux: systemd places the unit's processes in its cgroup
-//     (/proc/self/cgroup ends in /seamless.service) and sets INVOCATION_ID.
-//   - windows: not decided yet -- how the Task Scheduler's process tree looks
-//     from inside is what spike 2.01 of the auto-update plan measures, so no
-//     Windows install counts as supervised until then.
+//   - linux: systemd places the unit's processes in its cgroup, under the
+//     user's manager (inSystemdUnit), and sets INVOCATION_ID.
+//   - windows: the parent is the Task Scheduler (svchost.exe) and the
+//     Seamless task's principal is this user. A serve started by hand has a
+//     shell or Explorer for its parent. Gate 5 has already tied the task to
+//     this executable and the installer's marker.
 func probeSupervised(env installProbeEnv) (bool, string) {
 	switch env.goos {
 	case "darwin":
@@ -211,7 +225,7 @@ func probeSupervised(env installProbeEnv) (bool, string) {
 		}
 		return true, ""
 	case "windows":
-		return false, "the Scheduled Task check is not available on Windows yet"
+		return windowsSupervised(env)
 	default:
 		cg, err := env.readFile("/proc/self/cgroup")
 		if err != nil {
@@ -227,9 +241,44 @@ func probeSupervised(env installProbeEnv) (bool, string) {
 	}
 }
 
+// windowsSupervised is gate 9 on Windows: this process is a child of the Task
+// Scheduler, and the Seamless task runs as this user.
+func windowsSupervised(env installProbeEnv) (bool, string) {
+	parent, err := env.parentImage()
+	if err != nil {
+		return false, "could not identify the parent process: " + err.Error()
+	}
+	if !strings.EqualFold(parent, taskSchedulerImage) {
+		return false, "the parent process is " + parent + ", not the Task Scheduler (" + taskSchedulerImage + ")"
+	}
+	raw, err := env.taskXML()
+	if err != nil {
+		return false, "the Scheduled Task " + scheduledTask + " could not be read"
+	}
+	def, err := parseTaskXML(raw)
+	if err != nil {
+		return false, "the Scheduled Task " + scheduledTask + " could not be parsed: " + err.Error()
+	}
+	if def.UserID == "" {
+		return false, "the Scheduled Task " + scheduledTask + " names no user"
+	}
+	mine, err := env.isCurrentUser(def.UserID)
+	switch {
+	case err != nil:
+		return false, "could not tell whether the Scheduled Task " + scheduledTask + "'s user " + def.UserID + " is this user: " + err.Error()
+	case !mine:
+		return false, "the Scheduled Task " + scheduledTask + " runs as " + def.UserID + ", not this user"
+	}
+	return true, ""
+}
+
 // inSystemdUnit reports whether a /proc/self/cgroup listing places the
-// process in unit: the cgroup v2 line ("0::/.../seamless.service") or, on a
-// cgroup v1 host, the name=systemd hierarchy's line.
+// process in unit under a user's service manager: the cgroup v2 line
+// ("0::/user.slice/.../user@1000.service/app.slice/seamless.service") or, on
+// a cgroup v1 host, the name=systemd hierarchy's line, which a legacy host
+// has instead of a "0::" line. A sub-cgroup of the unit is in it too -- the
+// unit's stop kills it -- and a system unit of the same name is not the
+// installer's.
 func inSystemdUnit(cgroup []byte, unit string) bool {
 	for line := range strings.SplitSeq(string(cgroup), "\n") {
 		parts := strings.SplitN(strings.TrimSpace(line), ":", 3)
@@ -239,11 +288,37 @@ func inSystemdUnit(cgroup []byte, unit string) bool {
 		if parts[1] != "" && parts[1] != "name=systemd" {
 			continue // a v1 controller hierarchy other than systemd's
 		}
-		if strings.HasSuffix(parts[2], "/"+unit) {
+		if inUserUnit(parts[2], unit) {
 			return true
 		}
 	}
 	return false
+}
+
+// inUserUnit reports whether a cgroup path lies in unit, or below it, under a
+// user manager's own cgroup (user@<uid>.service).
+func inUserUnit(path, unit string) bool {
+	manager := false
+	for seg := range strings.SplitSeq(path, "/") {
+		switch {
+		case !manager:
+			manager = isUserManager(seg)
+		case seg == unit:
+			return true
+		}
+	}
+	return false
+}
+
+// isUserManager reports whether a cgroup path segment is a user manager's
+// unit, user@<uid>.service.
+func isUserManager(seg string) bool {
+	uid, ok := strings.CutPrefix(seg, "user@")
+	if !ok {
+		return false
+	}
+	uid, ok = strings.CutSuffix(uid, ".service")
+	return ok && uid != "" && strings.Trim(uid, "0123456789") == ""
 }
 
 // plistProgram returns ProgramArguments[0] from a launchd plist, or "" when

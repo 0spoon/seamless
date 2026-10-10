@@ -42,15 +42,39 @@ const installerPlist = `<?xml version="1.0" encoding="UTF-8"?>
 const installerUnit = `# Written by https://thereisnospoon.org/install. Re-run it to update.
 [Unit]
 Description=Seamless -- local-first memory and coordination substrate for AI agents
+Documentation=https://thereisnospoon.org/docs/
+After=network.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 Environment=SEAMLESS_CONFIG=/h/.config/seamless/seamless.yaml
 ExecStart=/h/.local/bin/seamlessd serve
 Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
 `
 
 const cgroupV2 = "0::/user.slice/user-1000.slice/user@1000.service/app.slice/seamless.service\n"
+
+// The /proc/self/cgroup listings the 2.01 spike captured verbatim (Ubuntu
+// 24.04 on cgroup v2; Debian 12 on full cgroup v1, which has no "0::" line and
+// names the unit in the name=systemd hierarchy alone).
+const (
+	cgroupV2Daemon  = "0::/user.slice/user-501.slice/user@501.service/app.slice/seamless.service\n"
+	cgroupV2Updater = "0::/user.slice/user-501.slice/user@501.service/app.slice/seamless-update-01M4HFPS1DBMJXQ4CE8ZZ0JRDH.service\n"
+	cgroupV2Shell   = "0::/user.slice/user-501.slice/session-3.scope\n"
+	cgroupV1Daemon  = "13:blkio:/\n12:freezer:/\n11:cpuset:/\n10:devices:/user.slice\n9:net_cls,net_prio:/\n8:hugetlb:/\n" +
+		"7:perf_event:/\n6:pids:/user.slice/user-501.slice/user@501.service\n5:misc:/\n" +
+		"4:memory:/user.slice/user-501.slice/user@501.service\n3:rdma:/\n2:cpu,cpuacct:/\n" +
+		"1:name=systemd:/user.slice/user-501.slice/user@501.service/app.slice/seamless.service\n"
+	cgroupV1Updater = "13:blkio:/\n12:freezer:/\n11:cpuset:/\n10:devices:/user.slice\n9:net_cls,net_prio:/\n8:hugetlb:/\n" +
+		"7:perf_event:/\n6:pids:/user.slice/user-501.slice/user@501.service\n5:misc:/\n" +
+		"4:memory:/user.slice/user-501.slice/user@501.service\n3:rdma:/\n2:cpu,cpuacct:/\n" +
+		"1:name=systemd:/user.slice/user-501.slice/user@501.service/app.slice/seamless-update-01M4HGX6DW35570MVCR4P4WRFZ.service\n"
+)
 
 func TestPlistProgram(t *testing.T) {
 	require.Equal(t, "/h/.local/bin/seamlessd", plistProgram([]byte(installerPlist)))
@@ -83,14 +107,36 @@ func TestUnitExecStart(t *testing.T) {
 }
 
 func TestInSystemdUnit(t *testing.T) {
-	require.True(t, inSystemdUnit([]byte(cgroupV2), "seamless.service"))
-	require.True(t, inSystemdUnit([]byte(
-		"12:cpu,cpuacct:/user.slice\n1:name=systemd:/user.slice/user-1000.slice/user@1000.service/seamless.service\n"),
-		"seamless.service"), "cgroup v1 reads the name=systemd hierarchy")
-	require.False(t, inSystemdUnit([]byte("0::/user.slice/user-1000.slice/session-3.scope\n"), "seamless.service"))
-	require.False(t, inSystemdUnit([]byte("0::/system.slice/not-seamless.service\n"), "seamless.service"))
-	require.False(t, inSystemdUnit([]byte("12:cpu:/x/seamless.service\n"), "seamless.service"),
-		"a non-systemd v1 controller does not count")
+	tests := []struct {
+		name   string
+		cgroup string
+		in     bool
+	}{
+		{"cgroup v2, the daemon", cgroupV2Daemon, true},
+		{"cgroup v2, uid 1000", cgroupV2, true},
+		{"cgroup v1, the daemon: only the name=systemd line names the unit", cgroupV1Daemon, true},
+		{"cgroup v1 without app.slice (older systemd)",
+			"12:cpu,cpuacct:/user.slice\n1:name=systemd:/user.slice/user-1000.slice/user@1000.service/seamless.service\n", true},
+		{"a sub-cgroup of the unit, which the unit's stop kills",
+			"0::/user.slice/user-501.slice/user@501.service/app.slice/seamless.service/x\n", true},
+		{"a unit in a slice of its own",
+			"0::/user.slice/user-501.slice/user@501.service/background.slice/seamless.service\n", true},
+		{"cgroup v2, the updater's transient unit", cgroupV2Updater, false},
+		{"cgroup v1, the updater's transient unit", cgroupV1Updater, false},
+		{"a login shell", cgroupV2Shell, false},
+		{"a system unit of the same name is not the installer's", "0::/system.slice/seamless.service\n", false},
+		{"no user manager above the unit", "0::/user.slice/user-501.slice/seamless.service\n", false},
+		{"a malformed manager segment", "0::/user.slice/user-501.slice/user@x.service/app.slice/seamless.service\n", false},
+		{"another unit", "0::/system.slice/not-seamless.service\n", false},
+		{"a non-systemd v1 controller does not count",
+			"12:cpu:/user.slice/user-501.slice/user@501.service/app.slice/seamless.service\n", false},
+		{"empty", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.in, inSystemdUnit([]byte(tt.cgroup), "seamless.service"))
+		})
+	}
 }
 
 // utf16LE renders s the way schtasks writes it: UTF-16 little endian with a BOM.
@@ -169,18 +215,34 @@ func fakeProbeEnv(goos string) installProbeEnv {
 		},
 		writable: func(string) bool { return true },
 		taskXML:  func() ([]byte, error) { return nil, errors.New("not windows") },
+		parentImage: func() (string, error) {
+			panic("only windows asks for the parent's image")
+		},
+		isCurrentUser: func(string) (bool, error) {
+			panic("only windows asks whose the task is")
+		},
 	}
 	switch goos {
 	case "darwin":
 		env.environ = []string{"XPC_SERVICE_NAME=org.thereisnospoon.seamless", "SEAMLESS_CONFIG=/h/.config/seamless/seamless.yaml"}
 	case "linux":
 		env.environ = []string{"INVOCATION_ID=abc", "SEAMLESS_CONFIG=/h/.config/seamless/seamless.yaml"}
+	case "windows":
+		// The Task Scheduler (svchost.exe) started this process from the
+		// installer's Seamless task, which belongs to this user.
+		env.home = `C:\Users\me`
+		env.exe = `C:\Users\me\AppData\Local\Programs\Seamless\seamlessd.exe`
+		env.ppid = 2672
+		env.taskXML = func() ([]byte, error) { return utf16LE(taskXML), nil }
+		env.parentImage = func() (string, error) { return "svchost.exe", nil }
+		env.isCurrentUser = func(account string) (bool, error) { return account == "S-1-5-21-1-2-3-1001", nil }
 	}
 	return env
 }
 
 func TestProbeInstall(t *testing.T) {
 	const cfgPath = "/h/.config/seamless/seamless.yaml"
+	const winCfg = `C:\Users\me\.config\seamless\seamless.yaml`
 	tests := []struct {
 		name     string
 		goos     string
@@ -232,14 +294,33 @@ func TestProbeInstall(t *testing.T) {
 		{"root", "linux", func(e *installProbeEnv) { e.euid = 0 }, cfgPath, "release", update.KindUnknown, "root"},
 		{"homebrew", "darwin", func(e *installProbeEnv) { e.exe = "/opt/homebrew/Caskroom/seamless/0.7.2/seamlessd" },
 			cfgPath, "release", update.KindHomebrew, "Homebrew"},
-		{"windows task is the installer's but supervision is unverified", "windows", func(e *installProbeEnv) {
-			e.exe = `C:\Users\me\AppData\Local\Programs\Seamless\seamlessd.exe`
-			e.home = `C:\Users\me`
-			e.taskXML = func() ([]byte, error) { return utf16LE(taskXML), nil }
-		}, `C:\Users\me\.config\seamless\seamless.yaml`, "release", update.KindUnknown, "Scheduled Task check"},
+		{"windows installer", "windows", nil, winCfg, "release", update.KindInstaller, ""},
+		{"windows parent's image name is matched case-insensitively", "windows", func(e *installProbeEnv) {
+			e.parentImage = func() (string, error) { return "SVCHOST.EXE", nil }
+		}, winCfg, "release", update.KindInstaller, ""},
+		{"windows serve started by hand from a shell", "windows", func(e *installProbeEnv) {
+			e.parentImage = func() (string, error) { return "cmd.exe", nil }
+		}, winCfg, "release", update.KindUnknown, "the parent process is cmd.exe, not the Task Scheduler (svchost.exe)"},
+		{"windows serve started from Explorer", "windows", func(e *installProbeEnv) {
+			e.parentImage = func() (string, error) { return "explorer.exe", nil }
+		}, winCfg, "release", update.KindUnknown, "the parent process is explorer.exe"},
+		{"windows parent unknown", "windows", func(e *installProbeEnv) {
+			e.parentImage = func() (string, error) { return "", errors.New("the parent process 4242 has exited") }
+		}, winCfg, "release", update.KindUnknown, "could not identify the parent process: the parent process 4242 has exited"},
+		{"windows task belongs to another user", "windows", func(e *installProbeEnv) {
+			e.isCurrentUser = func(string) (bool, error) { return false, nil }
+		}, winCfg, "release", update.KindUnknown, "runs as S-1-5-21-1-2-3-1001, not this user"},
+		{"windows task user cannot be resolved", "windows", func(e *installProbeEnv) {
+			e.isCurrentUser = func(string) (bool, error) { return false, errors.New("no mapping") }
+		}, winCfg, "release", update.KindUnknown, "could not tell whether"},
+		{"windows task names no user", "windows", func(e *installProbeEnv) {
+			e.taskXML = func() ([]byte, error) {
+				return utf16LE(strings.Replace(taskXML, "<UserId>S-1-5-21-1-2-3-1001</UserId>", "", 1)), nil
+			}
+		}, winCfg, "release", update.KindUnknown, "names no user"},
 		{"windows without the task", "windows", func(e *installProbeEnv) {
-			e.home = `C:\Users\me`
-		}, `C:\Users\me\.config\seamless\seamless.yaml`, "release", update.KindUnknown, "no installer-managed service"},
+			e.taskXML = func() ([]byte, error) { return nil, errors.New("exit status 1") }
+		}, winCfg, "release", update.KindUnknown, "no installer-managed service"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

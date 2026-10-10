@@ -162,27 +162,81 @@ func embeddedRootVerifier() func(bundle, artifact []byte, v update.Version) erro
 // service restart would kill it.
 var errInsideService = errors.New("the updater must run outside the service's process tree")
 
-// outsideServiceCheck is the updater's self-check that it does NOT run inside
-// the service it is about to restart -- the inverse of Detect's gate 9 -- or
-// the installer's bootout, restart or Stop-ScheduledTask would kill it
-// mid-install and leave the swap half done. On Linux, /proc/self/cgroup must
-// not place this process in the seamless.service unit (inSystemdUnit). On
-// darwin and Windows the answer depends on how the daemon starts the updater
-// (its own launchd session or job, outside the Scheduled Task's job object),
-// which task 2.09 builds and proves: until it does, they fail closed. So do
-// unreadable answers and every other OS.
+// jobObjectLimitKillOnJobClose is Windows' JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE:
+// a job with it kills every process in it once its last handle closes.
+const jobObjectLimitKillOnJobClose = 0x2000
+
+// selfProcess is what outsideServiceCheck reads about this process beyond
+// /proc: its process group (darwin) and its job (windows).
+type selfProcess struct {
+	pid, pgid int
+	inJob     bool
+	jobLimits uint32 // the job's JOB_OBJECT_LIMIT_* flags, when inJob
+}
+
+// outsideServiceCheck is the updater's self-check that it does NOT run where
+// stopping the service it is about to restart would take it down too -- the
+// inverse of Detect's gate 9 -- or the installer's bootout, restart or
+// Stop-ScheduledTask would kill it mid-install and leave the swap half done.
+// The rule per OS is how that OS stops a service, as the 2.01 spikes measured
+// it, and what the daemon's spawner (update_spawn.go) does to escape it:
+//
+//   - linux: systemd stops the unit's whole cgroup, so /proc/self/cgroup must
+//     not place this process in the seamless.service unit (inSystemdUnit). A
+//     transient unit of its own passes.
+//   - darwin: launchd signals the job's process group, so this process must
+//     lead a group of its own (pgid == pid). A Setsid child and a launchd
+//     job's main process pass; a plain child of the daemon does not. Not
+//     XPC_SERVICE_NAME, nor the parent pid: an orphaned updater inherits the
+//     one and shares ppid 1 with the daemon.
+//   - windows: Task Scheduler's stop ends only the task's own process, which is
+//     `serve`, never this `update --auto`, and leaves the rest of its job
+//     running; install.ps1 stops only `serve` processes. What would still take
+//     this process down is a job that kills its members when it closes, so
+//     that, read from its innermost job, is what it refuses. Not "the daemon
+//     is not in my job": an updater the update task starts shares the
+//     daemon's job and survives.
+//
+// Unreadable answers fail closed, and so does every other OS, where nothing
+// starts the updater.
 func outsideServiceCheck(goos string, readFile func(string) ([]byte, error)) error {
-	if goos != "linux" {
-		return fmt.Errorf("%w: on %s that cannot be checked until the daemon's updater spawner (task 2.09) exists", errInsideService, goos)
+	return checkOutsideService(goos, readFile, ownProcess)
+}
+
+// checkOutsideService is outsideServiceCheck over an injected reader of this
+// process's group and job.
+func checkOutsideService(goos string, readFile func(string) ([]byte, error), self func() (selfProcess, error)) error {
+	switch goos {
+	case "linux":
+		cg, err := readFile("/proc/self/cgroup")
+		if err != nil {
+			return fmt.Errorf("%w: cannot read /proc/self/cgroup: %w", errInsideService, err)
+		}
+		if inSystemdUnit(cg, systemdUnit) {
+			return fmt.Errorf("%w: this process is in the %s unit, which the installer restarts", errInsideService, systemdUnit)
+		}
+		return nil
+	case "darwin":
+		p, err := self()
+		if err != nil {
+			return fmt.Errorf("%w: cannot read this process's group: %w", errInsideService, err)
+		}
+		if p.pgid != p.pid {
+			return fmt.Errorf("%w: this process is in process group %d, not one of its own, and launchd stops the service by signalling its job's group", errInsideService, p.pgid)
+		}
+		return nil
+	case "windows":
+		p, err := self()
+		if err != nil {
+			return fmt.Errorf("%w: cannot read this process's job: %w", errInsideService, err)
+		}
+		if p.inJob && p.jobLimits&jobObjectLimitKillOnJobClose != 0 {
+			return fmt.Errorf("%w: this process is in a job that kills its processes when it closes", errInsideService)
+		}
+		return nil
+	default:
+		return fmt.Errorf("%w: on %s nothing starts the updater outside the service, so this cannot be checked", errInsideService, goos)
 	}
-	cg, err := readFile("/proc/self/cgroup")
-	if err != nil {
-		return fmt.Errorf("%w: cannot read /proc/self/cgroup: %w", errInsideService, err)
-	}
-	if inSystemdUnit(cg, systemdUnit) {
-		return fmt.Errorf("%w: this process is in the %s unit, which the installer restarts", errInsideService, systemdUnit)
-	}
-	return nil
 }
 
 // autoUpdateAllowed re-reads whether the owner still allows automatic

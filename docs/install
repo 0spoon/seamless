@@ -737,12 +737,18 @@ service_systemd() {
 	fi
 	unit=$HOME/.config/systemd/user/seamless.service
 	mkdir -p "$HOME/.config/systemd/user" "$HOME/.seamless"
+	# StartLimitIntervalSec=0 lifts systemd's start limit (5 starts in 10s).
+	# Without it, a crash loop, this script's own restart or an updater's
+	# rollback that runs into the limit leaves the service down for good:
+	# Restart=always does not retry past it. With it, Restart=always keeps
+	# trying every RestartSec, the way launchd's KeepAlive does.
 	cat >"$unit" <<EOF
 # Written by https://thereisnospoon.org/install. Re-run it to update.
 [Unit]
 Description=Seamless -- local-first memory and coordination substrate for AI agents
 Documentation=$DOCS
 After=network.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -758,7 +764,10 @@ EOF
 	systemctl --user enable seamless.service >/dev/null 2>&1 ||
 		die "systemctl --user enable seamless.service failed"
 	# enable --now would leave an already-running old binary in place, which is
-	# exactly the upgrade case. Enable, then restart unconditionally.
+	# exactly the upgrade case. Enable, then restart unconditionally, after a
+	# reset-failed: it clears a start limit already hit, should the rewritten
+	# unit not have loaded (the daemon-reload above is unchecked).
+	systemctl --user reset-failed seamless.service 2>/dev/null || true
 	systemctl --user restart seamless.service ||
 		die "systemctl --user restart seamless.service failed; check: journalctl --user -u seamless -n 50"
 

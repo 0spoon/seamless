@@ -167,7 +167,7 @@ func uninstallService(isClient bool, installDir string, dryRun bool) {
 		fieldRow("kind", dim("not installed (role: client -- this install runs no daemon)"))
 		return
 	}
-	runTeardown(serviceTeardown(runtime.GOOS, homeDir(), os.Getuid(), installDir), dryRun)
+	runTeardown(serviceTeardown(runtime.GOOS, homeDir(), os.Getuid(), installDir, ownUpdateTask()), dryRun)
 }
 
 // purgePaths is what --purge deletes: the config dir always, the data dir only
@@ -274,7 +274,15 @@ type serviceTeardownPlan struct {
 // serviceTeardown builds the teardown steps for goos. This is the first place
 // service management lives in Go; install writes the plist/unit/task from the
 // Makefile and the two installer scripts, so the identifiers are re-derived here.
-func serviceTeardown(goos, home string, uid int, installDir string) serviceTeardownPlan {
+//
+// It also removes what the daemon's updater spawner leaves behind
+// (update_spawn.go): on Windows the per-user update task, updateTask ("" when
+// this user's SID could not be read); on Linux any attempt's transient unit
+// still loaded, stopped before the service so an updater caught mid-update
+// cannot restart what this removes (--collect clears a finished one). The
+// darwin updater is a plain process in a session of its own, which leaves
+// nothing to remove.
+func serviceTeardown(goos, home string, uid int, installDir, updateTask string) serviceTeardownPlan {
 	switch goos {
 	case "darwin":
 		plist := filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist")
@@ -284,19 +292,28 @@ func serviceTeardown(goos, home string, uid int, installDir string) serviceTeard
 			RemoveFiles: []string{plist},
 		}
 	case "windows":
+		stop := []*exec.Cmd{
+			exec.Command("schtasks", "/End", "/TN", scheduledTask),
+			exec.Command("schtasks", "/Delete", "/TN", scheduledTask, "/F"),
+		}
+		if updateTask != "" {
+			stop = append(stop, exec.Command("schtasks", "/Delete", "/TN", updateTask, "/F"))
+		}
 		return serviceTeardownPlan{
-			Label: "Scheduled Task (" + scheduledTask + ")",
-			StopCmds: []*exec.Cmd{
-				exec.Command("schtasks", "/End", "/TN", scheduledTask),
-				exec.Command("schtasks", "/Delete", "/TN", scheduledTask, "/F"),
-			},
+			Label:     "Scheduled Task (" + scheduledTask + ")",
+			StopCmds:  stop,
 			PathEdits: []*exec.Cmd{exec.Command("powershell", "-NoProfile", "-Command", windowsPathRemoveScript(installDir))},
 		}
 	default: // linux and other unixes run the systemd --user unit
 		unit := filepath.Join(home, ".config", "systemd", "user", systemdUnit)
 		return serviceTeardownPlan{
-			Label:       "systemd --user (" + systemdUnit + ")",
-			StopCmds:    []*exec.Cmd{exec.Command("systemctl", "--user", "disable", "--now", systemdUnit)},
+			Label: "systemd --user (" + systemdUnit + ")",
+			StopCmds: []*exec.Cmd{
+				// A glob matches only units loaded now, which is every leftover
+				// transient one: they exist only while loaded.
+				exec.Command("systemctl", "--user", "stop", updateUnitPrefix+"*.service"),
+				exec.Command("systemctl", "--user", "disable", "--now", systemdUnit),
+			},
 			RemoveFiles: []string{unit},
 			ReloadCmds:  []*exec.Cmd{exec.Command("systemctl", "--user", "daemon-reload")},
 		}

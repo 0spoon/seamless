@@ -374,19 +374,23 @@ func knobEnv(knobs map[string]string) ([]string, error) {
 // installer in: the updater's own inherited environment with every SEAMLESS_*
 // variable dropped (case-insensitively on Windows), plus exactly knobs.
 //
-// Inherited minus SEAMLESS_*, not a whitelist. The updater inherits the
-// daemon's environment, which the service manager already keeps minimal
-// (launchd's, the systemd user manager's, the logon session's for the
-// Scheduled Task), and the installers need more of it than a list would keep
-// working: PATH for curl, tar, shasum and launchctl; HOME; TMPDIR for mktemp;
-// XDG_RUNTIME_DIR or DBUS_SESSION_BUS_ADDRESS for systemctl --user; the proxy
-// and CA-bundle variables curl and Invoke-WebRequest honor; CODEX_HOME, which
-// install-hooks reads; and on Windows SystemRoot, USERPROFILE, APPDATA,
-// LOCALAPPDATA, TEMP, PSModulePath, PROCESSOR_ARCHITECTURE and the rest
-// PowerShell and its cmdlets expect. Dropping SEAMLESS_* is what matters: it
-// removes every knob the installer would otherwise act on (SEAMLESS_CONFIG,
-// SEAMLESS_SERVER_URL, SEAMLESS_MCP_API_KEY, SEAMLESS_NO_SERVICE, ...), so the
-// only ones it sees are the ones the updater chose.
+// Inherited minus SEAMLESS_*, not a whitelist. The updater's environment is
+// already a service manager's minimal one, by way of how the daemon starts it
+// (update_spawn.go): on darwin it inherits the daemon's, which is launchd's;
+// on Linux its transient unit starts from the systemd user manager's, not the
+// daemon's, plus the proxy and CA variables the spawner forwards; on Windows
+// the update task's comes from the owner's logon session, like the daemon's,
+// and the fallback child inherits the daemon's. The installers need more of it
+// than a list would keep working: PATH for curl, tar, shasum and launchctl;
+// HOME; TMPDIR for mktemp; XDG_RUNTIME_DIR or DBUS_SESSION_BUS_ADDRESS for
+// systemctl --user; the proxy and CA-bundle variables curl and
+// Invoke-WebRequest honor; CODEX_HOME, which install-hooks reads; and on
+// Windows SystemRoot, USERPROFILE, APPDATA, LOCALAPPDATA, TEMP, PSModulePath,
+// PROCESSOR_ARCHITECTURE and the rest PowerShell and its cmdlets expect.
+// Dropping SEAMLESS_* is what matters: it removes every knob the installer
+// would otherwise act on (SEAMLESS_CONFIG, SEAMLESS_SERVER_URL,
+// SEAMLESS_MCP_API_KEY, SEAMLESS_NO_SERVICE, ...), so the only ones it sees
+// are the ones the updater chose.
 func unattendedInstallerEnv(goos string, inherited []string, knobs map[string]string) ([]string, error) {
 	kv, err := knobEnv(knobs)
 	if err != nil {

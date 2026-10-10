@@ -11,9 +11,11 @@ import (
 
 func TestServiceTeardown(t *testing.T) {
 	home := "/home/tester"
+	const updateTask = "SeamlessUpdate-S-1-5-21-1-2-3-1001"
 	tests := []struct {
 		name         string
 		goos         string
+		updateTask   string
 		wantLabel    string
 		wantStop     [][]string
 		wantRemove   []string
@@ -21,6 +23,8 @@ func TestServiceTeardown(t *testing.T) {
 		wantPathEdit bool
 	}{
 		{
+			// The darwin updater is a process in a session of its own: there
+			// is no launchd job or plist of its own to remove.
 			name:      "darwin launchd",
 			goos:      "darwin",
 			wantLabel: "launchd (org.thereisnospoon.seamless)",
@@ -30,17 +34,34 @@ func TestServiceTeardown(t *testing.T) {
 			},
 		},
 		{
+			// Leftover attempt units stop first, so an updater caught
+			// mid-update cannot restart the service this removes.
 			name:      "linux systemd --user",
 			goos:      "linux",
 			wantLabel: "systemd --user (seamless.service)",
-			wantStop:  [][]string{{"systemctl", "--user", "disable", "--now", "seamless.service"}},
+			wantStop: [][]string{
+				{"systemctl", "--user", "stop", "seamless-update-*.service"},
+				{"systemctl", "--user", "disable", "--now", "seamless.service"},
+			},
 			wantRemove: []string{
 				filepath.Join(home, ".config", "systemd", "user", "seamless.service"),
 			},
 			wantReload: [][]string{{"systemctl", "--user", "daemon-reload"}},
 		},
 		{
-			name:      "windows scheduled task",
+			name:       "windows scheduled task and the update task",
+			goos:       "windows",
+			updateTask: updateTask,
+			wantLabel:  "Scheduled Task (Seamless)",
+			wantStop: [][]string{
+				{"schtasks", "/End", "/TN", "Seamless"},
+				{"schtasks", "/Delete", "/TN", "Seamless", "/F"},
+				{"schtasks", "/Delete", "/TN", updateTask, "/F"},
+			},
+			wantPathEdit: true,
+		},
+		{
+			name:      "windows without the user's SID leaves the update task alone",
 			goos:      "windows",
 			wantLabel: "Scheduled Task (Seamless)",
 			wantStop: [][]string{
@@ -52,7 +73,7 @@ func TestServiceTeardown(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := serviceTeardown(tt.goos, home, 501, "/opt/bin")
+			p := serviceTeardown(tt.goos, home, 501, "/opt/bin", tt.updateTask)
 			require.Equal(t, tt.wantLabel, p.Label)
 			require.Equal(t, tt.wantStop, argvs(p.StopCmds))
 			require.Equal(t, tt.wantRemove, p.RemoveFiles)

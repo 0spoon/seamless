@@ -538,21 +538,67 @@ func TestUpdaterProbe(t *testing.T) {
 	require.Len(t, p.ForeignEnv, 3, "the probe passed in is not modified")
 }
 
+// TestOutsideServiceCheck runs the self-check per OS over fakes. The cgroup
+// listings are the spike's verbatim samples (install_probe_test.go).
 func TestOutsideServiceCheck(t *testing.T) {
-	read := func(content string, err error) func(string) ([]byte, error) {
+	cgroup := func(content string, err error) func(string) ([]byte, error) {
 		return func(path string) ([]byte, error) {
 			require.Equal(t, "/proc/self/cgroup", path)
 			return []byte(content), err
 		}
 	}
-	require.NoError(t, outsideServiceCheck("linux", read("0::/user.slice/user-1000.slice/user@1000.service/app.slice/seamless-update.scope\n", nil)))
-	err := outsideServiceCheck("linux", read("0::/user.slice/user-1000.slice/user@1000.service/app.slice/seamless.service\n", nil))
-	require.ErrorIs(t, err, errInsideService)
-	require.ErrorIs(t, outsideServiceCheck("linux", read("", os.ErrPermission)), errInsideService)
-	for _, goos := range []string{"darwin", "windows", "freebsd"} {
-		err := outsideServiceCheck(goos, read("", nil))
-		require.ErrorIs(t, err, errInsideService, goos)
-		require.Contains(t, err.Error(), "2.09")
+	proc := func(p selfProcess, err error) func() (selfProcess, error) {
+		return func() (selfProcess, error) { return p, err }
+	}
+	noCgroup := cgroup("", errors.New("only linux reads /proc"))
+	noProc := proc(selfProcess{}, errors.New("linux reads only /proc"))
+	tests := []struct {
+		name    string
+		goos    string
+		read    func(string) ([]byte, error)
+		self    func() (selfProcess, error)
+		outside bool
+		reason  string
+	}{
+		{"linux: the updater's transient unit", "linux", cgroup(cgroupV2Updater, nil), noProc, true, ""},
+		{"linux: a login shell", "linux", cgroup(cgroupV2Shell, nil), noProc, true, ""},
+		{"linux: inside seamless.service", "linux", cgroup(cgroupV2Daemon, nil), noProc, false, "seamless.service unit"},
+		{"linux v1: the updater's transient unit", "linux", cgroup(cgroupV1Updater, nil), noProc, true, ""},
+		{"linux v1: inside seamless.service", "linux", cgroup(cgroupV1Daemon, nil), noProc, false, "seamless.service unit"},
+		{"linux: a sub-cgroup of the unit, which its stop kills", "linux",
+			cgroup("0::/user.slice/user-501.slice/user@501.service/app.slice/seamless.service/x\n", nil), noProc, false, "seamless.service unit"},
+		{"linux: a system unit of the same name, which the installer never restarts", "linux",
+			cgroup("0::/system.slice/seamless.service\n", nil), noProc, true, ""},
+		{"linux: unreadable", "linux", cgroup("", os.ErrPermission), noProc, false, "/proc/self/cgroup"},
+
+		{"darwin: a Setsid child leads its own group", "darwin", noCgroup, proc(selfProcess{pid: 4242, pgid: 4242}, nil), true, ""},
+		{"darwin: a launchd job's main process leads its own group", "darwin", noCgroup, proc(selfProcess{pid: 900, pgid: 900}, nil), true, ""},
+		{"darwin: a plain child shares the service's group", "darwin", noCgroup, proc(selfProcess{pid: 4243, pgid: 900}, nil), false, "process group 900"},
+		{"darwin: unreadable", "darwin", noCgroup, proc(selfProcess{}, errors.New("getpgid: EPERM")), false, "process's group"},
+
+		{"windows: in no job", "windows", noCgroup, proc(selfProcess{pid: 7}, nil), true, ""},
+		{"windows: the task's shared job, SILENT_BREAKAWAY_OK only", "windows", noCgroup,
+			proc(selfProcess{pid: 7, inJob: true, jobLimits: 0x1000}, nil), true, ""},
+		{"windows: the task's job with that flag toggled off", "windows", noCgroup,
+			proc(selfProcess{pid: 7, inJob: true}, nil), true, ""},
+		{"windows: a job that kills its processes when it closes", "windows", noCgroup,
+			proc(selfProcess{pid: 7, inJob: true, jobLimits: jobObjectLimitKillOnJobClose}, nil), false, "kills its processes"},
+		{"windows: KILL_ON_JOB_CLOSE among other limits", "windows", noCgroup,
+			proc(selfProcess{pid: 7, inJob: true, jobLimits: 0x3000}, nil), false, "kills its processes"},
+		{"windows: unreadable", "windows", noCgroup, proc(selfProcess{}, errors.New("IsProcessInJob: denied")), false, "process's job"},
+
+		{"another OS starts no updater", "freebsd", noCgroup, noProc, false, "on freebsd"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkOutsideService(tt.goos, tt.read, tt.self)
+			if tt.outside {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, errInsideService)
+			require.ErrorContains(t, err, tt.reason)
+		})
 	}
 }
 
