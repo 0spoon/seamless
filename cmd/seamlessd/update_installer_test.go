@@ -4,12 +4,14 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -65,9 +67,20 @@ func TestRunInstallerScript_StopsAHungInstaller(t *testing.T) {
 
 func TestOpenUpdateLog_OneFilePerAttemptAndPruned(t *testing.T) {
 	dataDir := t.TempDir()
+	// Ids minted a millisecond apart: ULIDs from one millisecond order by
+	// their random half, not by creation, and a tight loop mints many per
+	// millisecond. Real attempts are never that close together.
+	base := time.Now()
+	mintedAt := 0
+	attemptID := func() string {
+		mintedAt++
+		id, err := ulid.New(ulid.Timestamp(base.Add(time.Duration(mintedAt)*time.Millisecond)), rand.Reader)
+		require.NoError(t, err)
+		return id.String()
+	}
 	var ids []string
 	for range updateLogKeep + 3 {
-		id := testAttemptID(t)
+		id := attemptID()
 		ids = append(ids, id)
 		f, path, err := openUpdateLog(dataDir, id)
 		require.NoError(t, err)
@@ -75,7 +88,7 @@ func TestOpenUpdateLog_OneFilePerAttemptAndPruned(t *testing.T) {
 		require.NoError(t, f.Close())
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(updateLogDir(dataDir), "notes.txt"), nil, 0o600))
-	_, _, err := openUpdateLog(dataDir, testAttemptID(t))
+	_, _, err := openUpdateLog(dataDir, attemptID())
 	require.NoError(t, err)
 
 	entries, err := os.ReadDir(updateLogDir(dataDir))
