@@ -296,31 +296,33 @@ func TestDecide_WaitWords(t *testing.T) {
 	require.Equal(t, "an earlier attempt failed; trying again in 1h", Decide(in).Wait)
 }
 
-func TestHeldBack(t *testing.T) {
+func TestNewestWait(t *testing.T) {
 	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
 	r := rel("0.7.4", now.Add(-5*time.Hour), true)
 	day := 24 * time.Hour
 
-	code, words := heldBack(r, now, day, nil, &Hold{Through: ver("0.7.5"), From: ver("0.7.5")})
+	code, words := newestWait(r, now, day, nil, &Hold{Through: ver("0.7.5"), From: ver("0.7.5")})
 	require.Equal(t, WaitHeld, code)
 	require.Equal(t, "v0.7.4 is held back: this install went back from v0.7.5, so automatic updates skip releases up to v0.7.5 until they are resumed", words)
 
-	code, words = heldBack(r, now, day, []Block{{Version: ver("0.7.4"), Reason: BlockRolledBack}}, nil)
+	code, words = newestWait(r, now, day, []Block{{Version: ver("0.7.4"), Reason: BlockRolledBack}}, nil)
 	require.Equal(t, WaitBlocked, code)
 	require.Equal(t, "automatic updates skip v0.7.4: the update to it rolled back", words)
 
 	unsigned := r
 	unsigned.ChecksumsBundle = false
-	code, _ = heldBack(unsigned, now, day, nil, nil)
+	code, words = newestWait(unsigned, now, day, nil, nil)
 	require.Equal(t, WaitUnsigned, code)
+	require.Equal(t, "v0.7.4 carries no signed checksums bundle, which an automatic update verifies", words)
 
-	code, words = heldBack(r, now, day, nil, nil)
+	code, words = newestWait(r, now, day, nil, nil)
 	require.Equal(t, WaitSoak, code)
 	require.Equal(t, "v0.7.4 waits out its 24h soak, about 19h to go", words)
-	code, _ = heldBack(r, time.Time{}, day, nil, nil)
+	code, words = newestWait(r, time.Time{}, day, nil, nil)
 	require.Equal(t, WaitSoak, code)
+	require.Equal(t, "v0.7.4 waits out its 24h soak; GitHub's clock is not known yet", words)
 
-	code, words = heldBack(r, now, 0, nil, nil)
+	code, words = newestWait(r, now, 0, nil, nil)
 	require.Empty(t, code)
 	require.Empty(t, words)
 }
@@ -334,11 +336,4 @@ func TestBackoffWait(t *testing.T) {
 		time.Hour, 2 * time.Hour, 4 * time.Hour, 8 * time.Hour, 16 * time.Hour, 24 * time.Hour, 24 * time.Hour,
 	}, got)
 	require.Equal(t, 24*time.Hour, backoffWait(1000), "no overflow")
-}
-
-func TestSpanWords(t *testing.T) {
-	require.Equal(t, "24h", spanWords(24*time.Hour))
-	require.Equal(t, "90m", spanWords(90*time.Minute))
-	require.Equal(t, "90s", spanWords(90*time.Second))
-	require.Equal(t, "1m30.5s", spanWords(90*time.Second+500*time.Millisecond))
 }

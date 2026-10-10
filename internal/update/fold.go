@@ -23,7 +23,7 @@ const (
 	// was restored.
 	OutcomeRolledBack = "rolled_back"
 	// OutcomeFailed: the attempt failed with the install left as it was:
-	// before anything changed (Stage.PreSwap, StageVerify, or stageSpawn when
+	// before anything changed (Stage.PreSwap, StageVerify, or StageSpawn when
 	// the updater never started), or in StageInstall with the installer
 	// leaving From in place.
 	OutcomeFailed = "failed"
@@ -42,11 +42,12 @@ const (
 	OutcomeSuperseded = "superseded"
 )
 
-// stageSpawn is the stage an AttemptResult and the update.failed payload name
+// StageSpawn is the stage an AttemptResult and the update.failed payload name
 // for an attempt whose updater never wrote a record: Spawn returned an error,
 // or nothing showed up within AttemptStartWindow. It is not a Stage the
-// updater moves through (Stages).
-const stageSpawn Stage = "spawn"
+// updater moves through (Stages); the surfaces word it as the updater never
+// starting.
+const StageSpawn Stage = "spawn"
 
 // spawnedByDaemon reports whether an attempt with why was started by a
 // daemon's checker, so its outcome feeds blocks, backoff and the pause. A

@@ -170,15 +170,12 @@ func newestFate(st update.Status, now time.Time) (tone, then string) {
 		}
 		return "warn", "updating is your call"
 	}
-	if h := st.Hold; h != nil && newest.Compare(h.Through) <= 0 {
-		return "", "this install went back from v" + h.From.String() + ", so automatic updates skip it until they are resumed"
-	}
-	for _, b := range st.Blocked {
-		if b.Version == newest {
-			return "warn", "automatic updates skip it (" + blockWords(b.Reason) + "), so updating to it is your call"
-		}
-	}
-	if !st.Newest.ChecksumsBundle {
+	switch code, why := update.HeldBack(*st.Newest, st.Blocked, st.Hold); code {
+	case update.WaitHeld:
+		return "", "this install went back from v" + st.Hold.From.String() + ", so automatic updates skip it until they are resumed"
+	case update.WaitBlocked:
+		return "warn", "automatic updates skip it (" + why + "), so updating to it is your call"
+	case update.WaitUnsigned:
 		return "warn", "it carries no signed checksums bundle, so updating to it is your call"
 	}
 	switch target := st.Target; {
@@ -187,7 +184,7 @@ func newestFate(st update.Status, now time.Time) (tone, then string) {
 	case target != nil && target.Version == newest:
 		return "", "it installs by itself within a minute"
 	case st.Settings.MinAge > 0 && st.Newest.PublishedAt.Add(st.Settings.MinAge).After(now):
-		return "", "it installs by itself once it is " + config.Duration(st.Settings.MinAge).String() + " old"
+		return "", "it installs by itself once it is " + update.SpanWords(st.Settings.MinAge) + " old"
 	default:
 		return "", "it installs by itself"
 	}

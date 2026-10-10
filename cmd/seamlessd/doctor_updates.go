@@ -184,55 +184,40 @@ func (v updateView) target(cur update.Version, now time.Time) autoTarget {
 	return t
 }
 
-// skipKind is what keeps a release from automatic updates, soak aside: the
-// skips update.Target makes.
-type skipKind int
-
-const (
-	// skipHeld: a hold, the owner's own pin after a deliberate downgrade.
-	skipHeld skipKind = iota
-	// skipBlocked: a block a failed attempt left.
-	skipBlocked
-	// skipUnsigned: no checksums bundle to verify.
-	skipUnsigned
-)
-
-// skipped is why automatic updates skip a release above the running version.
+// skipped is why automatic updates skip a release above the running version,
+// soak aside: update.HeldBack's verdict.
 type skipped struct {
-	kind   skipKind
+	// code is update.WaitHeld (a hold, the owner's own pin after a deliberate
+	// downgrade), WaitBlocked (a block a failed attempt left) or WaitUnsigned
+	// (no checksums bundle to verify); reason says it after "skip it: ".
+	code   string
 	reason string
 }
 
 // news reports a skip the owner hears about, since the release is then
 // installed only by hand. A hold is their own pin, and no news.
-func (s skipped) news() bool { return s.kind != skipHeld }
+func (s skipped) news() bool { return s.code != update.WaitHeld }
 
 // phrase is the skip after "vX is".
 func (s skipped) phrase() string {
-	if s.kind == skipHeld {
+	if s.code == update.WaitHeld {
 		return "held back: " + s.reason
 	}
 	return "skipped: " + s.reason
 }
 
 // skipOf says why automatic updates skip r, a release above the running
-// version, soak aside; ok is false when nothing does.
+// version, soak aside; ok is false when nothing does. A hold's words say where
+// it is resumed.
 func (v updateView) skipOf(r update.Release) (skipped, bool) {
-	st := v.state
-	if h := st.Hold; h != nil && r.Version.Compare(h.Through) <= 0 {
-		return skipped{kind: skipHeld, reason: fmt.Sprintf(
-			"this install went back from v%s, so automatic updates skip releases up to v%s until they are resumed in the console",
-			h.From, h.Through)}, true
+	code, why := update.HeldBack(r, v.state.Blocks, v.state.Hold)
+	switch code {
+	case "":
+		return skipped{}, false
+	case update.WaitHeld:
+		why += " in the console"
 	}
-	for _, b := range st.Blocks {
-		if b.Version == r.Version {
-			return skipped{kind: skipBlocked, reason: blockText(b.Reason)}, true
-		}
-	}
-	if !r.ChecksumsBundle {
-		return skipped{kind: skipUnsigned, reason: "it carries no signed checksums bundle, which an automatic update verifies"}, true
-	}
-	return skipped{}, false
+	return skipped{code: code, reason: why}, true
 }
 
 // underWay is an update the records show under way: one the daemon spawned
@@ -480,16 +465,16 @@ func (v updateView) autoRow(cur update.Version, newest update.Release, checked s
 	switch b := v.backoff(now); {
 	case b != nil:
 		text += fmt.Sprintf("the next attempt waits out a backoff until %s (%s), after %s in a row on v%s",
-			b.Until.Local().Format(timeLayout), whenText(b.Until, now), countText(b.Count, "failure"), b.Version)
+			b.Until.Local().Format(timeLayout), whenText(b.Until, now), update.Plural(int64(b.Count), "failure"), b.Version)
 	case t.nowOK:
 		text += fmt.Sprintf("installs v%s once no agent session is live, or at a lull in requests %s",
 			t.now.Version, v.deadlineText(cur, now))
 		if t.next.Version != t.now.Version {
-			text += fmt.Sprintf("; then v%s, once it is %s old (at %s)", t.next.Version, spanText(v.settings.MinAge), t.soakEnd.Local().Format(timeLayout))
+			text += fmt.Sprintf("; then v%s, once it is %s old (at %s)", t.next.Version, update.SpanWords(v.settings.MinAge), t.soakEnd.Local().Format(timeLayout))
 		}
 	default:
 		text += fmt.Sprintf("installs v%s once it is %s old (at %s, %s)",
-			t.next.Version, spanText(v.settings.MinAge), t.soakEnd.Local().Format(timeLayout), whenText(t.soakEnd, now))
+			t.next.Version, update.SpanWords(v.settings.MinAge), t.soakEnd.Local().Format(timeLayout), whenText(t.soakEnd, now))
 	}
 	if !skips {
 		return updatesRow{statusInfo, text, ""}
@@ -507,7 +492,7 @@ func (v updateView) autoRow(cur update.Version, newest update.Release, checked s
 func (v updateView) deadlineText(cur update.Version, now time.Time) string {
 	p := v.state.Pending
 	if p == nil || p.Running != cur {
-		return "after waiting " + spanText(v.settings.MaxDefer)
+		return "after waiting " + update.SpanWords(v.settings.MaxDefer)
 	}
 	deadline := p.Since.Add(v.settings.MaxDefer)
 	if deadline.After(now) {
@@ -535,7 +520,7 @@ func (v updateView) pausedRow(cur update.Version, curOK bool, now time.Time) upd
 		}
 	}
 	if newest, ok := v.newest(); ok && curOK && newest.Version.Compare(cur) > 0 {
-		if s, skips := v.skipOf(newest); !skips || s.kind != skipBlocked {
+		if s, skips := v.skipOf(newest); !skips || s.code != update.WaitBlocked {
 			text += fmt.Sprintf("; v%s is available (running v%s)", newest.Version, cur)
 			action += ", or update by hand with: " + v.install.Hint
 		}
@@ -681,40 +666,19 @@ func whyText(why string) string {
 	}
 }
 
-// blockText says why automatic updates skip a blocked release.
-func blockText(reason string) string {
-	switch reason {
-	case update.BlockRolledBack:
-		return "the update to it rolled back"
-	case update.BlockVerify:
-		return "it did not pass verification"
-	case update.BlockInstall:
-		return "its installer failed on every try, leaving the install as it was"
-	case update.BlockBroken:
-		return "the update to it could not be rolled back cleanly"
-	default:
-		return "an update to it failed"
-	}
-}
-
 // pauseText says why automatic updates paused themselves, naming the
-// releases that did it.
+// releases that did it: update's words with the versions after them, "two
+// updates in a row rolled back (v0.7.3, v0.7.4)", as the console's banner has
+// it.
 func pauseText(p *update.Pause) string {
+	if len(p.Versions) == 0 {
+		return update.PauseWords(p.Reason)
+	}
 	names := make([]string, len(p.Versions))
 	for i, ver := range p.Versions {
 		names[i] = "v" + ver.String()
 	}
-	list := strings.Join(names, ", ")
-	switch {
-	case p.Reason == update.PauseBroken && list != "":
-		return "the update to " + list + " could not be rolled back cleanly"
-	case p.Reason == update.PauseBroken:
-		return "an update could not be rolled back cleanly"
-	case list != "":
-		return "updates rolled back in a row (" + list + ")"
-	default:
-		return "updates rolled back in a row"
-	}
+	return update.PauseWords(p.Reason) + " (" + strings.Join(names, ", ") + ")"
 }
 
 // updateCheckRows prints what the daemon's update check is doing, under
@@ -770,7 +734,7 @@ func updateCheckRows(w io.Writer, v updateView, now time.Time) {
 		var blocked []string
 		for _, b := range st.Blocks {
 			if b.Version.Compare(cur) > 0 {
-				blocked = append(blocked, fmt.Sprintf("v%s (%s, %s)", b.Version, blockText(b.Reason), b.At.Local().Format(timeLayout)))
+				blocked = append(blocked, fmt.Sprintf("v%s (%s, %s)", b.Version, update.BlockWords(b.Reason), b.At.Local().Format(timeLayout)))
 			}
 		}
 		if len(blocked) > 0 {
@@ -779,7 +743,7 @@ func updateCheckRows(w io.Writer, v updateView, now time.Time) {
 	}
 	if b := v.backoff(now); b != nil {
 		fieldRowTo(w, "backoff", fmt.Sprintf("next attempt %s (%s)", whenText(b.Until, now), b.Until.Local().Format(timeLayout))+
-			dim(fmt.Sprintf(" -- %s in a row on v%s; the last %s", countText(b.Count, "failure"), b.Version, backoffText(b.Reason))))
+			dim(fmt.Sprintf(" -- %s in a row on v%s; the last %s", update.Plural(int64(b.Count), "failure"), b.Version, backoffText(b.Reason))))
 	}
 	if v.dataDir != "" {
 		drill := filepath.Join(update.StateDir(v.dataDir), confirmDrillName)
@@ -822,10 +786,10 @@ func (v updateView) targetRows(w io.Writer, cur update.Version, now time.Time) {
 		if s, ok := v.skipOf(newest); ok {
 			// A hold and a block have rows of their own below.
 			note := s.phrase()
-			switch s.kind {
-			case skipHeld:
+			switch s.code {
+			case update.WaitHeld:
 				note = "held back (hold, below)"
-			case skipBlocked:
+			case update.WaitBlocked:
 				note = "blocked (below)"
 			}
 			text += dim(fmt.Sprintf(" -- v%s is %s", newest.Version, note))
@@ -1023,28 +987,4 @@ func humanDuration(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
 	}
-}
-
-// spanText renders a configured duration -- min_age, max_defer -- in its
-// largest whole unit, "24h" or "90m", the way the daemon words them;
-// anything finer is Go's own spelling.
-func spanText(d time.Duration) string {
-	switch {
-	case d >= time.Hour && d%time.Hour == 0:
-		return fmt.Sprintf("%dh", d/time.Hour)
-	case d >= time.Minute && d%time.Minute == 0:
-		return fmt.Sprintf("%dm", d/time.Minute)
-	case d >= time.Second && d%time.Second == 0:
-		return fmt.Sprintf("%ds", d/time.Second)
-	default:
-		return d.String()
-	}
-}
-
-// countText renders "1 failure", "3 failures".
-func countText(n int, noun string) string {
-	if n == 1 {
-		return "1 " + noun
-	}
-	return fmt.Sprintf("%d %ss", n, noun)
 }

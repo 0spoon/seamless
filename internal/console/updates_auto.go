@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/arctop/seamless/internal/config"
 	"github.com/arctop/seamless/internal/update"
 )
 
@@ -24,11 +23,6 @@ import (
 // says so: the same week the briefing's trouble line covers (internal/update).
 // Settings > Updates keeps showing both after that.
 const troubleBannerWindow = 7 * 24 * time.Hour
-
-// attemptStageSpawn is the stage update names for an attempt whose updater
-// never wrote a record (update's stageSpawn, which it does not export): the
-// spawn failed, or nothing showed up within update.AttemptStartWindow.
-const attemptStageSpawn update.Stage = "spawn"
 
 // selfUpdating reports whether this install can install a release by itself
 // at all: a release build the installer made, with an updater wired. Only then
@@ -134,7 +128,7 @@ func nextRow(st update.Status, now time.Time) *updatesNext {
 		v := st.Newest.Version
 		n = &updatesNext{Version: "v" + v.String(), Line: st.Waiting}
 		if st.WaitCode == update.WaitSoak && st.Settings.MinAge > 0 {
-			n.Line = "installs by itself once it is " + config.Duration(st.Settings.MinAge).String() + " old"
+			n.Line = "installs by itself once it is " + update.SpanWords(st.Settings.MinAge) + " old"
 			n.SoakEnds = st.Newest.PublishedAt.Add(st.Settings.MinAge)
 		}
 	default:
@@ -243,7 +237,7 @@ func attemptRow(a update.AttemptResult) *updatesAttempt {
 // the install as it was.
 func failedDetail(stage update.Stage, from string) string {
 	switch {
-	case stage == attemptStageSpawn:
+	case stage == update.StageSpawn:
 		return "The updater never started, so nothing changed."
 	case stage == update.StageVerify:
 		return "The release did not pass verification, so nothing was installed."
@@ -312,14 +306,14 @@ func autoRows(p *updatesPanel, st update.Status, now time.Time) {
 		p.Next = nextRow(st, now)
 	}
 	if pz := st.Paused; pz != nil {
-		p.Paused = &updatesPaused{Reason: pauseWords(pz.Reason), Versions: versionList(pz.Versions), At: pz.At,
+		p.Paused = &updatesPaused{Reason: update.PauseWords(pz.Reason), Versions: versionList(pz.Versions), At: pz.At,
 			Danger: pz.Reason == update.PauseBroken}
 	}
 	if h := st.Hold; h != nil {
 		p.Hold = &updatesHold{Through: "v" + h.Through.String(), From: "v" + h.From.String(), At: h.At}
 	}
 	for _, b := range st.Blocked {
-		p.Blocked = append(p.Blocked, updatesBlock{Version: "v" + b.Version.String(), Reason: blockWords(b.Reason), At: b.At})
+		p.Blocked = append(p.Blocked, updatesBlock{Version: "v" + b.Version.String(), Reason: update.BlockWords(b.Reason), At: b.At})
 	}
 	if b := st.Backoff; b != nil {
 		p.Backoff = &updatesBackoff{Line: backoffLine(*b), In: untilPhrase(b.Until, now), Until: b.Until}
@@ -380,7 +374,7 @@ func updateAlertFor(st update.Status, now time.Time) *updateAlert {
 		return age >= 0 && age < troubleBannerWindow
 	}
 	if pz := st.Paused; pz != nil && st.Settings.Auto && recent(pz.At) {
-		line := capitalize(pauseWords(pz.Reason))
+		line := capitalize(update.PauseWords(pz.Reason))
 		if vs := versionList(pz.Versions); vs != "" {
 			line += " (" + vs + ")"
 		}
@@ -471,7 +465,7 @@ func whyWords(why string) string {
 // stage this release does not know (a newer updater's) reads as a plain step.
 func stageWords(stage update.Stage) string {
 	switch stage {
-	case "", attemptStageSpawn:
+	case "", update.StageSpawn:
 		return "starting the updater"
 	case update.StageLock:
 		return "taking the update lock"
@@ -495,32 +489,6 @@ func stageWords(stage update.Stage) string {
 		return "finishing"
 	default:
 		return "working"
-	}
-}
-
-// pauseWords says why automatic updates paused themselves, as update's own
-// notices do.
-func pauseWords(reason string) string {
-	if reason == update.PauseBroken {
-		return "an update could not be rolled back cleanly"
-	}
-	return "two updates in a row rolled back"
-}
-
-// blockWords says why automatic updates skip a release, as update's own wait
-// reasons do. The three is update's installFailuresToBlock.
-func blockWords(reason string) string {
-	switch reason {
-	case update.BlockRolledBack:
-		return "the update to it rolled back"
-	case update.BlockVerify:
-		return "it did not pass verification"
-	case update.BlockInstall:
-		return "its installer failed 3 times in a row"
-	case update.BlockBroken:
-		return "the update to it could not be rolled back cleanly"
-	default:
-		return "an update to it failed"
 	}
 }
 

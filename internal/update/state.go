@@ -135,7 +135,7 @@ type AttemptResult struct {
 	Why  string  `json:"why"`
 	// Outcome is one of the Outcome* words.
 	Outcome string `json:"outcome"`
-	// Stage is where the attempt stopped, or stageSpawn ("spawn") when the
+	// Stage is where the attempt stopped, or StageSpawn ("spawn") when the
 	// updater never wrote a record.
 	Stage      Stage `json:"stage,omitempty"`
 	RolledBack bool  `json:"rolled_back,omitempty"`

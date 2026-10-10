@@ -151,14 +151,14 @@ func (s Status) Mode() (Mode, string) {
 	case !s.Settings.Auto:
 		return ModeNotify, "automatic updates are off, so " + told
 	case s.Paused != nil:
-		return ModeNotify, "automatic updates paused themselves (" + pauseWords(s.Paused.Reason) +
+		return ModeNotify, "automatic updates paused themselves (" + PauseWords(s.Paused.Reason) +
 			"), so " + told + " until they are resumed in the console"
 	}
 	reason := "installs new releases by itself"
 	if s.Settings.MinAge > 0 {
-		reason += " once they are " + spanWords(s.Settings.MinAge) + " old"
+		reason += " once they are " + SpanWords(s.Settings.MinAge) + " old"
 	}
-	reason += ", when no agent session is live, or at a lull in requests after waiting " + spanWords(s.Settings.MaxDefer)
+	reason += ", when no agent session is live, or at a lull in requests after waiting " + SpanWords(s.Settings.MaxDefer)
 	if h := s.Hold; h != nil {
 		reason += fmt.Sprintf("; releases up to v%s are skipped because this install went back from v%s, until automatic updates are resumed in the console",
 			h.Through, h.From)
@@ -256,10 +256,10 @@ func (s Status) troubleNotice(remote bool, now time.Time) string {
 	if p := s.Paused; p != nil && recent(p.At) {
 		if remote {
 			return fmt.Sprintf("The Seamless server paused its automatic updates (%s). "+
-				"Owner action on the server, not a task for this session.", pauseWords(p.Reason))
+				"Owner action on the server, not a task for this session.", PauseWords(p.Reason))
 		}
 		return fmt.Sprintf("Seamless paused its automatic updates (%s). Owner action, not a task for this session: "+
-			"run seamlessd doctor, then resume them in the console under Settings > Updates.", pauseWords(p.Reason))
+			"run seamlessd doctor, then resume them in the console under Settings > Updates.", PauseWords(p.Reason))
 	}
 	a := s.LastAttempt
 	if a == nil || !spawnedByDaemon(a.Why) || !recent(a.FoldedAt) {
@@ -272,11 +272,11 @@ func (s Status) troubleNotice(remote bool, now time.Time) string {
 	}
 	if remote {
 		return fmt.Sprintf("The Seamless server could not update itself to v%s (%s) and stays on v%s. "+
-			"Owner action on the server, not a task for this session.", a.To, blockWords(b.Reason), cur)
+			"Owner action on the server, not a task for this session.", a.To, BlockWords(b.Reason), cur)
 	}
 	return fmt.Sprintf("Seamless could not update itself to v%s (%s) and stays on v%s; automatic updates skip that release. "+
 		"Owner action, not a task for this session: see Settings > Updates in the console, or run seamlessd doctor.",
-		a.To, blockWords(b.Reason), cur)
+		a.To, BlockWords(b.Reason), cur)
 }
 
 // compactAge renders a duration the way the briefing does elsewhere: "45m",

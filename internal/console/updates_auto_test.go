@@ -347,6 +347,29 @@ func TestUpdatesSection_NotifyOnlyInstallsGetNoAutoControls(t *testing.T) {
 
 // Update now: a success says what started, and each refusal is its own
 // message, built from the status the checker returned.
+// TestUpdatesSection_SoakWordedOnce: the Mode line, the Next update row and the
+// version fact's hover word update.min_age alike, with update.SpanWords. The
+// two rows used to disagree on one page for a soak that is not a whole number
+// of hours: "once they are 90m old" above "once it is 1h30m old".
+func TestUpdatesSection_SoakWordedOnce(t *testing.T) {
+	now := time.Now()
+	base := autoBase
+	base.MinAge = config.Duration(90 * time.Minute)
+	st := autoStatus(now)
+	st.Settings = update.Effective(base, config.UpdateOverride{}, true)
+	withNewer(&st, now)
+	st.Newest.PublishedAt = now.Add(-30 * time.Minute)
+	st.WaitCode, st.Waiting = update.WaitSoak, "v0.7.3 waits out its 90m soak, about 1h to go"
+
+	_, mux, _ := newUpdatesConsole(t, base, &st)
+	sec := updatesSection(t, mux)
+	require.Contains(t, sec, "installs new releases by itself once they are 90m old")
+	require.Contains(t, sec, "<span>installs by itself once it is 90m old</span>")
+	require.NotContains(t, sec, "1h30m")
+	_, then := newestFate(st, now)
+	require.Equal(t, "it installs by itself once it is 90m old", then)
+}
+
 func TestUpdatesApplyNow_Flashes(t *testing.T) {
 	now := time.Now()
 	applying := func(st update.Status) update.Status {

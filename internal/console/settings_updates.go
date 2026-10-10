@@ -358,7 +358,7 @@ func autoOnNote(st update.Status) string {
 	case mode == update.ModeAuto:
 		return " Seamless " + reason + "."
 	case st.Paused != nil && selfUpdating(st):
-		return " They paused themselves earlier (" + pauseWords(st.Paused.Reason) + "): resume them to let them run again."
+		return " They paused themselves earlier (" + update.PauseWords(st.Paused.Reason) + "): resume them to let them run again."
 	case !selfUpdating(st):
 		return " This install does not install releases by itself, so nothing changes here."
 	default:
@@ -585,7 +585,7 @@ func (s *Service) settingsUpdatesResume(w http.ResponseWriter, r *http.Request) 
 func resumedNotice(before, after update.Status) string {
 	var lifted []string
 	if pz := before.Paused; pz != nil && after.Paused == nil {
-		lifted = append(lifted, "the pause ("+pauseWords(pz.Reason)+")")
+		lifted = append(lifted, "the pause ("+update.PauseWords(pz.Reason)+")")
 	}
 	if h := before.Hold; h != nil && after.Hold == nil {
 		lifted = append(lifted, "the hold on releases up to v"+h.Through.String())

@@ -124,7 +124,7 @@ func TestApplyOutcome_PreSwapFailuresBackOff(t *testing.T) {
 	require.Equal(t, OutcomeFailed, st.Backoff.Reason)
 
 	// A new target starts the count over.
-	applyOutcome(&st, folded(WhyAuto, "0.7.4", OutcomeFailed, stageSpawn), attemptNow, true)
+	applyOutcome(&st, folded(WhyAuto, "0.7.4", OutcomeFailed, StageSpawn), attemptNow, true)
 	require.Equal(t, time.Hour, st.Backoff.Until.Sub(attemptNow))
 	require.Equal(t, 1, st.Backoff.Count)
 
@@ -166,7 +166,7 @@ func TestApplyOutcome_BrokenBlocksAndPauses(t *testing.T) {
 
 func TestApplyOutcome_InterruptedAndALateRecord(t *testing.T) {
 	var st State
-	require.True(t, applyOutcome(&st, folded(WhyAuto, "0.7.3", OutcomeInterrupted, stageSpawn), attemptNow, true))
+	require.True(t, applyOutcome(&st, folded(WhyAuto, "0.7.3", OutcomeInterrupted, StageSpawn), attemptNow, true))
 	require.Equal(t, time.Hour, st.Backoff.Until.Sub(attemptNow), "interrupted: an hour, no block")
 	require.Empty(t, st.Blocks)
 
@@ -188,7 +188,7 @@ func TestApplyOutcome_ManualAndSupersededChangeNothing(t *testing.T) {
 		folded(WhyManual, "0.7.3", OutcomeFailed, StageFetch),
 		folded(WhyManual, "0.7.3", OutcomeInterrupted, StageInstall),
 		folded("cron", "0.7.3", OutcomeRolledBack, StageRollback), // a why from a newer release
-		folded(WhyAuto, "0.7.3", OutcomeSuperseded, stageSpawn),
+		folded(WhyAuto, "0.7.3", OutcomeSuperseded, StageSpawn),
 	} {
 		t.Run(res.Why+"/"+res.Outcome, func(t *testing.T) {
 			st := State{Backoff: &Backoff{Until: attemptNow, Count: 2, Version: ver("0.7.3")}, Rollbacks: []Version{ver("0.7.1")}}

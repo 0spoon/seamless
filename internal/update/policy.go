@@ -198,65 +198,27 @@ func Target(rels []Release, current Version, clock time.Time, minAge time.Durati
 	return best, found
 }
 
-// heldBack says why r, a release above the running version, is not an
-// automatic update's target -- as a wait code and in words for the owner --
-// or returns "" when nothing holds it back. Every word is fixed or a parsed
-// version.
-func heldBack(r Release, clock time.Time, minAge time.Duration, blocks []Block, hold *Hold) (code, words string) {
-	switch b := blocked(blocks, r.Version); {
-	case held(hold, r.Version):
-		return WaitHeld, fmt.Sprintf("v%s is held back: this install went back from v%s, so automatic updates skip releases up to v%s until they are resumed",
-			r.Version, hold.From, hold.Through)
-	case b != nil:
-		return WaitBlocked, fmt.Sprintf("automatic updates skip v%s: %s", r.Version, blockWords(b.Reason))
-	case !r.ChecksumsBundle:
-		return WaitUnsigned, fmt.Sprintf("v%s carries no signed checksums bundle, which an automatic update verifies", r.Version)
-	case !soaked(r, clock, minAge):
-		if clock.IsZero() {
-			return WaitSoak, fmt.Sprintf("v%s waits out its %s soak; GitHub's clock is not known yet", r.Version, spanWords(minAge))
-		}
-		return WaitSoak, fmt.Sprintf("v%s waits out its %s soak, about %s to go", r.Version, spanWords(minAge),
-			compactAge(r.PublishedAt.Add(minAge).Sub(clock)))
+// newestWait says why the newest release, above the running version, is not
+// an automatic update's target -- as a wait code and in words for the owner
+// (Status.Waiting) -- or returns "" when nothing holds it back: one of
+// HeldBack's skips, or a soak not over on clock (GitHub's).
+func newestWait(r Release, clock time.Time, minAge time.Duration, blocks []Block, hold *Hold) (string, string) {
+	switch code, why := HeldBack(r, blocks, hold); code {
+	case WaitHeld:
+		return code, fmt.Sprintf("v%s is held back: %s", r.Version, why)
+	case WaitBlocked:
+		return code, fmt.Sprintf("automatic updates skip v%s: %s", r.Version, why)
+	case WaitUnsigned:
+		return code, fmt.Sprintf("v%s %s", r.Version, unsignedWords)
 	}
-	return "", ""
-}
-
-// blockWords says why a release is blocked, after "skip vX: ".
-func blockWords(reason string) string {
-	switch reason {
-	case BlockRolledBack:
-		return "the update to it rolled back"
-	case BlockVerify:
-		return "it did not pass verification"
-	case BlockInstall:
-		return fmt.Sprintf("its installer failed %d times in a row", installFailuresToBlock)
-	case BlockBroken:
-		return "the update to it could not be rolled back cleanly"
-	default:
-		return "an update to it failed"
-	}
-}
-
-// pauseWords says why automatic updates are paused.
-func pauseWords(reason string) string {
-	if reason == PauseBroken {
-		return "an update could not be rolled back cleanly"
-	}
-	return "two updates in a row rolled back"
-}
-
-// spanWords renders a configured duration for prose in its largest whole
-// unit: "24h", "90m", "90s"; anything finer is Go's own spelling.
-func spanWords(d time.Duration) string {
 	switch {
-	case d >= time.Hour && d%time.Hour == 0:
-		return fmt.Sprintf("%dh", d/time.Hour)
-	case d >= time.Minute && d%time.Minute == 0:
-		return fmt.Sprintf("%dm", d/time.Minute)
-	case d >= time.Second && d%time.Second == 0:
-		return fmt.Sprintf("%ds", d/time.Second)
+	case soaked(r, clock, minAge):
+		return "", ""
+	case clock.IsZero():
+		return WaitSoak, fmt.Sprintf("v%s waits out its %s soak; GitHub's clock is not known yet", r.Version, SpanWords(minAge))
 	default:
-		return d.String()
+		return WaitSoak, fmt.Sprintf("v%s waits out its %s soak, about %s to go", r.Version, SpanWords(minAge),
+			compactAge(r.PublishedAt.Add(minAge).Sub(clock)))
 	}
 }
 
@@ -362,24 +324,16 @@ func Decide(in DecideInput) Decision {
 	switch {
 	case !in.Activity:
 		return waitFor(WaitActivity, fmt.Sprintf("request activity is not tracked, so it installs once it has waited %s (in %s)",
-			spanWords(overdue), compactAge(overdue-in.Pending)))
+			SpanWords(overdue), compactAge(overdue-in.Pending)))
 	case in.InFlight > 0 && (idle || in.Pending >= in.MaxDefer):
-		return waitFor(WaitInFlight, fmt.Sprintf("waiting for %s in flight to finish", plural(in.InFlight, "request")))
+		return waitFor(WaitInFlight, fmt.Sprintf("waiting for %s in flight to finish", Plural(in.InFlight, "request")))
 	case in.Pending >= in.MaxDefer:
 		return waitFor(WaitQuiet, fmt.Sprintf("past its %s deadline; waiting for %s without requests",
-			spanWords(in.MaxDefer), spanWords(quietFor)))
+			SpanWords(in.MaxDefer), SpanWords(quietFor)))
 	case in.SessionsErr != nil:
 		return waitFor(WaitSessionCount, "live agent sessions could not be counted"+latest)
 	default:
 		return waitFor(WaitSessions, fmt.Sprintf("waiting for %s to go idle%s",
-			plural(int64(in.Sessions), "live agent session"), latest))
+			Plural(int64(in.Sessions), "live agent session"), latest))
 	}
-}
-
-// plural renders "1 request", "3 requests".
-func plural(n int64, noun string) string {
-	if n == 1 {
-		return "1 " + noun
-	}
-	return fmt.Sprintf("%d %ss", n, noun)
 }

@@ -119,7 +119,7 @@ func (c *Checker) evaluate(ctx context.Context, now time.Time, s Settings, cur V
 		case c.applying != nil:
 			c.view.decision = waitFor(WaitInProgress, applyingWords(c.applying))
 		case nok && newest.Version.Compare(cur) > 0:
-			code, words := heldBack(newest, clock, s.MinAge, c.state.Blocks, c.state.Hold)
+			code, words := newestWait(newest, clock, s.MinAge, c.state.Blocks, c.state.Hold)
 			c.view.decision = waitFor(code, words)
 		}
 		return changed
@@ -268,7 +268,7 @@ func (c *Checker) spawn(ctx context.Context, now time.Time, from, to Version, wh
 		c.log.Warn("update: could not start the updater; trying again after a backoff",
 			"to", to.String(), "why", why, "attempt", id, "err", err)
 		c.state.Spawn = nil
-		res := AttemptResult{ID: id, From: from, To: to, Why: why, Outcome: OutcomeFailed, Stage: stageSpawn,
+		res := AttemptResult{ID: id, From: from, To: to, Why: why, Outcome: OutcomeFailed, Stage: StageSpawn,
 			SpawnedAt: now, FoldedAt: now}
 		c.settle(ctx, res, now, from, true)
 		c.persist()
@@ -428,7 +428,7 @@ func (c *Checker) fold(ctx context.Context, now time.Time, cur Version) bool {
 		}
 		c.state.Spawn = nil
 		c.settle(ctx, AttemptResult{
-			ID: sp.ID, From: sp.From, To: sp.To, Why: sp.Why, Outcome: outcome, Stage: stageSpawn,
+			ID: sp.ID, From: sp.From, To: sp.To, Why: sp.Why, Outcome: outcome, Stage: StageSpawn,
 			SpawnedAt: sp.At, FoldedAt: now,
 		}, now, cur, true)
 		return true

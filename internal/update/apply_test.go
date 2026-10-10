@@ -576,7 +576,7 @@ func TestAuto_InterruptedBacksOffAndALateRecordSupersedes(t *testing.T) {
 	st = a.tick()
 	require.Nil(t, st.Applying)
 	require.Equal(t, OutcomeInterrupted, st.LastAttempt.Outcome)
-	require.Equal(t, stageSpawn, st.LastAttempt.Stage)
+	require.Equal(t, StageSpawn, st.LastAttempt.Stage)
 	require.NotNil(t, st.Backoff)
 	require.Equal(t, a.clock.Now().Add(time.Hour), st.Backoff.Until)
 	require.Empty(t, st.Blocked)

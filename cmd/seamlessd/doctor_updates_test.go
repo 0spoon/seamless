@@ -147,13 +147,6 @@ func TestHumanDuration(t *testing.T) {
 	require.Equal(t, "3d", humanDuration(80*time.Hour))
 }
 
-func TestSpanText(t *testing.T) {
-	require.Equal(t, "24h", spanText(24*time.Hour))
-	require.Equal(t, "90m", spanText(90*time.Minute))
-	require.Equal(t, "45s", spanText(45*time.Second))
-	require.Equal(t, "1.5s", spanText(1500*time.Millisecond))
-}
-
 func ptr[T any](v T) *T { return &v }
 
 // Versions the automatic-update fixtures name.
@@ -372,7 +365,7 @@ func TestUpdatesCheck_Automatic(t *testing.T) {
 			}),
 			status: statusWarn,
 			want: []string{
-				"automatic updates paused themselves 3h ago: updates rolled back in a row (v0.7.3, v0.7.4)",
+				"automatic updates paused themselves 3h ago: two updates in a row rolled back (v0.7.3, v0.7.4)",
 				"; the last attempt (v0.7.2 -> v0.7.4, automatic, 3h ago) rolled back: v0.7.4 did not come up (no answer); rolled back to v0.7.2",
 				"; v0.7.5 is available (running v0.7.2) -- resume them in the console under Settings > Updates, or update by hand with: seamlessd update",
 			},
@@ -606,11 +599,83 @@ func TestUpdateCheckRows_PauseHoldAndWarnings(t *testing.T) {
 		"error    applied with warnings: v0.7.2 is serving",
 		"fix      seamlessd install-hooks",
 		"hold     releases up to v0.7.4 are skipped -- this install went back from v0.7.4 on " + at(now.Add(-5*time.Hour)),
-		"paused   since " + at(now.Add(-3*time.Hour)) + " -- updates rolled back in a row (v0.7.3, v0.7.4); resume automatic updates in the console",
+		"paused   since " + at(now.Add(-3*time.Hour)) + " -- two updates in a row rolled back (v0.7.3, v0.7.4); resume automatic updates in the console",
 	} {
 		require.Contains(t, out, want)
 	}
 	require.NotContains(t, out, "target", "a paused daemon does not update itself, so it has no target")
+}
+
+// TestUpdateCheckRows_PauseWordedOnce: the mode row (Status.Mode) and the
+// paused row word one pause alike, with update.PauseWords, for each reason.
+// The paused row used to say "updates rolled back in a row" right under a mode
+// row saying "two updates in a row rolled back", and "the update to v0.7.3
+// could not be rolled back cleanly" under "an update could not be rolled back
+// cleanly".
+func TestUpdateCheckRows_PauseWordedOnce(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	for reason, versions := range map[string][]update.Version{
+		update.PauseRollbacks: {v073, v074},
+		update.PauseBroken:    {v073},
+	} {
+		dir := t.TempDir()
+		require.NoError(t, update.SaveState(dir, autoRecord(now, func(s *update.State) {
+			s.Paused = &update.Pause{Reason: reason, Versions: versions, At: now.Add(-time.Hour)}
+		})))
+		cfg := config.Defaults()
+		cfg.DataDir = dir
+		var buf bytes.Buffer
+		updateCheckRows(&buf, loadUpdateView(context.Background(), cfg, nil), now)
+		out := buf.String()
+
+		words := update.PauseWords(reason)
+		names := "v0.7.3"
+		if len(versions) == 2 {
+			names = "v0.7.3, v0.7.4"
+		}
+		require.Contains(t, out, "mode     notify -- automatic updates paused themselves ("+words+")", reason)
+		require.Contains(t, out, " -- "+words+" ("+names+"); resume automatic updates in the console", reason)
+		require.Contains(t, updatesCheck(context.Background(), cfg, nil, now).detail,
+			"automatic updates paused themselves 1h ago: "+words+" ("+names+")", reason)
+	}
+}
+
+// TestUpdatesCheck_SkipsWordedAsUpdate: why automatic updates skip the newest
+// release reads in update's own words -- update.HeldBack's, update.BlockWords
+// for each block reason -- on the doctor row and the blocked row alike.
+func TestUpdatesCheck_SkipsWordedAsUpdate(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	render := func(st update.State) (doctor, rows string) {
+		dir := t.TempDir()
+		require.NoError(t, update.SaveState(dir, st))
+		cfg := config.Defaults()
+		cfg.DataDir = dir
+		var buf bytes.Buffer
+		updateCheckRows(&buf, loadUpdateView(context.Background(), cfg, nil), now)
+		return updatesCheck(context.Background(), cfg, nil, now).detail, buf.String()
+	}
+	for _, reason := range []string{update.BlockRolledBack, update.BlockVerify, update.BlockInstall, update.BlockBroken} {
+		doctor, rows := render(autoRecord(now, func(s *update.State) {
+			s.Releases = append(s.Releases, signed(v073, now.Add(-48*time.Hour)))
+			s.Blocks = []update.Block{{Version: v073, Reason: reason, At: now.Add(-time.Hour)}}
+		}))
+		require.Contains(t, doctor, "but automatic updates skip it: "+update.BlockWords(reason)+" -- update with: seamlessd update", reason)
+		require.Contains(t, rows, "blocked  v0.7.3 ("+update.BlockWords(reason)+", ", reason)
+	}
+	require.Contains(t, update.BlockWords(update.BlockInstall), "3 times in a row")
+
+	doctor, _ := render(autoRecord(now, func(s *update.State) {
+		s.Releases = append(s.Releases, update.Release{Version: v073, PublishedAt: now.Add(-48 * time.Hour)})
+	}))
+	_, why := update.HeldBack(update.Release{Version: v073}, nil, nil)
+	require.Contains(t, doctor, "but automatic updates skip it: "+why+" -- update with: seamlessd update")
+
+	doctor, _ = render(autoRecord(now, func(s *update.State) {
+		s.Releases = append(s.Releases, signed(v073, now.Add(-48*time.Hour)))
+		s.Hold = &update.Hold{Through: v073, From: v073, At: now.Add(-time.Hour)}
+	}))
+	_, why = update.HeldBack(signed(v073, now), nil, &update.Hold{Through: v073, From: v073})
+	require.Contains(t, doctor, "v0.7.3 is held back: "+why+" in the console")
 }
 
 // TestUpdateCheckRows_UnderWay: the update row, for an attempt the updater
