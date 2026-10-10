@@ -49,6 +49,34 @@ builds:
     ldflags: [-s -w]
     mod_timestamp: "{{ .CommitTimestamp }}"
 
+# Developer ID signing and notarization of the darwin binaries, done from
+# the Linux runner by goreleaser's quill integration, before the
+# archives (and so checksums.txt) are made. Why it matters:
+# - macOS Background Task Management keys a LaunchAgent's item to its binary's
+#   signing identity. An adhoc-signed binary is a new item on every update,
+#   which posts a "seamlessd can run in the background" notice each time; only
+#   a Team ID identity stays the same (lab detached-updater-os-spikes).
+# - Notarized binaries pass Gatekeeper wherever they are quarantined, which is
+#   what the Homebrew cask's quarantine strip below works around today.
+# It runs only when the signing secret is non-empty: release.yml passes the
+# five secrets (an unset secret arrives as an empty string, which isEnvSet
+# would still call set), and a fork or a local `make release-snapshot` without
+# them builds the adhoc-signed binaries as before. wait makes the release fail
+# rather than publish a binary Apple has not accepted.
+notarize:
+  macos:
+    - ids: [seamlessd, seam]
+      enabled: '{{ ne (envOrDefault "MACOS_SIGN_P12" "") "" }}'
+      sign:
+        certificate: "{{ .Env.MACOS_SIGN_P12 }}"
+        password: "{{ .Env.MACOS_SIGN_PASSWORD }}"
+      notarize:
+        issuer_id: "{{ .Env.MACOS_NOTARY_ISSUER_ID }}"
+        key_id: "{{ .Env.MACOS_NOTARY_KEY_ID }}"
+        key: "{{ .Env.MACOS_NOTARY_KEY }}"
+        wait: true
+        timeout: 20m
+
 # One archive per platform holding both binaries, plus the files a fresh
 # install needs: the example config `make install` seeds from, and the portable
 # Claude Code/Codex skills embedded by seamlessd. They are also bundled as

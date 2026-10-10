@@ -26,13 +26,40 @@ permissions:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Apple notarizes each of the four darwin binaries (`notarize:` in
+    # .goreleaser.yaml) and goreleaser waits for every verdict; that usually
+    # takes minutes but can take far longer, so 15 was too tight.
+    timeout-minutes: 45
     steps:
       # Full history: the changelog is built from the commits since the
       # previous tag, which a shallow checkout cannot see.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      # This repo's releases are Developer ID-signed and notarized. A missing
+      # secret would make goreleaser skip that step and quietly publish
+      # adhoc-signed darwin binaries, bringing back the macOS Background Items
+      # notice on every update, so the release stops here instead -- before the
+      # installer scripts are signed into Rekor below. Forks have no such
+      # secrets and build unsigned, as before.
+      - name: Require the macOS signing secrets
+        if: github.repository == 'arctop/seamless'
+        env:
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+        run: |
+          missing=
+          for name in MACOS_SIGN_P12 MACOS_SIGN_PASSWORD MACOS_NOTARY_ISSUER_ID MACOS_NOTARY_KEY_ID MACOS_NOTARY_KEY; do
+            [ -n "$(printenv "$name")" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::macOS signing secrets not set:$missing"
+            exit 1
+          fi
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -90,6 +117,15 @@ jobs:
           # fine-grained PAT with contents:write on that single repo -- keep it
           # that narrow; this job builds what every user downloads.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # Developer ID signing + notarization of the darwin binaries
+          # (`notarize:` in .goreleaser.yaml): the .p12 (certificate + key) in
+          # base64 and its password, and an App Store Connect API key (issuer,
+          # key id, the .p8 in base64) for notarytool.
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
 
       # Post-release verify. goreleaser signed checksums.txt twice (the two
       # `signs:` entries in .goreleaser.yaml); fetch it and both signatures
