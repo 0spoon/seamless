@@ -246,9 +246,10 @@ func updateStartedSummary(p map[string]any) string {
 }
 
 // updateFailedSummary is the ledger line of an update.failed event: an update
-// the daemon started did not apply. It is built from the parsed target version
-// and the fixed outcome word only -- the event never carries the updater's
-// error text, and the line never names a stage or a path.
+// the daemon started did not apply. It is built from the parsed target version,
+// the fixed outcome word and, for a failure the updater's gates refused, the
+// fixed words for that refusal -- the event never carries the updater's error
+// text, and the line never names a stage or a path.
 func updateFailedSummary(p map[string]any) string {
 	to, ok := update.Parse(payloadStr(p, "to"))
 	if !ok {
@@ -259,6 +260,9 @@ func updateFailedSummary(p map[string]any) string {
 	case update.OutcomeRolledBack:
 		return line + " rolled back"
 	case update.OutcomeFailed:
+		if r := payloadStr(p, "refusal"); update.KnownRefusal(r) {
+			return line + " failed: " + update.RefusalWords(r)
+		}
 		return line + " failed"
 	case update.OutcomeBroken:
 		return line + " could not be rolled back cleanly"
