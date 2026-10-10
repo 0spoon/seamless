@@ -84,8 +84,10 @@ your installed copy (`make update CHECK=1` only reports).
 ### Automatic update checks {#automatic-update-checks}
 
 A daemon installed from a release checks GitHub for new releases by itself: a
-few minutes after it starts, then about every 6 hours (`update.check_interval`).
-The check itself installs nothing. On an install the installer made, a newer
+few minutes after it first starts, then about every 6 hours
+(`update.check_interval`). A restart keeps the schedule it saved rather than
+checking again; **Check now** under **Settings -> Updates** in the console
+checks at once. The check itself installs nothing. On an install the installer made, a newer
 release then installs by itself ([automatic updates](#automatic-updates)); every
 other install is only told. When a newer release is out, the daemon tells you:
 
