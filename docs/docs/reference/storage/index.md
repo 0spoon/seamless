@@ -18,6 +18,7 @@ On-disk layout
 ~/.seamless/ Owner-only local data directory
 seam.db Indexes, sessions, tasks, trials, events, and embeddings
 seamlessd.lock serve's one-daemon lock; holds the holder's PID (never delete it)
+seam.db.pre-rollback-{attempt} Only after a rollback restored the database: the one the rolled-back release had migrated (with its -wal and -shm), kept until you delete it
 memory/ Durable memory tree
 _global/{name}.md Machine-wide memories
 {project}/{name}.md One project memory per file
@@ -26,11 +27,12 @@ _global/{slug}.md Machine-wide notes
 {project}/{slug}.md One project note per file
 backups/ Pre-update archives (pre-update-v{old}-{time}.tar.gz), the newest two
 update/ The update check's and the updater's record (release builds only)
-state.json Last check, cached release list, running daemon
+state.json Last check, cached release list, running daemon, automatic-update state
 update.lock The updater's lock; never delete it
 attempt.json The newest update attempt, live and finished
-attempts.jsonl Every finished attempt, one line each
+attempts.jsonl Finished attempts, one line each (compacted to the newest 100)
 logs/{attempt}.log Each attempt's full output, the newest 20
+test-fail-confirm Only during a rollback drill: every update rolls back while it exists
 Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.
 ```
 
@@ -170,8 +172,9 @@ so losing `seam.db` loses them:
   (merge, consolidate, archive, digest, reproject, rekind, split, abandon-plan,
   memory-wanted, tool-error).
 - `settings` - `repo_project_map`, project families, the runtime briefing
-  overrides the console writes, the console's update-check override, the
-  per-scope utility-activation latch, and the embedder on/off switch.
+  overrides the console writes, the console's update override (checks and
+  automatic updates), the per-scope utility-activation latch, and the embedder
+  on/off switch.
 - `jobs` - the small queue for embeds and LLM digests.
 
 The split is deliberate: durable knowledge is yours in plain markdown, and
@@ -185,19 +188,48 @@ to think about any of that is
 snapshot with SQLite's `VACUUM INTO` inside a read transaction and is safe to run
 against a running daemon.
 
-### The update check's record
+### The update records {#the-update-records}
 
 `update/state.json` is the [automatic update check's](https://thereisnospoon.org/docs/updating/#automatic-update-checks)
 memory between restarts: when it last asked GitHub, the cached release list and
 its `ETag`, when it asks next, the current error streak, the newest release it
 has told you about, the daemon that wrote it (version, install kind, process
-and instance id), and the last version change it saw. Only a daemon from a
-release build writes it - a build from source never creates the directory -
-and `seamlessd doctor` and `seamlessd update --check` only read it. It is
-private (mode `0600` in a `0700` directory) and disposable: delete it and the
-next start rebuilds it, at the cost of one "version changed" notice it can no
-longer tell. A file that does not parse is moved aside to
+and instance id), and the last version change it saw. On an install that
+[updates itself](https://thereisnospoon.org/docs/updating/#automatic-updates) it also keeps what automatic
+updates have decided: the pending update and when it began waiting, the update
+it started, the last attempt it settled, blocked releases, a hold, a pause, a
+backoff, and a fingerprint of Codex's `hooks.json`. Only a daemon from a release
+build writes it - a build from source never creates the directory - and
+`seamlessd doctor` and `seamlessd update --check` only read it, with
+`attempt.json` and `attempts.jsonl` beside it. It is private (mode `0600` in a
+`0700` directory) and safe to delete: the next start rebuilds it. That costs
+one "version changed" notice it can no longer tell, and everything automatic
+updates had decided. A release that rolled back here is then a candidate again,
+and a hold or a pause is gone. A file that does not parse is moved aside to
 `state.json.corrupt-<time>` and the daemon starts fresh.
+
+The updater, `seamlessd update`, keeps its own records next to it. It writes
+them; the daemon only reads them. It holds `update/update.lock` for its whole
+run, an OS lock released however the process ends. Never delete that file:
+removed while an updater holds it, it lets a second updater lock a new file of
+the same name. `attempt.json` is the newest attempt, rewritten every 30
+seconds while it runs, and `attempts.jsonl` gets each finished attempt as one
+line. A line that does not parse is skipped, never fatal. `logs/<attempt>.log`
+holds an attempt's every step and its installer's output, and the newest 20
+logs are kept. Each release reads the records of releases older and newer than
+itself, so their format only ever gains fields. The updater runs only on an
+install the installer made, so a build from source writes none of these.
+
+Before an update on such an install, the updater archives the instance to
+`backups/pre-update-v<old>-<time>.tar.gz` with
+[`seamlessd export`](https://thereisnospoon.org/docs/reference/cli-seamlessd/#seamlessd_export)'s machinery,
+and keeps the newest two. When an update is rolled back after the new release
+had already migrated the database, the backup's database is put back. The
+migrated one, with its `-wal` and `-shm`, stays beside it as
+`seam.db.pre-rollback-<attempt>` until you delete it. Memories and notes are
+never rolled back. Creating `update/test-fail-confirm` rehearses a rollback on
+a real install: while it exists, every update fails its confirmation on purpose
+and rolls back, and `seamlessd doctor` warns. Delete it afterwards.
 
 ### Reconciliation
 

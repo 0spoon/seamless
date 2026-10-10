@@ -281,13 +281,15 @@ restart, and stay until reset.</li>
 </tbody>
 </table>
 </div>
-<p>A fourth, <code>update.check</code>, is merged the other way round: the <strong>more
-restrictive</strong> value wins. Settings → <a href="../../reference/console/#updates">Updates</a> can
-always turn the update check off, and can turn it on when file and env leave
-the key unset - but an explicit <code>check: false</code> in the file or
-<code>SEAMLESS_UPDATE_CHECK=false</code> is final, and the console shows the toggle locked
-with where it was set. <code>false</code> promises no update traffic at all, so it is
-never one click from untrue. See <a href="#the-update-check">the update block</a>.</p>
+<p>The <code>update:</code> block's two switches, <code>update.check</code> and <code>update.auto</code>, are merged
+the other way round: the <strong>more restrictive</strong> value wins. Settings →
+<a href="../../reference/console/#updates">Updates</a> can always turn either off, and can turn
+it on when file and env do not say <code>false</code> - but an explicit <code>check: false</code> or
+<code>auto: false</code> in the file (or <code>SEAMLESS_UPDATE_CHECK=false</code>,
+<code>SEAMLESS_UPDATE_AUTO=false</code>) is final, and the console shows that switch locked
+with where it was set. <code>check: false</code> promises no update traffic at all, so it
+is never one click from untrue, and with checks off nothing installs by itself
+either. See <a href="#the-update-check">the update block</a>.</p>
 <p>It exists so you can change what agents get injected - and what they can reach -
 while they are running, and it is the one place where the config file is not the
 last word: check the console before concluding a <code>briefing:</code>, <code>features:</code>, or
@@ -314,19 +316,46 @@ never hides a screen you were using. Like any override, it wins over this key
 until <strong>Reset</strong> hands the level back to file/env.</p>
 <h3 id="the-update-check">The update check</h3>
 <p>The <code>update:</code> block drives the daemon's
-<a href="../../updating/#automatic-update-checks">automatic update checks</a>:</p>
+<a href="../../updating/#automatic-update-checks">automatic update checks</a> and
+<a href="../../updating/#automatic-updates">automatic updates</a>:</p>
 <ul>
 <li><code>check</code> (<code>SEAMLESS_UPDATE_CHECK</code>) is optional. Left unset, a release build
 checks and a build from source does not; <code>true</code> or <code>false</code> decides either
-way. <code>false</code> means no request to GitHub at all.</li>
+way. <code>false</code> means no request to GitHub at all, and so no automatic update
+either.</li>
 <li><code>check_interval</code> (<code>SEAMLESS_UPDATE_CHECK_INTERVAL</code>) is the time between
 checks: a Go duration from <code>1h</code> to <code>720h</code>, default <code>6h</code>. Write the unit - a
 bare number other than <code>0</code> is refused rather than guessed at, since <code>6</code> could
 mean six seconds or six hours.</li>
+<li><code>auto</code> (<code>SEAMLESS_UPDATE_AUTO</code>) is optional, and unset means on: an install
+made by the curl or PowerShell installer installs a newer release by itself.
+Homebrew, builds from source, client machines and layouts the daemon cannot
+vouch for are only told, whatever <code>auto</code> says
+(<a href="../../updating/#who-updates-itself">who updates itself</a>). <code>false</code> keeps the
+check and its notices and leaves installing to you (<code>seamlessd update</code>, or
+<strong>Update now</strong> in the console). Like <code>check: false</code>, it is final, and the
+console cannot turn it back on. With checks off, <code>auto</code> is off too.</li>
+<li><code>max_defer</code> (<code>SEAMLESS_UPDATE_MAX_DEFER</code>) is how long a pending automatic
+update waits for a quiet daemon - no live agent session, no request in
+flight - before it takes the next lull in requests instead: a Go duration from
+<code>1m</code> to <code>720h</code>, default <code>24h</code>. <code>0</code> is refused. After 1.5 times <code>max_defer</code> it
+installs as soon as no request is in flight, and after twice <code>max_defer</code>
+whatever is in flight (<a href="../../updating/#when-it-installs">when it installs</a>).</li>
+<li><code>min_age</code> (<code>SEAMLESS_UPDATE_MIN_AGE</code>) is the soak: how long a release must have
+been published before an automatic update takes it, measured on GitHub's
+clock. A Go duration from <code>0</code> (no wait) to <code>720h</code>, default <code>24h</code>. Installing by
+hand ignores it.</li>
 </ul>
-<p>Both keys are new in this release. seamlessd releases before it refuse config
-keys they do not know, so a file that sets one runs only with this release or
-newer - which is why the example file leaves <code>check</code> commented out.</p>
+<p>Set <code>auto</code>, <code>max_defer</code> and <code>min_age</code> in the file, not in the daemon's
+environment. Any <code>SEAMLESS_*</code> variable besides <code>SEAMLESS_CONFIG</code> in the
+daemon's environment makes the install notify-only - the installer rewrites
+the service without it - so <code>SEAMLESS_UPDATE_AUTO=true</code> can never turn
+automatic updates on, and the two durations set there switch them off rather
+than tune them.</p>
+<p>All five keys are new in v0.7.0. seamlessd releases before it refuse config
+keys they do not know, so a file that sets one runs only with v0.7.0 or newer.
+The example file spells out the keys whose default has a value and leaves
+<code>check</code> and <code>auto</code>, whose default is unset, commented out.</p>
 <h2 id="generating-a-key">Generating a key</h2>
 <p><code>mcp.api_key</code> guards <code>/api/mcp</code> and the console. On a true first run - no
 config file anywhere in the search order and no <code>SEAMLESS_MCP_API_KEY</code> in the
@@ -980,12 +1009,16 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="c"># decide whether and when it also installs one by itself, which only an install</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># the curl or PowerShell installer made ever does: Homebrew, builds from source,</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># client machines and layouts the daemon cannot vouch for are only told.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># Set auto, max_defer and min_age here, not in the daemon&#39;s environment: any</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># SEAMLESS_* variable besides SEAMLESS_CONFIG there makes the install</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># notify-only, so their env variables below can turn automatic updates off but</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># never on.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">update</span><span class="p">:</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Unset (the default) means on for release builds and off for builds from</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># source. false means zero update traffic: no request to GitHub at all, and so</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># no automatic update either. The key is left commented out because seamlessd</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># releases before this one reject config keys they do not know, so setting it</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># pins this file to this release or newer.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># releases before v0.7.0 reject config keys they do not know, so setting it</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># pins this file to v0.7.0 or newer.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_UPDATE_CHECK</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># check: false</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Time between checks, as a Go duration (6h, 90m, 1h30m) from 1h to 720h. A</span><span class="w">

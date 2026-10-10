@@ -309,12 +309,16 @@ plan_capture:
 # decide whether and when it also installs one by itself, which only an install
 # the curl or PowerShell installer made ever does: Homebrew, builds from source,
 # client machines and layouts the daemon cannot vouch for are only told.
+# Set auto, max_defer and min_age here, not in the daemon's environment: any
+# SEAMLESS_* variable besides SEAMLESS_CONFIG there makes the install
+# notify-only, so their env variables below can turn automatic updates off but
+# never on.
 update:
   # Unset (the default) means on for release builds and off for builds from
   # source. false means zero update traffic: no request to GitHub at all, and so
   # no automatic update either. The key is left commented out because seamlessd
-  # releases before this one reject config keys they do not know, so setting it
-  # pins this file to this release or newer.
+  # releases before v0.7.0 reject config keys they do not know, so setting it
+  # pins this file to v0.7.0 or newer.
   # env: SEAMLESS_UPDATE_CHECK
   # check: false
   # Time between checks, as a Go duration (6h, 90m, 1h30m) from 1h to 720h. A

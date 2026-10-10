@@ -112,7 +112,9 @@ Checks stop early if config or the database cannot be loaded at all.
 | `codex mcp` | Exact enabled stdio bridge state from `codex mcp get seamless --json`, plus executable/config target existence. |
 | `feature skills` | An **info** line when a client's skill home still holds a skill for an [optional feature](https://thereisnospoon.org/docs/reference/console/#optional-features) you switched off - the daemon never deletes there on a toggle. Re-run `install-hooks` to remove it, or re-enable the feature. |
 | `gardener` | The ticker configuration, or a warning that it is disabled. |
-| `updates` | The [automatic update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks), read from the daemon's own record (`~/.seamless/update/state.json`) without asking GitHub: **ok** when up to date, a **warn** naming the newer release and the command for this install, an **info** line when checks are off (and why) or have not run yet. A check failing for a week is a **warn** - usually a proxy the service's environment does not know about. |
+| `updates` | The [automatic update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks) and [automatic updates](https://thereisnospoon.org/docs/updating/#automatic-updates), read from the daemon's and the updater's own records (`~/.seamless/update/state.json`, `attempt.json`) without asking GitHub or the daemon. One line, the most urgent thing first. An update that could not be rolled back cleanly, and that the daemon has not settled, is a **warn** carrying the updater's recovery steps and its log. An update under way is **info**. Automatic updates that paused themselves are a **warn** naming why, with the way out: resume them in the console under **Settings > Updates**. A daemon that updates itself says, as **info**, what it installs next and when: once its soak (`update.min_age`) is over, then when no agent session is live, or at a lull in requests after its deadline (`update.max_defer`). A newer release that automatic updates skip (blocked after a failed attempt, or published without a signed checksums bundle) is a **warn** with the command to install it by hand; a hold after a deliberate downgrade is **info**. A daemon that only notifies is **ok** when up to date and a **warn** naming the newer release and the command for this install. The last attempt is added while it concerns the running release, with the updater's own error; one that applied with warnings names `seamlessd install-hooks`. One the updater's gates refused is a **warn** ending in the owner's action for that refusal: `seamlessd restart` when the installed seamlessd is not the version the daemon runs (a release installed without a restart) or the install no longer looks installer-made, and `seamlessd update`, run by hand, when the updater could not make sure it runs outside the service. Automatic updates turned off before it began need no action. **info** when checks are off (and why) or have not run yet. A check failing for a week is a **warn** - usually a proxy the service's environment does not know about. |
+| `update drill` | Only while `~/.seamless/update/test-fail-confirm` exists: a **warn**, because the rollback drill's switch makes every update fail its confirmation and roll back. Delete the file to end the drill. |
+| `tls trust` | Whether this machine's own client verifies the certificate the daemon serves for `server_url`. That client is the one its hooks dial with, and the one an update confirms the new daemon through. The answer comes from the config (the system roots plus `tls.ca_file`) without a dial, so it answers while the daemon is down. **ok** when the client verifies it; otherwise a **warn** naming the repair, since every update would fail its confirmation, and so would its rollback's: the attempt ends not rolled back and automatic updates pause. A `tls.ca_file` that cannot be loaded warns on any install. Absent when TLS is off and the client is usable. |
 
 Under `role: client` the report is a deliberately short, different list: a
 `role` info line naming the server it dials, a `server_url` reachability probe,
@@ -398,7 +400,9 @@ seamlessd uninstall [--client claude|claude-desktop|codex|all|detect] [--dry-run
 ```
 
 Reverses a full install on any supported OS: stops and removes the per-user
-service, strips the Seamless hook entries, deregisters the MCP server
+service and what [the updater](https://thereisnospoon.org/docs/reference/service/#the-updater) leaves behind
+(a Linux update unit still running, the Windows update task), strips the
+Seamless hook entries, deregisters the MCP server
 (including the chat surface's `claude_desktop_config.json` entry - only the
 reserved `seamless` key is removed, everything else stays byte-for-byte),
 removes the installed skills, and deletes the binaries. Config and the data dir
@@ -461,12 +465,13 @@ On an install the installer made, `update` also backs the instance up first
 counts the update only once the new release answers `/healthz` as a freshly
 started daemon that is still the same one ten seconds later, and otherwise
 rolls back to the release you had. Each such run is recorded in
-`~/.seamless/update/`. Already on the newest release, it says so and changes
-nothing. [Update & uninstall](https://thereisnospoon.org/docs/updating/) has the details.
+`~/.seamless/update/`. A daemon that [updates itself](https://thereisnospoon.org/docs/updating/#automatic-updates)
+runs this same engine unattended. Already on the newest release, it says so
+and changes nothing. [Update & uninstall](https://thereisnospoon.org/docs/updating/) has the details.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--check` | `false` | Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's [update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks) is doing: its mode and when it last checked. It asks even when `update.check` is `false`, because running it is you asking. |
+| `--check` | `false` | Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's [update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks) and [automatic updates](https://thereisnospoon.org/docs/updating/#automatic-updates) have recorded: the mode and the last check; for a daemon that updates itself, the release it installs next with its soak (`target`) and the deadline (`pending`); an update under way; the last attempt with the updater's error, log and backup (and a `fix` row: `seamlessd install-hooks` after one that applied with warnings, or the owner's action - `seamlessd restart`, or `seamlessd update` by hand - after one the updater's gates refused while the daemon still runs the release it started from); a hold, a pause, blocked releases, a backoff, and the rollback drill while it is on. These come from the records, so they print even when the release list cannot be read. It asks even when `update.check` is `false`, because running it is you asking. |
 | `--dry-run` | `false` | Print the target, the installer's source and signature, the install dir, and the backup and rollback plan, plus the equivalent one-liner, without downloading, installing or recording anything (it reads the release list and the target release). |
 | `--url` | the target release's installer | Run the installer at this https URL instead: TLS only, with a printed warning, your environment as is, and no backup, rollback or record. |
 | `--config` | `$SEAMLESS_CONFIG`, then the search path | The config the data dir and the daemon's address come from. |
@@ -474,8 +479,10 @@ nothing. [Update & uninstall](https://thereisnospoon.org/docs/updating/) has the
 The installer's env knobs pass through, and a knob you set wins:
 `SEAMLESS_VERSION=0.3.0 seamlessd update` pins a version (older ones too),
 `SEAMLESS_INSTALL_DIR=...` retargets, exactly as the curl installer does.
-`--auto` and its `--attempt`/`--from`/`--to`/`--why` belong to the daemon's
-unattended updater; they are not for interactive use.
+`--auto` with `--attempt`, `--from`, `--to` and `--why` is the command line a
+daemon that updates itself starts its updater with, outside the service
+([The updater on your OS](https://thereisnospoon.org/docs/reference/service/#the-updater)). It is not for
+interactive use, and it refuses `--check`, `--dry-run` and `--url`.
 
 ## seamlessd map-repo {#seamlessd_map_repo}
 

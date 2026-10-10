@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.
+description: The package layering, what each package owns, three data-flow traces through the real code, and the things Seamless deliberately does not have.
 ---
 
 Seamless ships two Go binaries: the `seamlessd` daemon and the `seam` CLI. The
@@ -19,7 +19,7 @@ If you are looking for the conceptual model rather than the code, start at
   <div class="doc-stack">
     <div class="flow-node"><span class="flow-step">Entry points</span><strong>cmd/seamlessd · cmd/seam · cmd/docsgen</strong><small>Wire dependencies and process boundaries.</small></div>
     <div class="flow-node"><span class="flow-step">API surfaces</span><strong>internal/mcp · hooks · console</strong><small>Translate HTTP, MCP, hooks, and UI requests; own no domain policy.</small></div>
-    <div class="flow-node emphasis"><span class="flow-step">Domains</span><strong>retrieve · lifecycle · gardener · files · plans · capture · importer</strong><small>Business rules and reusable workflows.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">Domains</span><strong>retrieve · lifecycle · gardener · files · plans · capture · importer · update</strong><small>Business rules and reusable workflows.</small></div>
     <div class="flow-node"><span class="flow-step">Foundations</span><strong>store · events · llm · markdown · core · config · validate</strong><small>Leaves, or nearly so; never reach upward.</small></div>
   </div>
   <figcaption id="layering-caption">Imports move downward. Shared behavior moves into a lower layer rather than sideways through another surface.</figcaption>
@@ -58,6 +58,7 @@ violation is visible in the import block.
 | `capture` | domain | SSRF-safe URL fetch: private-IP rejection, a pinned dialer, a port allowlist, redirect validation, a size cap. | - |
 | `archive` | domain | Instance archives: `VACUUM INTO` snapshot + corpus + manifest out, guarded tar extraction and restore-or-merge back in. Never imports `config` - an archive is described by its manifest and the data dir it is handed, not by whichever process is holding it. | `core`, `files`, `llm`, `store`, `validate` |
 | `importer` | domain | One-way migration from the v1 store. Reads v1, writes v2, never modifies v1. | `core`, `files`, `store` |
+| `update` | domain | The background update check and automatic updates: the GitHub release list, install-kind detection (`Detect`, a pure function of the probe `cmd/seamlessd` gathers), the policy that picks a release and a moment (`Target`, `Decide`), folding the updater's attempt records into blocks, backoff, holds and pauses, `<data_dir>/update/state.json`, and the `Status` every surface renders. It decides and records; installing is the detached `seamlessd update --auto` that `cmd/seamlessd` starts. | `config`, `core` |
 | `mcp` | surface | The tool surface over streamable HTTP, plus session bindings (per connection, and by agent process) and scope resolution. | `agentproc`, `capture`, `core`, `events`, `files`, `gardener`, `lifecycle`, `llm`, `plans`, `retrieve`, `store`, `validate` |
 | `hooks` | surface | Shared Claude Code/Codex hook endpoints and adapters, ambient sessions, bounded injection, findings harvest, and Claude-specific plan capture. | `agentproc`, `config`, `core`, `events`, `files`, `plans`, `retrieve`, `store`, `validate` |
 | `console` | surface | The server-rendered observability UI and its SSE feed. | `config`, `core`, `events`, `files`, `gardener`, `lifecycle`, `markdown`, `plans`, `retrieve`, `store` |
@@ -133,6 +134,42 @@ Two orderings inside it are also deliberate. Step 9 runs *after* step 8 so that
 they are partitioned out before the trim ever sees them. And step 14 runs after
 step 13 so the recorded event contains exactly the text the agent received,
 ambient line included, rather than the briefing as it looked one step earlier.
+
+## Trace: an automatic update, from decision to restarted daemon
+
+<figure class="doc-figure" aria-labelledby="update-trace-caption">
+  <span class="figure-kicker">Automatic update trace</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node"><span class="flow-step">Checker · every minute</span><strong>Fold, target, decide</strong><small>Settle the updater's last record; pick the newest release that has soaked by GitHub's clock, carries signed checksums and is neither blocked nor held; wait for an idle daemon or a lull past <code>max_defer</code>.</small></div>
+    <div class="flow-node"><span class="flow-step">Spawn</span><strong>Record, then hand off</strong><small>Re-check a release list older than a minute; save the spawn and record <code>update.started</code>; the OS spawner starts <code>seamlessd update --auto</code> outside the service.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">Updater</span><strong>Verify, back up, install</strong><small>Take <code>update.lock</code>; re-run the gates; verify the release's installer and checksums against its exact tag; prove the rollback; archive the instance; run the installer, which restarts the service.</small></div>
+    <div class="flow-node success"><span class="flow-step">Confirm</span><strong>Observe, or roll back</strong><small>A new daemon of the new release, the same one ten seconds later; otherwise put the database back if it was migrated and reinstall the old release. The record goes to <code>attempt.json</code> for the new daemon to fold.</small></div>
+  </div>
+  <figcaption id="update-trace-caption">The daemon decides and records; a separate process, outside the service, does the installing.</figcaption>
+</figure>
+
+Three things in that path are decisions, not mechanics:
+
+**The decision and the act live in different processes.** The daemon is the
+thing being replaced, so it cannot install itself: the installer's service
+restart would kill it mid-swap. It starts the updater where that restart cannot
+reach (per OS, [The updater on your OS](/reference/service/#the-updater)), and
+the two talk only through files. The daemon writes `state.json`; the updater,
+holding `update.lock`, writes `attempt.json` and `attempts.jsonl`. Every release
+reads every other release's records, so their format only ever gains fields
+(see [Domain invariants](/internals/invariants/#automatic-updates)).
+
+**There is one upgrade implementation.** The updater runs the same installer
+script a fresh install runs, after verifying its Sigstore bundle in-process.
+It fetches only installers, checksums and their signatures, and swaps no
+binary itself. A manual `seamlessd update` runs the same engine, attended.
+
+**Success is observed, not reported.** The installer's exit code decides
+nothing. The update counts only once `/healthz` answers from a new process of
+the new release, the one the update state names as running, and the same one
+ten seconds later. An installer that exits non-zero while the new release
+serves is "applied with warnings". A release that never answers is rolled back
+and blocked for automatic updates.
 
 ## The deliberate no's
 

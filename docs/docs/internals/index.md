@@ -27,6 +27,6 @@ scope resolution, FTS and LIKE escaping, LLM degradation - stated with the
 failure it prevents, so you can tell when a change is about to relearn one the
 hard way.
 
-- [Architecture](https://thereisnospoon.org/docs/internals/architecture/): The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.
-- [Contributing](https://thereisnospoon.org/docs/internals/contributing/): The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.
-- [Domain invariants](https://thereisnospoon.org/docs/internals/invariants/): The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation - and why each exists.
+- [Architecture](https://thereisnospoon.org/docs/internals/architecture/): The package layering, what each package owns, three data-flow traces through the real code, and the things Seamless deliberately does not have.
+- [Contributing](https://thereisnospoon.org/docs/internals/contributing/): The make targets, the check gate and what CI runs, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.
+- [Domain invariants](https://thereisnospoon.org/docs/internals/invariants/): The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation, automatic updates and release discipline - and why each exists.

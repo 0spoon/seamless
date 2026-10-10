@@ -50,9 +50,10 @@ other routes (Homebrew, a clone, `go install`, prebuilt archives);
 controls, logs, and every path.
 
 Seamless is early in its development cycle, and releases with improvements and
-bug fixes land often. Make updating a habit - at least weekly - so you are
-always on the latest version: `seamlessd update` is the one command, on every
-OS. See [Update & uninstall](/updating/).
+bug fixes land often. The installer's install keeps itself current: from v0.7.0
+it installs each new release by itself, a day after it is published and at a
+moment no agent is using it. To update right now, `seamlessd update` is the one
+command, on every OS. See [Update & uninstall](/updating/#automatic-updates).
 
 Piping a stranger's script into a shell deserves a read first - it is
 [one file](https://thereisnospoon.org/install).

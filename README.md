@@ -107,14 +107,17 @@ archive for your platform (macOS, Linux, and Windows; amd64 and arm64), installs
 `seamlessd` and `seam` into `~/.local/bin`, generates the bearer key, installs
 hooks, MCP, and skills for the detected Claude Code/Codex local hosts, and runs
 the daemon as a per-user service -- launchd on macOS, systemd `--user` on Linux, an
-at-logon Scheduled Task on Windows. Upgrade any time with `seamlessd update`
-(re-runs the installer for you; `--check` reports installed vs latest): your
-config and `~/.seamless` are never touched.
+at-logon Scheduled Task on Windows. It keeps itself up to date: from v0.7.0 it
+installs each new release by itself, a day after it is published and at a moment
+no agent is using it -- backed up, and rolled back if the new release does not
+come up. To update right now, run `seamlessd update` (`--check` reports
+installed vs latest): your config and `~/.seamless` are preserved.
 
 > **Early days, frequent releases.** Seamless is early in its development
-> cycle, and releases with improvements and bug fixes land often. Update at
-> least weekly to run the latest version -- `seamlessd update` is the one
-> command. See [Update & uninstall](https://thereisnospoon.org/docs/updating/).
+> cycle, and releases with improvements and bug fixes land often. An installer
+> install updates itself from v0.7.0 on; on v0.6.0 or older, run
+> `seamlessd update` once. See
+> [Update & uninstall](https://thereisnospoon.org/docs/updating/).
 
 (Why `seam`? The CLI keeps the short name of Seam v1, the decommissioned
 private predecessor Seamless was rebuilt from the ground up to replace.)

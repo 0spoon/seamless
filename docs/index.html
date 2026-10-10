@@ -92,7 +92,7 @@
           "name": "Does it phone home?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. Localhost bind, a static bearer key, and no product telemetry. Embeddings use OpenAI if you add a key, or run fully offline with Ollama. This page has no trackers either: it is a static file, and what it remembers (your theme, your OS pick, how far you read) stays in your own browser."
+            "text": "No. Localhost bind, a static bearer key, and no product telemetry. The one request it makes on its own is an anonymous look at GitHub's release list, so it can tell you about a new release and update itself; update.check: false turns that off. Embeddings use OpenAI if you add a key, or run fully offline with Ollama. This page has no trackers either: it is a static file, and what it remembers (your theme, your OS pick, how far you read) stays in your own browser."
           }
         },
         {
@@ -812,7 +812,7 @@ Read with memory_read before re-deriving.<span class="t-tag">&lt;/seam-recall&gt
           <li><svg aria-hidden="true"><use href="#i-check"/></svg>Deregisters the MCP server and removes the skills</li>
           <li><svg aria-hidden="true"><use href="#i-check"/></svg>Deletes both binaries. Running it twice is harmless.</li>
         </ul>
-        <p class="leave-keep">Your memories stay in <code>~/.seamless</code> and your key in <code>~/.config/seamless</code>, because uninstalling a program shouldn't delete your knowledge. Add <code>--purge</code> to remove them too. Same command on Windows. Updating later is <code>seamlessd update</code>.</p>
+        <p class="leave-keep">Your memories stay in <code>~/.seamless</code> and your key in <code>~/.config/seamless</code>, because uninstalling a program shouldn't delete your knowledge. Add <code>--purge</code> to remove them too. Same command on Windows. Updates install themselves; to update right now, run <code>seamlessd update</code>.</p>
         <p class="leave-more"><a class="lnk" href="docs/updating/#uninstall">Update &amp; uninstall, in full <svg aria-hidden="true"><use href="#i-arrow"/></svg></a></p>
       </aside>
     </div>
@@ -1001,7 +1001,7 @@ Recent findings:
       </details>
       <details class="rv">
         <summary>Does it phone home?</summary>
-        <div class="a"><p>No. Localhost bind, a static bearer key, and no product telemetry. Embeddings use OpenAI if you add a key, or run fully offline with Ollama. This page has no trackers either: it is a static file, and what it remembers (your theme, your OS pick, how far you read) stays in your own browser.</p></div>
+        <div class="a"><p>No. Localhost bind, a static bearer key, and no product telemetry. The one request it makes on its own is an anonymous look at GitHub's release list, so it can tell you about a new release and update itself; <code>update.check: false</code> turns that off. Embeddings use OpenAI if you add a key, or run fully offline with Ollama. This page has no trackers either: it is a static file, and what it remembers (your theme, your OS pick, how far you read) stays in your own browser.</p></div>
       </details>
       <details class="rv">
         <summary>How do I uninstall it?</summary>

@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Contributing - Seamless docs</title>
-<meta name="description" content="The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.">
+<meta name="description" content="The make targets, the check gate and what CI runs, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/internals/contributing/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/internals/contributing/">
 <meta property="og:title" content="Contributing - Seamless docs">
-<meta property="og:description" content="The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.">
+<meta property="og:description" content="The make targets, the check gate and what CI runs, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - sessions end. What they learned doesn&#39;t.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Internals","item":"https://thereisnospoon.org/docs/internals/"},{"@type":"ListItem","position":3,"name":"Contributing","item":"https://thereisnospoon.org/docs/internals/contributing/"}]},{"@type":"TechArticle","headline":"Contributing - Seamless docs","description":"The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.","url":"https://thereisnospoon.org/docs/internals/contributing/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Internals","item":"https://thereisnospoon.org/docs/internals/"},{"@type":"ListItem","position":3,"name":"Contributing","item":"https://thereisnospoon.org/docs/internals/contributing/"}]},{"@type":"TechArticle","headline":"Contributing - Seamless docs","description":"The make targets, the check gate and what CI runs, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.","url":"https://thereisnospoon.org/docs/internals/contributing/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#eef1f5">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#070a13">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -226,11 +226,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 </nav>
 
   <h1>Contributing</h1>
-  <p class="lede">The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.</p>
+  <p class="lede">The make targets, the check gate and what CI runs, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.</p>
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#the-targets">The targets</a></li><li class="lvl-2"><a href="#the-edit-test-loop-make-install">The edit-test loop: make install</a></li><li class="lvl-2"><a href="#the-check-gate">The check gate</a></li><li class="lvl-2"><a href="#use-make-fmt-never-gofmt--w-">Use make fmt, never gofmt -w .</a></li><li class="lvl-2"><a href="#style-essentials">Style essentials</a></li><li class="lvl-2"><a href="#database-rules">Database rules</a></li><li class="lvl-2"><a href="#testing-rules">Testing rules</a></li><li class="lvl-2"><a href="#forbidden-apis">Forbidden APIs</a></li><li class="lvl-2"><a href="#required-patterns">Required patterns</a></li><li class="lvl-2"><a href="#adding-an-mcp-tool">Adding an MCP tool</a></li><li class="lvl-2"><a href="#before-declaring-done">Before declaring done</a></li>
+      <li class="lvl-2"><a href="#the-targets">The targets</a></li><li class="lvl-2"><a href="#the-edit-test-loop-make-install">The edit-test loop: make install</a></li><li class="lvl-2"><a href="#the-check-gate">The check gate</a></li><li class="lvl-2"><a href="#what-ci-runs">What CI runs</a></li><li class="lvl-2"><a href="#use-make-fmt-never-gofmt--w-">Use make fmt, never gofmt -w .</a></li><li class="lvl-2"><a href="#style-essentials">Style essentials</a></li><li class="lvl-2"><a href="#database-rules">Database rules</a></li><li class="lvl-2"><a href="#testing-rules">Testing rules</a></li><li class="lvl-2"><a href="#forbidden-apis">Forbidden APIs</a></li><li class="lvl-2"><a href="#required-patterns">Required patterns</a></li><li class="lvl-2"><a href="#adding-an-mcp-tool">Adding an MCP tool</a></li><li class="lvl-2"><a href="#before-declaring-done">Before declaring done</a></li>
     </ul>
   </details>
   <p>The conventions live in <code>AGENTS.md</code> at the repo root, and that file is the source
@@ -273,7 +273,7 @@ which makes a stale running daemon invisible.</p>
 <h2 id="the-check-gate">The <code>check</code> gate</h2>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make check
 </span></span></code></pre></div>
-<p>That is the one command that must be green before work is done. It runs six steps
+<p>That is the one command that must be green before work is done. It runs ten steps
 sequentially - as separate <code>$(MAKE)</code> invocations rather than prerequisites, so it
 stops at the first red step and stays ordered under <code>make -j</code>:</p>
 <div class="table-wrap">
@@ -298,30 +298,50 @@ stops at the first red step and stays ordered under <code>make -j</code>:</p>
 </tr>
 <tr>
 <td>3</td>
+<td><code>cross-check</code></td>
+<td><code>go vet</code> for darwin/arm64 and windows/amd64, so code behind an OS build tag type-checks before a release has to build it.</td>
+</tr>
+<tr>
+<td>4</td>
 <td><code>fmt-check</code></td>
 <td>gofmt drift in tracked files.</td>
 </tr>
 <tr>
-<td>4</td>
+<td>5</td>
 <td><code>docs-check</code></td>
 <td>A committed docs site that no longer matches <code>docs-src/</code>.</td>
 </tr>
 <tr>
-<td>5</td>
+<td>6</td>
+<td><code>installer-check</code></td>
+<td>An installer script that does not parse (<code>sh -n</code>, and PowerShell's parser when <code>pwsh</code> is installed).</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>site-check</code></td>
+<td>A hand-written landing page that drifted from the installer or the CLI.</td>
+</tr>
+<tr>
+<td>8</td>
 <td><code>lint</code></td>
 <td>golangci-lint, including the repo's custom bans.</td>
 </tr>
 <tr>
-<td>6</td>
+<td>9</td>
+<td><code>vulncheck</code></td>
+<td>A known vulnerability in code this repo actually calls (govulncheck).</td>
+</tr>
+<tr>
+<td>10</td>
 <td><code>test-race</code></td>
 <td>Everything, under the race detector.</td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>The order is cost-ascending: the cheapest and most-likely-to-fail steps run first,
-and <code>test-race</code> is last because it is by far the slowest. The individual targets
-exist for iterating; <code>check</code> is the thing you run before you claim to be done.</p>
+<p>The cheap, likely-to-fail steps run first, and <code>test-race</code> is last because it is
+by far the slowest. The individual targets exist for iterating; <code>check</code> is the
+thing you run before you claim to be done.</p>
 <p><code>docs-check</code> regenerates into a temp dir and diffs, rather than rewriting your
 working tree and running <code>git diff</code>. That means it never mutates the file you are
 editing, and <code>diff -r</code> catches untracked drift that <code>git diff</code> cannot see - a page
@@ -329,6 +349,36 @@ deleted from <code>docs-src/</code> but still committed under <code>docs/docs/</
 are generated from the code (the MCP tool reference reads <code>mcp.Catalog()</code>, the
 configuration reference reflects <code>config.Defaults()</code>), so changing a tool or a
 config key makes the committed output stale, and this is the step that says so.</p>
+<h2 id="what-ci-runs">What CI runs</h2>
+<p><code>.github/workflows/ci.yml</code> runs three jobs on every push to <code>main</code> and every
+pull request:</p>
+<ul>
+<li><strong><code>check</code></strong>, on Linux: <code>make check</code>, the gate above.</li>
+<li><strong><code>os-smoke</code></strong>, on <code>macos-latest</code> and <code>windows-latest</code>: <code>go test -count=1</code>
+over <code>./cmd/seamlessd</code>, <code>./internal/update</code> and <code>./internal/agentproc</code>. These
+are the packages with code behind darwin and windows build tags (file
+locking, the detached updater, the process table), which <code>cross-check</code> only
+vets. It builds with <code>CGO_ENABLED=0</code>, as the release does, and without
+<code>-race</code>. Each OS reports on its own (<code>fail-fast: false</code>). Tests that fail on
+Windows because of a known product bug are skipped there by name
+(<code>known_windows_failures</code> in the workflow); delete a name when its fix lands.</li>
+<li><strong><code>config-lint</code></strong>: actionlint over the workflows, and <code>goreleaser check</code> over
+<code>.goreleaser.yaml</code> with the goreleaser version range the release workflow
+uses. Without it, a broken release config would first fail on a pushed tag.</li>
+</ul>
+<p>Since those packages' tests run on Windows, write them to pass there:</p>
+<ul>
+<li>A test that fakes a home sets <code>USERPROFILE</code> beside <code>HOME</code>. <code>os.UserHomeDir</code>
+reads <code>USERPROFILE</code> on Windows, so a test that sets only <code>HOME</code> writes to the
+real profile of whoever runs it.</li>
+<li>Windows reports file modes as <code>0666</code>, so an assertion on <code>0600</code> or <code>0700</code>
+goes behind <code>if runtime.GOOS != &quot;windows&quot;</code>.</li>
+<li>A POSIX fixture path such as <code>/opt/seam</code> is not absolute on Windows.
+<code>absFixture</code> (<code>cmd/seamlessd/desktop_mcp_test.go</code>) makes it absolute on the
+OS under test.</li>
+<li>Expect the OS's path separator: build expected paths with <code>filepath.Join</code>,
+never with <code>/</code>.</li>
+</ul>
 <h2 id="use-make-fmt-never-gofmt--w-">Use <code>make fmt</code>, never <code>gofmt -w .</code></h2>
 <p>This one bites in a specific way, so it is worth stating plainly.</p>
 <p>The go tool's <code>./...</code> pattern skips dot-directories, so <code>build</code>, <code>vet</code>, <code>test</code>,
@@ -599,7 +649,7 @@ error.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-targets">The targets</a></li><li class="lvl-2"><a href="#the-edit-test-loop-make-install">The edit-test loop: make install</a></li><li class="lvl-2"><a href="#the-check-gate">The check gate</a></li><li class="lvl-2"><a href="#use-make-fmt-never-gofmt--w-">Use make fmt, never gofmt -w .</a></li><li class="lvl-2"><a href="#style-essentials">Style essentials</a></li><li class="lvl-2"><a href="#database-rules">Database rules</a></li><li class="lvl-2"><a href="#testing-rules">Testing rules</a></li><li class="lvl-2"><a href="#forbidden-apis">Forbidden APIs</a></li><li class="lvl-2"><a href="#required-patterns">Required patterns</a></li><li class="lvl-2"><a href="#adding-an-mcp-tool">Adding an MCP tool</a></li><li class="lvl-2"><a href="#before-declaring-done">Before declaring done</a></li>
+      <li class="lvl-2"><a href="#the-targets">The targets</a></li><li class="lvl-2"><a href="#the-edit-test-loop-make-install">The edit-test loop: make install</a></li><li class="lvl-2"><a href="#the-check-gate">The check gate</a></li><li class="lvl-2"><a href="#what-ci-runs">What CI runs</a></li><li class="lvl-2"><a href="#use-make-fmt-never-gofmt--w-">Use make fmt, never gofmt -w .</a></li><li class="lvl-2"><a href="#style-essentials">Style essentials</a></li><li class="lvl-2"><a href="#database-rules">Database rules</a></li><li class="lvl-2"><a href="#testing-rules">Testing rules</a></li><li class="lvl-2"><a href="#forbidden-apis">Forbidden APIs</a></li><li class="lvl-2"><a href="#required-patterns">Required patterns</a></li><li class="lvl-2"><a href="#adding-an-mcp-tool">Adding an MCP tool</a></li><li class="lvl-2"><a href="#before-declaring-done">Before declaring done</a></li>
     </ul>
   </aside>
   

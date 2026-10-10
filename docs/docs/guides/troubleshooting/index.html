@@ -230,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says trust unverified</a></li><li class="lvl-2"><a href="#codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-call-is-rejected-as-ambiguous-scope-session-or-agent">A call is rejected as ambiguous scope, session, or agent</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#a-tool-is-missing-or-a-console-screen-says-it-is-switched-off">A tool is missing, or a console screen says it is switched off</a></li><li class="lvl-2"><a href="#a-console-screen-is-not-in-the-sidebar">A console screen is not in the sidebar</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#seamlessd-update-refuses-the-release-with-a-signature-error">seamlessd update refuses the release with a signature error</a></li><li class="lvl-2"><a href="#the-update-check-keeps-failing">The update check keeps failing</a></li><li class="lvl-2"><a href="#the-update-notice-will-not-go-away">The update notice will not go away</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
+      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says trust unverified</a></li><li class="lvl-2"><a href="#codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-call-is-rejected-as-ambiguous-scope-session-or-agent">A call is rejected as ambiguous scope, session, or agent</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#a-tool-is-missing-or-a-console-screen-says-it-is-switched-off">A tool is missing, or a console screen says it is switched off</a></li><li class="lvl-2"><a href="#a-console-screen-is-not-in-the-sidebar">A console screen is not in the sidebar</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#seamlessd-update-refuses-the-release-with-a-signature-error">seamlessd update refuses the release with a signature error</a></li><li class="lvl-2"><a href="#the-update-check-keeps-failing">The update check keeps failing</a></li><li class="lvl-2"><a href="#the-update-notice-will-not-go-away">The update notice will not go away</a></li><li class="lvl-2"><a href="#an-automatic-update-is-waiting">An automatic update is waiting</a></li><li class="lvl-2"><a href="#an-automatic-update-failed">An automatic update failed</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
     </ul>
   </details>
   <p>Seamless has one property that makes troubleshooting unlike most software:
@@ -619,15 +619,215 @@ not talk to GitHub at all, set <code>update.check: false</code> - then nothing i
 nothing is reported. <code>seamlessd update --check</code> asks directly, so it shows the
 same error with its cause.</p>
 <h2 id="the-update-notice-will-not-go-away">The update notice will not go away</h2>
-<p><strong>What is happening.</strong> A newer release is out, and the daemon says so in new
-sessions' briefings for a week after it first saw it, in the console, and in
-<code>seamlessd doctor</code>. Nothing installs itself.</p>
+<p><strong>What is happening.</strong> A newer release is out that this install will not install
+by itself, and the daemon says so in new sessions' briefings for a week after it
+first saw it, in the console, and in <code>seamlessd doctor</code>. Either the install is
+only ever told - Homebrew, a build from source, a client machine, or a layout the
+daemon cannot vouch for (<a href="../../updating/#who-updates-itself">who updates itself</a>) -
+or its automatic updates are off, paused, or skip that release.</p>
 <p><strong>Fix.</strong> Update with the command the notice names - it depends on how Seamless
 was installed (<code>seamlessd update</code>, <code>brew upgrade --cask arctop/tap/seamless</code>, or
 <code>git pull &amp;&amp; make install</code>); the table in
-<a href="../../updating/#automatic-update-checks">automatic update checks</a> lists them. To stop
-hearing about updates instead, turn checks off in <strong>Settings -&gt; Updates</strong> or set
-<code>update.check: false</code>.</p>
+<a href="../../updating/#automatic-update-checks">automatic update checks</a> lists them. On an
+install that updates itself, <strong>Settings -&gt; Updates</strong> says why it skips the
+release, and <strong>Update now</strong> installs it. To stop hearing about updates instead,
+turn checks off in <strong>Settings -&gt; Updates</strong> or set <code>update.check: false</code>.</p>
+<h2 id="an-automatic-update-is-waiting">An automatic update is waiting</h2>
+<p><strong>What is happening.</strong> This install updates itself, a newer release is out, and
+it has not been installed yet. Usually that is the design working:
+<a href="../../updating/#when-it-installs">automatic updates</a> wait out a soak, then wait for a
+quiet daemon. <strong>Settings -&gt; Updates</strong> says what this one waits for on its
+<strong>Next update</strong> row (and on the Home health strip's hover);
+<code>seamlessd update --check</code> prints the release and its deadline on its <code>target</code>
+and <code>pending</code> rows.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Next update says</th>
+<th>Why</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>installs by itself once it is 24h old</code></td>
+<td>The release is younger than <code>update.min_age</code>.</td>
+<td>Wait, or use <strong>Update now</strong>.</td>
+</tr>
+<tr>
+<td><code>waiting for 2 live agent sessions to go idle, or at a lull in requests in 19h</code></td>
+<td>Agents are working. Past <code>update.max_defer</code> it takes the next lull instead.</td>
+<td>Nothing.</td>
+</tr>
+<tr>
+<td><code>past its 24h deadline; waiting for 90s without requests</code></td>
+<td>Something keeps calling the daemon.</td>
+<td>Nothing: at 1.5 times <code>max_defer</code> it installs once no request is in flight. An open <strong>Interactions</strong> page refreshes every 15 seconds, so closing it lets the lull come sooner.</td>
+</tr>
+<tr>
+<td><code>waiting for 1 request in flight to finish</code></td>
+<td>A request is being served.</td>
+<td>Nothing: at twice <code>max_defer</code> it installs anyway.</td>
+</tr>
+<tr>
+<td><code>an earlier attempt failed; trying again in 1h</code></td>
+<td>The backoff after a failed attempt.</td>
+<td>Read <strong>Last attempt</strong>; <strong>Update now</strong> does not wait for the backoff.</td>
+</tr>
+<tr>
+<td><code>an updater is already running</code></td>
+<td>A <code>seamlessd update</code> holds the update lock.</td>
+<td>Let it finish.</td>
+</tr>
+<tr>
+<td><code>re-checking the release list in 12m before installing v0.7.3</code>, or <code>could not be re-checked</code></td>
+<td>Its copy of the release list is older than a minute, and it re-checks at most every 15 minutes.</td>
+<td>Nothing; if the check keeps failing, see <a href="#the-update-check-keeps-failing">the update check keeps failing</a>.</td>
+</tr>
+<tr>
+<td><code>live agent sessions could not be counted</code></td>
+<td>The database did not answer the count, which never counts as idle.</td>
+<td>Run <code>seamlessd doctor</code>.</td>
+</tr>
+<tr>
+<td><code>the update state could not be saved</code></td>
+<td><code>~/.seamless/update/</code> cannot be written - a full disk, or permissions.</td>
+<td>Free space or fix the permissions; an update never starts without its record on disk.</td>
+</tr>
+<tr>
+<td><code>v0.7.3 carries no signed checksums bundle</code></td>
+<td>Automatic updates verify that bundle, and this release has none.</td>
+<td>Update by hand with <code>seamlessd update</code>.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>No <strong>Next update</strong> row at all means nothing is pending: the release sits under
+<strong>Held back</strong> (you went back to an older release) or <strong>Skipped releases</strong> (an
+update to it failed), or the <strong>Mode</strong> row says automatic updates are off or
+paused. <a href="../../updating/#automatic-updates">Automatic updates</a> covers each.</p>
+<h2 id="an-automatic-update-failed">An automatic update failed</h2>
+<p><strong>What is happening.</strong> An update the daemon started - by itself, or through
+<strong>Update now</strong> - did not apply. For a week every console page says so in a
+banner (&quot;The update to v0.7.3 rolled back.&quot;), and three places read the same
+record:</p>
+<ul>
+<li><strong>Settings -&gt; Updates -&gt; Last attempt</strong>: the outcome, the updater's own error,
+and its log;</li>
+<li><code>seamlessd doctor</code>, on its <code>updates</code> row;</li>
+<li><code>seamlessd update --check</code>, on its <code>last</code>, <code>error</code>, <code>log</code> and <code>backup</code> rows.</li>
+</ul>
+<p>The log, <code>~/.seamless/update/logs/&lt;attempt&gt;.log</code>, has every step and the
+installer's full output; the newest 20 logs are kept. The outcome says how bad
+it is:</p>
+<ul>
+<li><strong>rolled back</strong>, <strong>failed</strong> or <strong>interrupted</strong>: Seamless still runs the release
+you had, and nothing is lost. Automatic updates skip a release that rolled
+back or failed verification, and retry the rest after a backoff
+(<a href="../../updating/#when-an-update-fails">when an update fails</a>). There is nothing to
+do unless it keeps happening; the error says why.</li>
+<li><strong>not rolled back</strong>: the new release did not come up, and the release you had
+could not be confirmed either, so the daemon may be down. Automatic updates
+paused themselves, and the banner is red.</li>
+</ul>
+<p><strong>Fix, when it was not rolled back.</strong> The error spells out the steps. In order:</p>
+<ol>
+<li>
+<p>See whether the daemon runs: <code>seamlessd status</code>. If <code>seamlessd doctor</code> warns
+on <code>tls trust</code>, read the TLS cause below first - the release you had is
+probably running, and only its confirmation failed.</p>
+</li>
+<li>
+<p>Reinstall the release you had, pinned to it:</p>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> <span class="nv">SEAMLESS_VERSION</span><span class="o">=</span>0.7.2 sh
+</span></span></code></pre></div>
+<div class="code-block" data-lang="powershell"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nv">$env:SEAMLESS_VERSION</span><span class="p">=</span><span class="s1">&#39;0.7.2&#39;</span><span class="p">;</span> <span class="nb">irm </span><span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">thereisnospoon</span><span class="p">.</span><span class="n">org</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="py">ps1</span> <span class="p">|</span> <span class="nb">iex
+</span></span></span></code></pre></div>
+</li>
+<li>
+<p>Only if the data has to go back to how it was before the update, restore the
+backup the error names. <code>seamlessd import --from &lt;backup&gt;</code> merges into a data
+dir that already holds data, so a true restore needs an empty one: stop the
+daemon, move the data dir aside, import, start.</p>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd stop
+</span></span><span class="line"><span class="cl">mv ~/.seamless ~/.seamless.broken
+</span></span><span class="line"><span class="cl">seamlessd import --from ~/.seamless.broken/backups/pre-update-v0.7.2-20261009T141500Z.tar.gz
+</span></span><span class="line"><span class="cl">seamlessd start
+</span></span></code></pre></div>
+<div class="code-block" data-lang="powershell"><pre class="chroma"><code><span class="line"><span class="cl"><span class="n">seamlessd</span> <span class="n">stop</span>
+</span></span><span class="line"><span class="cl"><span class="nb">Move-Item</span> <span class="nv">$HOME</span><span class="p">\.</span><span class="py">seamless</span> <span class="nv">$HOME</span><span class="p">\.</span><span class="py">seamless</span><span class="p">.</span><span class="py">broken</span>
+</span></span><span class="line"><span class="cl"><span class="n">seamlessd</span> <span class="n">import</span> <span class="p">-</span><span class="n">-from</span> <span class="nv">$HOME</span><span class="p">\.</span><span class="py">seamless</span><span class="p">.</span><span class="n">broken</span><span class="p">\</span><span class="n">backups</span><span class="p">\</span><span class="nb">pre-update</span><span class="n">-v0</span><span class="p">.</span><span class="py">7</span><span class="p">.</span><span class="mf">2</span><span class="p">-</span><span class="n">20261009T141500Z</span><span class="p">.</span><span class="py">tar</span><span class="p">.</span><span class="py">gz</span>
+</span></span><span class="line"><span class="cl"><span class="n">seamlessd</span> <span class="nb">start
+</span></span></span></code></pre></div>
+<p>The backup lives inside the data dir, so after the move its path starts with
+the new name. Anything written after the backup was taken stays in the moved
+directory.</p>
+</li>
+<li>
+<p>Once the install is healthy, press <strong>Resume automatic updates</strong> in
+<strong>Settings -&gt; Updates</strong>. The release that failed stays skipped.</p>
+</li>
+</ol>
+<p>Causes worth knowing:</p>
+<ul>
+<li><strong>The updater refused to start it.</strong> The attempt failed while checking it may
+install now (the <code>gates</code> stage), before anything changed. The daemon tries
+again after the backoff, and is refused the same way until you act.
+<strong>Last attempt</strong>, the console banner, <code>seamlessd doctor</code>'s <code>updates</code> row and
+<code>seamlessd update --check</code>'s <code>fix</code> row name the cause and, while the daemon
+still runs the release the attempt started from, the fix:
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>The cause</th>
+<th>The fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the installed seamlessd is not the version the daemon runs - a release was installed without restarting the service</td>
+<td><code>seamlessd restart</code>, so the daemon runs the release on disk</td>
+</tr>
+<tr>
+<td>the install no longer looks like one the installer manages</td>
+<td><code>seamlessd restart</code>, so the service re-reads how it was installed</td>
+</tr>
+<tr>
+<td>the updater could not make sure it runs outside the service, which the installer restarts</td>
+<td>update by hand from a terminal: <code>seamlessd update</code></td>
+</tr>
+<tr>
+<td>automatic updates were turned off before it began</td>
+<td>nothing: that was your choice</td>
+</tr>
+</tbody>
+</table>
+</div>
+</li>
+<li><strong>A TLS daemon this machine cannot verify.</strong> The updater confirms an update
+through this machine's own client - the system's roots plus <code>tls.ca_file</code>,
+dialing <code>server_url</code> - the one its hooks use. If that client cannot verify the
+daemon's certificate, no update can be confirmed, and neither can the rollback
+after it, so every attempt ends &quot;not rolled back&quot; and pauses automatic
+updates. <code>seamlessd doctor</code>'s <code>tls trust</code> row warns about this and names the
+repair; fix it before you resume.</li>
+<li><strong>The rollback drill is on.</strong> While <code>~/.seamless/update/test-fail-confirm</code>
+exists, every update fails its confirmation on purpose and rolls back, and
+<code>seamlessd doctor</code> warns on <code>update drill</code>. Delete the file.</li>
+<li><strong><code>not enough free space for the backup</code>.</strong> The attempt stopped before
+changing anything; the error says how much the backup needs. Free space on
+the data dir's disk; it is retried after the backoff.</li>
+<li><strong>The updater never started.</strong> Nothing changed, and it is retried after the
+backoff. The daemon's own log says why, on its
+<code>update: could not start the updater</code> line;
+<a href="../../reference/service/#the-updater">The updater on your OS</a> has where that log
+is and what the updater needs.</li>
+<li><strong>applied with warnings.</strong> Not a failure: the new release serves, but the
+installer reported a problem after it came up, usually while wiring the agent
+clients. Run <code>seamlessd install-hooks</code>.</li>
+</ul>
 <h2 id="memory-write-says-the-name-is-held-by-a-superseded-memory"><code>memory_write</code> says the name is held by a superseded memory</h2>
 <p><strong>What is happening.</strong> A superseded or archived memory leaves every index but
 stays on disk as provenance - and it still owns its filename. The name is taken by
@@ -662,7 +862,7 @@ name is a lossless in-place update, so retrying is safe.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says trust unverified</a></li><li class="lvl-2"><a href="#codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-call-is-rejected-as-ambiguous-scope-session-or-agent">A call is rejected as ambiguous scope, session, or agent</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#a-tool-is-missing-or-a-console-screen-says-it-is-switched-off">A tool is missing, or a console screen says it is switched off</a></li><li class="lvl-2"><a href="#a-console-screen-is-not-in-the-sidebar">A console screen is not in the sidebar</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#seamlessd-update-refuses-the-release-with-a-signature-error">seamlessd update refuses the release with a signature error</a></li><li class="lvl-2"><a href="#the-update-check-keeps-failing">The update check keeps failing</a></li><li class="lvl-2"><a href="#the-update-notice-will-not-go-away">The update notice will not go away</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
+      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says trust unverified</a></li><li class="lvl-2"><a href="#codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-call-is-rejected-as-ambiguous-scope-session-or-agent">A call is rejected as ambiguous scope, session, or agent</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#a-tool-is-missing-or-a-console-screen-says-it-is-switched-off">A tool is missing, or a console screen says it is switched off</a></li><li class="lvl-2"><a href="#a-console-screen-is-not-in-the-sidebar">A console screen is not in the sidebar</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#seamlessd-update-refuses-the-release-with-a-signature-error">seamlessd update refuses the release with a signature error</a></li><li class="lvl-2"><a href="#the-update-check-keeps-failing">The update check keeps failing</a></li><li class="lvl-2"><a href="#the-update-notice-will-not-go-away">The update notice will not go away</a></li><li class="lvl-2"><a href="#an-automatic-update-is-waiting">An automatic update is waiting</a></li><li class="lvl-2"><a href="#an-automatic-update-failed">An automatic update failed</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
     </ul>
   </aside>
   

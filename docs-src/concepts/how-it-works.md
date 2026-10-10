@@ -113,10 +113,12 @@ All three are covered in [Recall](/concepts/recall/) and
   exactly. No ANN index, no separate service.
 - **Not a cloud service.** No account, no sync, and no outbound product
   telemetry. The local event and retrieval telemetry shown in the console never
-  leaves the machine. The bind is loopback and the key is static. The one
-  request Seamless makes unprompted is the anonymous
+  leaves the machine. The bind is loopback and the key is static. The only
+  requests Seamless makes unprompted are the anonymous
   [update check](/updating/#automatic-update-checks) against GitHub's release
-  list, which `update.check: false` turns off.
+  list and, on an install the installer made, the downloads that
+  [install a newer release by itself](/updating/#automatic-updates).
+  `update.check: false` turns both off.
 - **Not autonomous.** The gardener proposes; you decide. Nothing rewrites your
   knowledge behind your back.
 - **Not a chat memory.** It is not trying to remember your conversation. It

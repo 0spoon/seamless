@@ -59,10 +59,13 @@ internal/mcp/      MCP tools (streamable HTTP, static bearer key); see ToolCount
 internal/hooks/    session hooks + CC plan-mode capture (PostToolUse etc.) [P2/P3]
 internal/console/  server-rendered observability UI (html/template + SSE)  [P5]
 internal/capture/  SSRF-safe URL fetch                                     [P4]
-internal/update/   background update check: GitHub release list, install-kind
-                   detection, <data_dir>/update/state.json, the Status every
-                   surface renders (briefing notice, console, doctor, /healthz).
-                   Installs nothing; imports config + core only
+internal/update/   update check + automatic updates: GitHub release list,
+                   install-kind detection, Target/Decide policy, attempt-record
+                   fold, <data_dir>/update/state.json, the Status every surface
+                   renders (briefing notice, console, doctor, /healthz). Never
+                   installs in-process: the daemon spawns a detached `seamlessd
+                   update --auto` (cmd/seamlessd/update_spawn*.go) to run the
+                   release's installer. Imports config + core only
 internal/archive/  instance archives: VACUUM INTO snapshot + corpus + manifest
                    out; guarded tar extract and restore-or-merge back in.
                    Never imports config
@@ -151,11 +154,12 @@ utility-vs-recency index order via utility_mode/utility_weight); those knobs are
 editable live in the console (Settings -> Briefing injection), which stores a
 runtime override in the DB that wins over file/env until reset and applies from
 the next session start without a daemon restart. `gardener.session_idle_minutes`
-is the single live/idle threshold shared by the session reaper and the console.
-The `update:` block (check, check_interval) drives the background update check;
-its console override (Settings -> Updates) merges the other way round: an
-explicit file/env `check: false` is final and locks the toggle, because false
-means no update traffic at all. Durations are `config.Duration` ("6h"; a bare
+is the single live/idle threshold shared by the session reaper, the console and
+automatic updates' idle gate. The `update:` block (check, check_interval, auto,
+max_defer, min_age) drives the update check and automatic updates; its console
+override (Settings -> Updates) merges the other way round: `check: false` or
+`auto: false` in the file/env is final and locks its toggle (false check means
+no update traffic at all). Durations are `config.Duration` ("6h"; a bare
 number other than 0 is refused).
 
 ## Storage layout
@@ -163,9 +167,13 @@ number other than 0 is refused).
 ```
 ~/.seamless/
   seam.db                          SQLite: indexes, sessions, tasks, trials, events, embeddings, ...
+  seamlessd.lock                   serve's one-daemon-per-data-dir lock (holder's PID; never delete it)
   memory/{project|_global}/{name}.md   one memory per file (source of truth)
   notes/{project|_global}/{slug}.md    work artifacts (source of truth)
+  backups/pre-update-v*.tar.gz     the updater's pre-update archives (newest 2)
   update/state.json                the update check's record (release daemons only)
+  update/update.lock               the updater's lock (never delete it)
+  update/attempt.json, attempts.jsonl, logs/   the updater's records (it writes, the daemon reads)
 ```
 
 Files are the source of truth for durable knowledge; the DB is the record for

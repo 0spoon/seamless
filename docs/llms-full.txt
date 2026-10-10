@@ -142,9 +142,10 @@ other routes (Homebrew, a clone, `go install`, prebuilt archives);
 controls, logs, and every path.
 
 Seamless is early in its development cycle, and releases with improvements and
-bug fixes land often. Make updating a habit - at least weekly - so you are
-always on the latest version: `seamlessd update` is the one command, on every
-OS. See [Update & uninstall](/updating/).
+bug fixes land often. The installer's install keeps itself current: from v0.7.0
+it installs each new release by itself, a day after it is published and at a
+moment no agent is using it. To update right now, `seamlessd update` is the one
+command, on every OS. See [Update & uninstall](/updating/#automatic-updates).
 
 Piping a stranger's script into a shell deserves a read first - it is
 [one file](https://thereisnospoon.org/install).
@@ -1399,8 +1400,12 @@ native commands, log locations, and every path Seamless touches are on
 
 ## Upgrading {#upgrading}
 
-`seamlessd update` upgrades in place to the newest release, on every OS -
-backed up, confirmed, and rolled back if the new release does not come up.
+From v0.7.0, an install the installer made updates itself: each new release is
+installed a day after it is published, at a moment no agent is using the daemon
+([automatic updates](/updating/#automatic-updates)). `seamlessd update` upgrades
+in place to the newest release right now, on every OS - backed up, confirmed,
+and rolled back if the new release does not come up. An install on v0.6.0 or
+older has no update check: run `seamlessd update` once by hand.
 [Update & uninstall](/updating/) has the full procedure, the pinning knobs,
 and how the release's installer and checksums are signature-verified first.
 
@@ -1439,15 +1444,19 @@ What you are accepting when you run this:
   `capture_url` to fetch, the GitHub release check and download that an
   explicit `seamlessd update` performs, and - on a release build - the
   [background update check](/updating/#automatic-update-checks): one anonymous
-  request to GitHub's releases API every 6 hours, carrying no identifiers.
-  `update.check: false` turns it off and means no update traffic at all.
+  request to GitHub's releases API every 6 hours, carrying no identifiers. On
+  an install the installer made, an
+  [automatic update](/updating/#automatic-updates) adds the same downloads
+  `seamlessd update` makes. `update.check: false` turns both off and means no
+  update traffic at all.
 - **Release authenticity has two layers.** Every installer verifies the
   archive's SHA-256 against `checksums.txt`. When `cosign` is installed it also
   verifies the manifest's keyless signature against this repository's release
   workflow identity; without cosign it warns clearly and continues with checksum
   integrity only - unless `SEAMLESS_CHECKSUMS_SHA256` pins the manifest to one
   its caller already verified, in which case any other manifest is refused and
-  the run says the signature was verified by seamlessd. `seamlessd update`
+  the run says the signature was verified by seamlessd. `seamlessd update` -
+  and every automatic update -
   separately verifies the target release's installer script and `checksums.txt`
   against their Sigstore bundles, in-process and by that release's exact tag,
   before executing anything, and pins the installer to that `checksums.txt`. `curl | sh` still means trusting the bytes served by the
@@ -1496,9 +1505,18 @@ manager and paths for you. The OS-specific detail all lives on
 ## Update
 
 Seamless is early in its development cycle: releases with improvements and bug
-fixes land often. A daemon installed from a release checks for them by itself
-and tells you when one is out ([automatic update checks](#automatic-update-checks));
-updating is then one command.
+fixes land often. From v0.7.0, an install made by the curl or PowerShell
+installer installs them by itself, once a release has been out for a day and
+nothing is using the daemon ([automatic updates](#automatic-updates)). Every
+other install checks for them and tells you when one is out
+([automatic update checks](#automatic-update-checks)). Either way, updating
+right now is one command.
+
+**On v0.6.0 or older?** Those releases have no update check and never update
+themselves. Run `seamlessd update` once by hand; from v0.7.0 on, an installer
+install keeps itself current. A binary at v0.5.3 or older cannot verify today's
+releases, so re-run the installer one-liner instead
+([why](/guides/troubleshooting/#seamlessd-update-refuses-the-release-with-a-signature-error)).
 
 `seamlessd update` is the one command, on every OS. It upgrades in place to the
 newest release by running that release's own installer for you - so there is a
@@ -1560,19 +1578,25 @@ your installed copy (`make update CHECK=1` only reports).
 
 A daemon installed from a release checks GitHub for new releases by itself: a
 few minutes after it starts, then about every 6 hours (`update.check_interval`).
-It installs nothing. When a newer release is out, it tells you:
+The check itself installs nothing. On an install the installer made, a newer
+release then installs by itself ([automatic updates](#automatic-updates)); every
+other install is only told. When a newer release is out, the daemon tells you:
 
 - New agent sessions get one line in their briefing, for a week after the
   release first shows up, worded as your action rather than the agent's:
   `Seamless v0.7.3 is available (running v0.7.2). Owner action, not a task for
-  this session: seamlessd update`. A session on another machine of a
+  this session: seamlessd update`. An install that will install the release by
+  itself skips that line. A session on another machine of a
   [shared daemon](/guides/network-install/) is told the server can update.
 - The console shows it on the Home health strip and in
   **Settings -> Updates**, with the newest release, when the daemon last
-  checked, and the command for your install.
-- `seamlessd doctor` reports it on its `updates` row, `seamlessd update --check`
-  adds what the daemon's check is doing, and `seam version` / `seam status`
-  print an extra line.
+  checked, the command for your install, and - on an install that updates
+  itself - when it will install it.
+- `seamlessd doctor` reports it on its `updates` row, and warns when the
+  rollback drill's switch is left on or when this machine cannot verify its own
+  TLS daemon (either makes every update fail its confirmation).
+  `seamlessd update --check` adds what the daemon's check and automatic updates
+  are doing, and `seam version` / `seam status` print an extra line.
 
 For a day after the daemon starts on a new version, new sessions hear
 `Seamless updated to v0.7.3 (from v0.7.2)` with a link to the release notes,
@@ -1581,12 +1605,12 @@ and the console shows the same as a banner.
 How you update depends on how you installed, and every notice names the right
 command:
 
-| Installed with | Update with |
-|---|---|
-| the installer (`curl ... \| sh` or `irm ... \| iex`) | `seamlessd update` |
-| Homebrew | `brew upgrade --cask arctop/tap/seamless` |
-| a clone (`make install`), `go install` or `go build` | `git pull && make install` |
-| a client of a shared daemon | re-run the pairing commands `seamlessd client-config` prints on the server |
+| Installed with | Updates itself | Update by hand with |
+|---|---|---|
+| the installer (`curl ... \| sh` or `irm ... \| iex`) | yes, from v0.7.0 | `seamlessd update` |
+| Homebrew | no | `brew upgrade --cask arctop/tap/seamless` |
+| a clone (`make install`), `go install` or `go build` | no | `git pull && make install` |
+| a client of a shared daemon | no | re-run the pairing commands `seamlessd client-config` prints on the server |
 
 **What is sent.** One anonymous `GET` to
 `https://api.github.com/repos/arctop/seamless/releases`, with a fixed
@@ -1596,7 +1620,8 @@ answer is cached with its `ETag` in `~/.seamless/update/state.json`; a failed
 check retries after 15 minutes, doubling up to the check interval, and a rate
 limit is waited out. Releases still uploading their assets, drafts and
 prereleases are ignored, and "newest" means the highest version, not the most
-recently published.
+recently published. An automatic update adds the downloads it needs to install
+a release ([what happens during an update](#during-an-update)).
 
 **Turning it off.** In `seamless.yaml`:
 
@@ -1605,13 +1630,15 @@ update:
   check: false
 ```
 
-`false` means no update traffic at all, and it is final: the console shows its
-toggle locked. With the key left out, **Settings -> Updates** turns checks on
-and off at runtime, and `SEAMLESS_UPDATE_CHECK=false` does the same from the
-service's environment. `seamlessd update --check` and `seamlessd update` work
-either way - running them is you asking. The `update:` keys are new: a
-seamlessd release from before them refuses a config that sets one, so setting
-it ties that file to this release or newer.
+`false` means no update traffic at all - and so no automatic update either -
+and it is final: the console shows its toggle locked. With the key left out,
+**Settings -> Updates** turns checks on and off at runtime, and
+`SEAMLESS_UPDATE_CHECK=false` does the same from the service's environment.
+`seamlessd update --check` and `seamlessd update` work either way - running
+them is you asking. The `update:` keys are new in v0.7.0: a seamlessd release
+from before them refuses a config that sets one, so setting it ties that file
+to v0.7.0 or newer. To keep the check but install by hand, turn
+[automatic updates off](#turning-automatic-updates-off) instead.
 
 Builds from source (`make install`, `go install`, `go build`) do not check unless
 `update.check: true` is set, and never write the state file - a developer's
@@ -1638,6 +1665,221 @@ build disagrees with your config before an agent does.
 `/healthz` reports the running build. If a change seems not to have taken effect,
 check it before you debug anything else - a stale daemon still serving the old
 binary looks exactly like a bug in the new one.
+
+## Automatic updates {#automatic-updates}
+
+From v0.7.0, an install made by the curl or PowerShell installer installs new
+releases by itself. It waits until a release has been out for a day, then until
+nothing is using the daemon, and then runs the same verified update
+`seamlessd update` does - backed up, confirmed, and rolled back if the new
+release does not come up. You can watch it, hurry it, or turn it off in
+**Settings -> Updates**.
+
+### Who updates itself {#who-updates-itself}
+
+A published release, installed by the installer on macOS, Linux or Windows and
+run by the service the installer wrote, with the installer's config file
+(`~/.config/seamless/seamless.yaml`). Every other install is only told about new
+releases, whatever `update.auto` says:
+
+- Homebrew, which owns its files;
+- builds from source: `make install`, `go install`, `go build`;
+- a client machine of a [shared daemon](/guides/network-install/), which runs no
+  daemon of its own;
+- a release whose layout the daemon cannot vouch for: started by hand rather
+  than by the service, running as root, a service definition the installer did
+  not write or that runs another binary, another config file, a binary directory
+  it cannot write to, or any `SEAMLESS_*` variable besides `SEAMLESS_CONFIG` in
+  the daemon's environment (the installer rewrites the service without it).
+
+**Settings -> Updates** (its **Mode** row) and `seamlessd update --check` (its
+`mode` row) say which kind this install is, and why. That last rule is why the update keys belong in the
+config file, not the service's environment: `SEAMLESS_UPDATE_AUTO=true` there
+does not turn automatic updates on, it makes the install notify-only. How the
+daemon starts the updater on each OS is under
+[The updater on your OS](/reference/service/#the-updater).
+
+### When it installs {#when-it-installs}
+
+**After the soak.** An automatic update takes only a release published at least
+`update.min_age` ago (default `24h`), so a bad release can be pulled before it
+reaches you. The age is measured on GitHub's clock - the `Date` of its answers -
+not this machine's. The release must also carry its signed checksums bundle; one
+without it is announced, never installed by itself. An automatic update never
+moves to an older version, and installing by hand ignores the soak.
+
+**At a quiet moment.** The daemon looks once a minute, and the first rule that
+holds wins:
+
+1. No live agent session and no request in flight: it installs now. A session is
+   live while it is active and has sent a heartbeat within
+   `gardener.session_idle_minutes` (45 minutes by default), on any machine that
+   shares the daemon.
+2. Waiting for `update.max_defer` (default `24h`): it installs at the next 90
+   seconds without a request.
+3. Waiting for 1.5 times `max_defer`: it installs as soon as no request is in
+   flight.
+4. Waiting for twice `max_defer`: it installs whatever is in flight. A request
+   that never returns (a hung tool call) would otherwise hold every update off;
+   the restart ends it, and its client retries.
+
+The wait starts when a soaked release is first ready for the version you run,
+so with the defaults a release is installed within about three days of being
+published, even on a daemon that is never idle. Not counted as activity:
+`/healthz` probes, an open console tab's live feed, an MCP client's standing
+notification stream, and requests the Host allowlist refuses. One caveat: an
+open console **Interactions** page that lists sessions refreshes every 15
+seconds, so rule 2 never fires while it is open; rules 1, 3 and 4 still do.
+
+**With nothing in the way.** No update already running (a `seamlessd update` you
+started holds the update lock, and the daemon waits for it), no backoff after a
+failed attempt, and no pause or hold (below). Just before it starts, the daemon
+re-reads the release list if its copy is more than a minute old, so a release
+pulled in the meantime is never installed.
+
+**Settings -> Updates** shows the release it installs next and what it waits
+for - `waiting for 2 live agent sessions to go idle, or at a lull in requests in
+19h` - and `seamlessd update --check` prints the same on its `target` and
+`pending` rows. [An automatic update is waiting](/guides/troubleshooting/#an-automatic-update-is-waiting)
+lists every reason.
+
+### What happens during an update {#during-an-update}
+
+The daemon never installs anything in-process. It starts `seamlessd update
+--auto` outside the service, where the installer's service restart cannot stop
+it, and that updater:
+
+1. takes the update lock and records itself in `~/.seamless/update/attempt.json`
+   (and, when it is done, `attempts.jsonl`), logging to
+   `~/.seamless/update/logs/<attempt>.log`;
+2. re-checks that this install may still update itself, that the `seamlessd` on
+   disk is the release the daemon runs, that the updater really runs outside the
+   service, and - for an automatic update - that you have not turned automatic
+   updates off in the meantime. A refusal here changes nothing, and names its
+   fix ([the updater refused](/guides/troubleshooting/#an-automatic-update-failed));
+3. re-reads the release by its tag and downloads its installer and
+   `checksums.txt` with their Sigstore bundles from GitHub, then verifies both
+   against the release workflow's identity on that exact tag;
+4. proves the way back before changing anything: the release you run now must
+   still download and verify the same way, or there is no update;
+5. backs the instance up - the database, your memories and your notes - to
+   `~/.seamless/backups/pre-update-v<old>-<time>.tar.gz`, keeping the newest two;
+6. runs the release's installer, pinned to the verified `checksums.txt`, over
+   the install exactly as it is: the same directory, and the same agent clients
+   and skills, never adding one you do not have. The installer downloads the
+   release archive and restarts the service;
+7. confirms the result: the new release has to answer `/healthz` from a freshly
+   started process, the one the update state names as running, and still be the
+   same process ten seconds later. It has two minutes, or up to five while a new
+   daemon is still starting (migrating its database, say). If the installer
+   failed after the new release came up, the update counts as "applied with
+   warnings": run `seamlessd install-hooks`;
+8. otherwise rolls back: it stops the service, puts the database back from the
+   backup if the new release had already migrated it (the migrated file stays
+   beside it as `seam.db.pre-rollback-<id>`), reinstalls the release you had and
+   confirms it the same way. Memories and notes are never rolled back.
+
+The restart takes a moment, and agents keep working through it: hooks retry
+briefly and then fail open, and the `seam` MCP bridge rides out a restart
+([the `seam` CLI](/reference/cli-seam/#hooks)). For a day afterwards, new
+sessions hear `Seamless updated to v0.7.3 (from v0.7.2)` and every console page
+carries the same as a banner. A daemon that has just started on a new version
+waits at least half an hour before it asks GitHub anything again.
+
+### When an update fails {#when-an-update-fails}
+
+Every attempt ends in its record, and the daemon reads the outcome from it:
+
+| Outcome | What happened | What automatic updates do next |
+|---|---|---|
+| applied | The new release is installed and answered as the running daemon. | Nothing more. |
+| applied, unconfirmed | The new release runs, but the updater stopped before it confirmed so. | Treat it as applied. |
+| rolled back | It failed after installing, and the release you had was restored. | Skip that release. |
+| failed | It stopped before anything changed, or the installer failed and left the release you had in place. | Try again after a backoff. A release that fails verification is skipped at once, and one whose installer fails 3 times in a row is skipped too. |
+| interrupted | The updater stopped before it finished - killed, crashed, or asleep with the machine - and the release you had still runs. | Try again after a backoff. |
+| not rolled back | It failed after installing, and the release you had could not be restored cleanly. | Skip that release and pause. |
+
+The backoff is an hour after the first failure, doubling with each failure in a
+row on the same release, up to 24 hours. A skipped release stays skipped; the
+next release is taken as usual, and **Update now** or `seamlessd update`
+installs a skipped one if you want it.
+
+**Paused.** After automatic updates roll back two different releases in a row,
+or after any update the daemon started could not be rolled back cleanly, they
+pause themselves: nothing installs by itself until you press **Resume automatic
+updates** in **Settings -> Updates**. **Update now** still works while they are
+paused. Resume changes no setting, leaves skipped releases skipped, and lets a
+running backoff run out.
+
+For a week after automatic updates pause or an update the daemon started does
+not apply, every console page carries a banner pointing to
+**Settings -> Updates**, where **Last attempt** has the updater's own error and
+its log. New sessions' briefings mention a pause, or a release that is now
+skipped, as your action, not theirs. `seamlessd doctor` reports the same on its
+`updates` row. [An automatic update failed](/guides/troubleshooting/#an-automatic-update-failed)
+says how to read it and recover.
+
+### Going back to an older release {#going-back}
+
+Installing an older release on purpose - `SEAMLESS_VERSION=0.7.1 seamlessd
+update`, or the installer with that knob - sets a hold, so automatic updates do
+not undo your choice: they skip every release up to the one you left, or the
+newest one the daemon knew of, whichever is higher. A release above that is
+taken as usual. **Resume automatic updates** or **Update now** lifts the hold,
+and it ends by itself once the install reaches that version again. A rollback
+is not a choice, and sets no hold.
+
+### Update now {#update-now}
+
+**Update to v0.7.3 now** in **Settings -> Updates** installs the newest release
+at once, after you confirm. It skips the soak, the wait for idle agents, skipped
+releases and the backoff, and lifts a hold. It runs whether automatic updates
+are on, off or paused - it is you asking - through the same updater, with the
+same backup, confirmation and rollback, and the daemon restarts to finish. It is
+refused, with the reason, while update checks are off, on an install that does
+not update itself (the section shows the command to run instead), while an
+update is under way, within a minute of a failed release check, when no newer
+release is known, and when the newest release carries no signed checksums
+bundle.
+
+### Turning automatic updates off {#turning-automatic-updates-off}
+
+In `seamless.yaml`:
+
+```yaml
+update:
+  auto: false
+```
+
+The daemon still checks and tells you, and installing stays yours:
+`seamlessd update`, or **Update now**. Like `check: false`, it is final: the
+console shows its switch locked. With the key left out, **Turn automatic updates
+off** in **Settings -> Updates** does the same at runtime, and **Reset to the
+config file** hands both switches back to the file. `update.check: false` turns
+off the check and, with it, every automatic update.
+
+Set these keys in the file, not in the service's environment: any `SEAMLESS_*`
+variable besides `SEAMLESS_CONFIG` there makes the install notify-only, so
+`SEAMLESS_UPDATE_MAX_DEFER` or `SEAMLESS_UPDATE_MIN_AGE` would switch automatic
+updates off rather than tune them. `update.max_defer` and `update.min_age` are
+described with [the update block](/reference/configuration/#the-update-check).
+
+### Codex hooks after an update {#codex-hooks-after-an-update}
+
+Codex skips a hook whose definition changed until you approve it again. When an
+update changes Codex's `hooks.json` (`$CODEX_HOME/hooks.json`, else
+`~/.codex/hooks.json`), the day-long "updated" banner and new sessions'
+briefings on this machine say so: open `/hooks` in Codex and approve them, as
+after the install ([Trust the hooks once](/codex-cli/#trust-the-hooks-once)).
+
+### macOS: the background-items notice {#macos-background-items}
+
+From v0.7.0, the macOS release binaries are signed with the project's Developer
+ID Application certificate and notarized by Apple, so macOS should keep
+treating an updated `seamlessd` as the same background item and show no new
+notice. Moving to a signed release from an ad-hoc-signed build - v0.6.0 or
+older, or any `make install` build - may still show one "seamlessd can run in
+the background" notice, sometimes a while after the update.
 
 ## Uninstall {#uninstall}
 
@@ -2366,10 +2608,12 @@ All three are covered in [Recall](/concepts/recall/) and
   exactly. No ANN index, no separate service.
 - **Not a cloud service.** No account, no sync, and no outbound product
   telemetry. The local event and retrieval telemetry shown in the console never
-  leaves the machine. The bind is loopback and the key is static. The one
-  request Seamless makes unprompted is the anonymous
+  leaves the machine. The bind is loopback and the key is static. The only
+  requests Seamless makes unprompted are the anonymous
   [update check](/updating/#automatic-update-checks) against GitHub's release
-  list, which `update.check: false` turns off.
+  list and, on an install the installer made, the downloads that
+  [install a newer release by itself](/updating/#automatic-updates).
+  `update.check: false` turns both off.
 - **Not autonomous.** The gardener proposes; you decide. Nothing rewrites your
   knowledge behind your back.
 - **Not a chat memory.** It is not trying to remember your conversation. It
@@ -5567,11 +5811,14 @@ on a shared daemon a skip is the design working, not a fault.
 The server's [automatic update check](/updating/#automatic-update-checks)
 covers the server: its briefing notice reaches every session, and a session on
 another machine is told that **the server** can update - an action for whoever
-runs it, not for that machine. Updating the server does not update the clients:
-each paired machine keeps its own `seam` binary (the hooks and the MCP bridge),
-and updates it by re-running the pairing commands `seamlessd client-config`
-prints on the server. A client runs no daemon, so it has no update check of its
-own.
+runs it, not for that machine. A server the installer made also
+[updates itself](/updating/#automatic-updates) by the same rules as any other
+install, and a live session on any paired machine counts: it waits for all of
+them to go quiet, or for its deadline. Updating the server does not update the
+clients: each paired machine keeps its own `seam` binary (the hooks and the MCP
+bridge), and updates it by re-running the pairing commands
+`seamlessd client-config` prints on the server. A client runs no daemon, so it
+has no update check of its own and never updates itself.
 
 ## Windows: a second user on one box
 
@@ -6006,16 +6253,150 @@ same error with its cause.
 
 ## The update notice will not go away
 
-**What is happening.** A newer release is out, and the daemon says so in new
-sessions' briefings for a week after it first saw it, in the console, and in
-`seamlessd doctor`. Nothing installs itself.
+**What is happening.** A newer release is out that this install will not install
+by itself, and the daemon says so in new sessions' briefings for a week after it
+first saw it, in the console, and in `seamlessd doctor`. Either the install is
+only ever told - Homebrew, a build from source, a client machine, or a layout the
+daemon cannot vouch for ([who updates itself](/updating/#who-updates-itself)) -
+or its automatic updates are off, paused, or skip that release.
 
 **Fix.** Update with the command the notice names - it depends on how Seamless
 was installed (`seamlessd update`, `brew upgrade --cask arctop/tap/seamless`, or
 `git pull && make install`); the table in
-[automatic update checks](/updating/#automatic-update-checks) lists them. To stop
-hearing about updates instead, turn checks off in **Settings -> Updates** or set
-`update.check: false`.
+[automatic update checks](/updating/#automatic-update-checks) lists them. On an
+install that updates itself, **Settings -> Updates** says why it skips the
+release, and **Update now** installs it. To stop hearing about updates instead,
+turn checks off in **Settings -> Updates** or set `update.check: false`.
+
+## An automatic update is waiting {#an-automatic-update-is-waiting}
+
+**What is happening.** This install updates itself, a newer release is out, and
+it has not been installed yet. Usually that is the design working:
+[automatic updates](/updating/#when-it-installs) wait out a soak, then wait for a
+quiet daemon. **Settings -> Updates** says what this one waits for on its
+**Next update** row (and on the Home health strip's hover);
+`seamlessd update --check` prints the release and its deadline on its `target`
+and `pending` rows.
+
+| Next update says | Why | What to do |
+|---|---|---|
+| `installs by itself once it is 24h old` | The release is younger than `update.min_age`. | Wait, or use **Update now**. |
+| `waiting for 2 live agent sessions to go idle, or at a lull in requests in 19h` | Agents are working. Past `update.max_defer` it takes the next lull instead. | Nothing. |
+| `past its 24h deadline; waiting for 90s without requests` | Something keeps calling the daemon. | Nothing: at 1.5 times `max_defer` it installs once no request is in flight. An open **Interactions** page refreshes every 15 seconds, so closing it lets the lull come sooner. |
+| `waiting for 1 request in flight to finish` | A request is being served. | Nothing: at twice `max_defer` it installs anyway. |
+| `an earlier attempt failed; trying again in 1h` | The backoff after a failed attempt. | Read **Last attempt**; **Update now** does not wait for the backoff. |
+| `an updater is already running` | A `seamlessd update` holds the update lock. | Let it finish. |
+| `re-checking the release list in 12m before installing v0.7.3`, or `could not be re-checked` | Its copy of the release list is older than a minute, and it re-checks at most every 15 minutes. | Nothing; if the check keeps failing, see [the update check keeps failing](#the-update-check-keeps-failing). |
+| `live agent sessions could not be counted` | The database did not answer the count, which never counts as idle. | Run `seamlessd doctor`. |
+| `the update state could not be saved` | `~/.seamless/update/` cannot be written - a full disk, or permissions. | Free space or fix the permissions; an update never starts without its record on disk. |
+| `v0.7.3 carries no signed checksums bundle` | Automatic updates verify that bundle, and this release has none. | Update by hand with `seamlessd update`. |
+
+No **Next update** row at all means nothing is pending: the release sits under
+**Held back** (you went back to an older release) or **Skipped releases** (an
+update to it failed), or the **Mode** row says automatic updates are off or
+paused. [Automatic updates](/updating/#automatic-updates) covers each.
+
+## An automatic update failed {#an-automatic-update-failed}
+
+**What is happening.** An update the daemon started - by itself, or through
+**Update now** - did not apply. For a week every console page says so in a
+banner ("The update to v0.7.3 rolled back."), and three places read the same
+record:
+
+- **Settings -> Updates -> Last attempt**: the outcome, the updater's own error,
+  and its log;
+- `seamlessd doctor`, on its `updates` row;
+- `seamlessd update --check`, on its `last`, `error`, `log` and `backup` rows.
+
+The log, `~/.seamless/update/logs/<attempt>.log`, has every step and the
+installer's full output; the newest 20 logs are kept. The outcome says how bad
+it is:
+
+- **rolled back**, **failed** or **interrupted**: Seamless still runs the release
+  you had, and nothing is lost. Automatic updates skip a release that rolled
+  back or failed verification, and retry the rest after a backoff
+  ([when an update fails](/updating/#when-an-update-fails)). There is nothing to
+  do unless it keeps happening; the error says why.
+- **not rolled back**: the new release did not come up, and the release you had
+  could not be confirmed either, so the daemon may be down. Automatic updates
+  paused themselves, and the banner is red.
+
+**Fix, when it was not rolled back.** The error spells out the steps. In order:
+
+1. See whether the daemon runs: `seamlessd status`. If `seamlessd doctor` warns
+   on `tls trust`, read the TLS cause below first - the release you had is
+   probably running, and only its confirmation failed.
+2. Reinstall the release you had, pinned to it:
+
+   ```bash
+   curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.7.2 sh
+   ```
+
+   ```powershell
+   $env:SEAMLESS_VERSION='0.7.2'; irm https://thereisnospoon.org/install.ps1 | iex
+   ```
+
+3. Only if the data has to go back to how it was before the update, restore the
+   backup the error names. `seamlessd import --from <backup>` merges into a data
+   dir that already holds data, so a true restore needs an empty one: stop the
+   daemon, move the data dir aside, import, start.
+
+   ```bash
+   seamlessd stop
+   mv ~/.seamless ~/.seamless.broken
+   seamlessd import --from ~/.seamless.broken/backups/pre-update-v0.7.2-20261009T141500Z.tar.gz
+   seamlessd start
+   ```
+
+   ```powershell
+   seamlessd stop
+   Move-Item $HOME\.seamless $HOME\.seamless.broken
+   seamlessd import --from $HOME\.seamless.broken\backups\pre-update-v0.7.2-20261009T141500Z.tar.gz
+   seamlessd start
+   ```
+
+   The backup lives inside the data dir, so after the move its path starts with
+   the new name. Anything written after the backup was taken stays in the moved
+   directory.
+4. Once the install is healthy, press **Resume automatic updates** in
+   **Settings -> Updates**. The release that failed stays skipped.
+
+Causes worth knowing:
+
+- **The updater refused to start it.** The attempt failed while checking it may
+  install now (the `gates` stage), before anything changed. The daemon tries
+  again after the backoff, and is refused the same way until you act.
+  **Last attempt**, the console banner, `seamlessd doctor`'s `updates` row and
+  `seamlessd update --check`'s `fix` row name the cause and, while the daemon
+  still runs the release the attempt started from, the fix:
+
+  | The cause | The fix |
+  |---|---|
+  | the installed seamlessd is not the version the daemon runs - a release was installed without restarting the service | `seamlessd restart`, so the daemon runs the release on disk |
+  | the install no longer looks like one the installer manages | `seamlessd restart`, so the service re-reads how it was installed |
+  | the updater could not make sure it runs outside the service, which the installer restarts | update by hand from a terminal: `seamlessd update` |
+  | automatic updates were turned off before it began | nothing: that was your choice |
+- **A TLS daemon this machine cannot verify.** The updater confirms an update
+  through this machine's own client - the system's roots plus `tls.ca_file`,
+  dialing `server_url` - the one its hooks use. If that client cannot verify the
+  daemon's certificate, no update can be confirmed, and neither can the rollback
+  after it, so every attempt ends "not rolled back" and pauses automatic
+  updates. `seamlessd doctor`'s `tls trust` row warns about this and names the
+  repair; fix it before you resume.
+- **The rollback drill is on.** While `~/.seamless/update/test-fail-confirm`
+  exists, every update fails its confirmation on purpose and rolls back, and
+  `seamlessd doctor` warns on `update drill`. Delete the file.
+- **`not enough free space for the backup`.** The attempt stopped before
+  changing anything; the error says how much the backup needs. Free space on
+  the data dir's disk; it is retried after the backoff.
+- **The updater never started.** Nothing changed, and it is retried after the
+  backoff. The daemon's own log says why, on its
+  `update: could not start the updater` line;
+  [The updater on your OS](/reference/service/#the-updater) has where that log
+  is and what the updater needs.
+- **applied with warnings.** Not a failure: the new release serves, but the
+  installer reported a problem after it came up, usually while wiring the agent
+  clients. Run `seamlessd install-hooks`.
 
 ## `memory_write` says the name is held by a superseded memory
 
@@ -7565,7 +7946,9 @@ Checks stop early if config or the database cannot be loaded at all.
 | `codex mcp` | Exact enabled stdio bridge state from `codex mcp get seamless --json`, plus executable/config target existence. |
 | `feature skills` | An **info** line when a client's skill home still holds a skill for an [optional feature](/reference/console/#optional-features) you switched off - the daemon never deletes there on a toggle. Re-run `install-hooks` to remove it, or re-enable the feature. |
 | `gardener` | The ticker configuration, or a warning that it is disabled. |
-| `updates` | The [automatic update check](/updating/#automatic-update-checks), read from the daemon's own record (`~/.seamless/update/state.json`) without asking GitHub: **ok** when up to date, a **warn** naming the newer release and the command for this install, an **info** line when checks are off (and why) or have not run yet. A check failing for a week is a **warn** - usually a proxy the service's environment does not know about. |
+| `updates` | The [automatic update check](/updating/#automatic-update-checks) and [automatic updates](/updating/#automatic-updates), read from the daemon's and the updater's own records (`~/.seamless/update/state.json`, `attempt.json`) without asking GitHub or the daemon. One line, the most urgent thing first. An update that could not be rolled back cleanly, and that the daemon has not settled, is a **warn** carrying the updater's recovery steps and its log. An update under way is **info**. Automatic updates that paused themselves are a **warn** naming why, with the way out: resume them in the console under **Settings > Updates**. A daemon that updates itself says, as **info**, what it installs next and when: once its soak (`update.min_age`) is over, then when no agent session is live, or at a lull in requests after its deadline (`update.max_defer`). A newer release that automatic updates skip (blocked after a failed attempt, or published without a signed checksums bundle) is a **warn** with the command to install it by hand; a hold after a deliberate downgrade is **info**. A daemon that only notifies is **ok** when up to date and a **warn** naming the newer release and the command for this install. The last attempt is added while it concerns the running release, with the updater's own error; one that applied with warnings names `seamlessd install-hooks`. One the updater's gates refused is a **warn** ending in the owner's action for that refusal: `seamlessd restart` when the installed seamlessd is not the version the daemon runs (a release installed without a restart) or the install no longer looks installer-made, and `seamlessd update`, run by hand, when the updater could not make sure it runs outside the service. Automatic updates turned off before it began need no action. **info** when checks are off (and why) or have not run yet. A check failing for a week is a **warn** - usually a proxy the service's environment does not know about. |
+| `update drill` | Only while `~/.seamless/update/test-fail-confirm` exists: a **warn**, because the rollback drill's switch makes every update fail its confirmation and roll back. Delete the file to end the drill. |
+| `tls trust` | Whether this machine's own client verifies the certificate the daemon serves for `server_url`. That client is the one its hooks dial with, and the one an update confirms the new daemon through. The answer comes from the config (the system roots plus `tls.ca_file`) without a dial, so it answers while the daemon is down. **ok** when the client verifies it; otherwise a **warn** naming the repair, since every update would fail its confirmation, and so would its rollback's: the attempt ends not rolled back and automatic updates pause. A `tls.ca_file` that cannot be loaded warns on any install. Absent when TLS is off and the client is usable. |
 
 Under `role: client` the report is a deliberately short, different list: a
 `role` info line naming the server it dials, a `server_url` reachability probe,
@@ -7851,7 +8234,9 @@ seamlessd uninstall [--client claude|claude-desktop|codex|all|detect] [--dry-run
 ```
 
 Reverses a full install on any supported OS: stops and removes the per-user
-service, strips the Seamless hook entries, deregisters the MCP server
+service and what [the updater](/reference/service/#the-updater) leaves behind
+(a Linux update unit still running, the Windows update task), strips the
+Seamless hook entries, deregisters the MCP server
 (including the chat surface's `claude_desktop_config.json` entry - only the
 reserved `seamless` key is removed, everything else stays byte-for-byte),
 removes the installed skills, and deletes the binaries. Config and the data dir
@@ -7914,12 +8299,13 @@ On an install the installer made, `update` also backs the instance up first
 counts the update only once the new release answers `/healthz` as a freshly
 started daemon that is still the same one ten seconds later, and otherwise
 rolls back to the release you had. Each such run is recorded in
-`~/.seamless/update/`. Already on the newest release, it says so and changes
-nothing. [Update & uninstall](/updating/) has the details.
+`~/.seamless/update/`. A daemon that [updates itself](/updating/#automatic-updates)
+runs this same engine unattended. Already on the newest release, it says so
+and changes nothing. [Update & uninstall](/updating/) has the details.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--check` | `false` | Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's [update check](/updating/#automatic-update-checks) is doing: its mode and when it last checked. It asks even when `update.check` is `false`, because running it is you asking. |
+| `--check` | `false` | Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's [update check](/updating/#automatic-update-checks) and [automatic updates](/updating/#automatic-updates) have recorded: the mode and the last check; for a daemon that updates itself, the release it installs next with its soak (`target`) and the deadline (`pending`); an update under way; the last attempt with the updater's error, log and backup (and a `fix` row: `seamlessd install-hooks` after one that applied with warnings, or the owner's action - `seamlessd restart`, or `seamlessd update` by hand - after one the updater's gates refused while the daemon still runs the release it started from); a hold, a pause, blocked releases, a backoff, and the rollback drill while it is on. These come from the records, so they print even when the release list cannot be read. It asks even when `update.check` is `false`, because running it is you asking. |
 | `--dry-run` | `false` | Print the target, the installer's source and signature, the install dir, and the backup and rollback plan, plus the equivalent one-liner, without downloading, installing or recording anything (it reads the release list and the target release). |
 | `--url` | the target release's installer | Run the installer at this https URL instead: TLS only, with a printed warning, your environment as is, and no backup, rollback or record. |
 | `--config` | `$SEAMLESS_CONFIG`, then the search path | The config the data dir and the daemon's address come from. |
@@ -7927,8 +8313,10 @@ nothing. [Update & uninstall](/updating/) has the details.
 The installer's env knobs pass through, and a knob you set wins:
 `SEAMLESS_VERSION=0.3.0 seamlessd update` pins a version (older ones too),
 `SEAMLESS_INSTALL_DIR=...` retargets, exactly as the curl installer does.
-`--auto` and its `--attempt`/`--from`/`--to`/`--why` belong to the daemon's
-unattended updater; they are not for interactive use.
+`--auto` with `--attempt`, `--from`, `--to` and `--why` is the command line a
+daemon that updates itself starts its updater with, outside the service
+([The updater on your OS](/reference/service/#the-updater)). It is not for
+interactive use, and it refuses `--check`, `--dry-run` and `--url`.
 
 ## seamlessd map-repo {#seamlessd_map_repo}
 
@@ -8157,13 +8545,15 @@ That fourth layer covers three blocks where the stored row simply wins:
 | `features:` | Settings → [Features](/reference/console/#optional-features) | Immediately in the console; an agent sees it from its next session (tool lists and briefings alike). |
 | `console.level` | Settings → [Experience](/reference/console/#experience), or the Home welcome card | Immediately, in the console only. |
 
-A fourth, `update.check`, is merged the other way round: the **more
-restrictive** value wins. Settings → [Updates](/reference/console/#updates) can
-always turn the update check off, and can turn it on when file and env leave
-the key unset - but an explicit `check: false` in the file or
-`SEAMLESS_UPDATE_CHECK=false` is final, and the console shows the toggle locked
-with where it was set. `false` promises no update traffic at all, so it is
-never one click from untrue. See [the update block](#the-update-check).
+The `update:` block's two switches, `update.check` and `update.auto`, are merged
+the other way round: the **more restrictive** value wins. Settings →
+[Updates](/reference/console/#updates) can always turn either off, and can turn
+it on when file and env do not say `false` - but an explicit `check: false` or
+`auto: false` in the file (or `SEAMLESS_UPDATE_CHECK=false`,
+`SEAMLESS_UPDATE_AUTO=false`) is final, and the console shows that switch locked
+with where it was set. `check: false` promises no update traffic at all, so it
+is never one click from untrue, and with checks off nothing installs by itself
+either. See [the update block](#the-update-check).
 
 It exists so you can change what agents get injected - and what they can reach -
 while they are running, and it is the one place where the config file is not the
@@ -8197,19 +8587,47 @@ until **Reset** hands the level back to file/env.
 ### The update check {#the-update-check}
 
 The `update:` block drives the daemon's
-[automatic update checks](/updating/#automatic-update-checks):
+[automatic update checks](/updating/#automatic-update-checks) and
+[automatic updates](/updating/#automatic-updates):
 
 - `check` (`SEAMLESS_UPDATE_CHECK`) is optional. Left unset, a release build
   checks and a build from source does not; `true` or `false` decides either
-  way. `false` means no request to GitHub at all.
+  way. `false` means no request to GitHub at all, and so no automatic update
+  either.
 - `check_interval` (`SEAMLESS_UPDATE_CHECK_INTERVAL`) is the time between
   checks: a Go duration from `1h` to `720h`, default `6h`. Write the unit - a
   bare number other than `0` is refused rather than guessed at, since `6` could
   mean six seconds or six hours.
+- `auto` (`SEAMLESS_UPDATE_AUTO`) is optional, and unset means on: an install
+  made by the curl or PowerShell installer installs a newer release by itself.
+  Homebrew, builds from source, client machines and layouts the daemon cannot
+  vouch for are only told, whatever `auto` says
+  ([who updates itself](/updating/#who-updates-itself)). `false` keeps the
+  check and its notices and leaves installing to you (`seamlessd update`, or
+  **Update now** in the console). Like `check: false`, it is final, and the
+  console cannot turn it back on. With checks off, `auto` is off too.
+- `max_defer` (`SEAMLESS_UPDATE_MAX_DEFER`) is how long a pending automatic
+  update waits for a quiet daemon - no live agent session, no request in
+  flight - before it takes the next lull in requests instead: a Go duration from
+  `1m` to `720h`, default `24h`. `0` is refused. After 1.5 times `max_defer` it
+  installs as soon as no request is in flight, and after twice `max_defer`
+  whatever is in flight ([when it installs](/updating/#when-it-installs)).
+- `min_age` (`SEAMLESS_UPDATE_MIN_AGE`) is the soak: how long a release must have
+  been published before an automatic update takes it, measured on GitHub's
+  clock. A Go duration from `0` (no wait) to `720h`, default `24h`. Installing by
+  hand ignores it.
 
-Both keys are new in this release. seamlessd releases before it refuse config
-keys they do not know, so a file that sets one runs only with this release or
-newer - which is why the example file leaves `check` commented out.
+Set `auto`, `max_defer` and `min_age` in the file, not in the daemon's
+environment. Any `SEAMLESS_*` variable besides `SEAMLESS_CONFIG` in the
+daemon's environment makes the install notify-only - the installer rewrites
+the service without it - so `SEAMLESS_UPDATE_AUTO=true` can never turn
+automatic updates on, and the two durations set there switch them off rather
+than tune them.
+
+All five keys are new in v0.7.0. seamlessd releases before it refuse config
+keys they do not know, so a file that sets one runs only with v0.7.0 or newer.
+The example file spells out the keys whose default has a value and leaves
+`check` and `auto`, whose default is unset, commented out.
 
 ## Generating a key
 
@@ -8611,12 +9029,16 @@ plan_capture:
 # decide whether and when it also installs one by itself, which only an install
 # the curl or PowerShell installer made ever does: Homebrew, builds from source,
 # client machines and layouts the daemon cannot vouch for are only told.
+# Set auto, max_defer and min_age here, not in the daemon's environment: any
+# SEAMLESS_* variable besides SEAMLESS_CONFIG there makes the install
+# notify-only, so their env variables below can turn automatic updates off but
+# never on.
 update:
   # Unset (the default) means on for release builds and off for builds from
   # source. false means zero update traffic: no request to GitHub at all, and so
   # no automatic update either. The key is left commented out because seamlessd
-  # releases before this one reject config keys they do not know, so setting it
-  # pins this file to this release or newer.
+  # releases before v0.7.0 reject config keys they do not know, so setting it
+  # pins this file to v0.7.0 or newer.
   # env: SEAMLESS_UPDATE_CHECK
   # check: false
   # Time between checks, as a Go duration (6h, 90m, 1h30m) from 1h to 720h. A
@@ -9168,6 +9590,166 @@ unit-tested, but it has fewer live-verified runs than macOS and Linux; the
 which combinations have been observed working.
 
 
+## The updater on your OS {#the-updater}
+
+On an install the installer made, the daemon installs new releases by itself
+([Automatic updates](/updating/#automatic-updates) covers which installs, and
+when). It never installs anything in-process. It starts the updater,
+`seamlessd update --auto`, which verifies the new release and runs that
+release's own installer, and the installer restarts the service. So the daemon
+starts the updater where stopping the service cannot reach it, which is a
+different place on each OS.
+
+The updater runs the `seamlessd` on disk and refuses unless that binary is the
+release the daemon is updating from. It also refuses to run inside the
+service's own process tree. It holds `~/.seamless/update/update.lock` for its
+whole run, so only one update runs at a time, and records itself in
+`~/.seamless/update/attempt.json`. Every step, and the installer's output,
+goes to `~/.seamless/update/logs/<attempt>.log`.
+
+**macOS:**
+
+A child process in a session of its own (`setsid`). launchd stops a
+LaunchAgent by signalling its process group (on `bootout`, on `kickstart -k`,
+and when the daemon is killed), and the updater has left that group, so the
+installer's reload of the service does not reach it. The installer reloads
+with `launchctl bootout` and `bootstrap`, never by re-executing the loaded job
+in place: macOS 26 kills a job re-executed in place after its binary was
+replaced. Nothing is registered with launchd for the updater, so there is
+nothing to remove. Its standard error goes to `~/.seamless/seamlessd.log`. An
+updater that refuses before its own log opens says why there
+(`command failed cmd=update`).
+
+```bash
+pgrep -fl 'seamlessd update --auto'   # an update in progress
+```
+
+From v0.7.0 on, the macOS release binaries are signed with the project's
+Developer ID Application certificate and notarized by Apple. macOS Background
+Items should therefore treat an updated `seamlessd` as the same background
+item. The first update away from an ad-hoc-signed binary (v0.6.0 or older, or
+a build from source) may still show one "seamlessd can run in the background"
+notice, possibly hours after the update.
+
+
+**Linux:**
+
+A transient user unit of its own, `seamless-update-<attempt>.service`, started
+with `systemd-run --user`. Stopping or restarting `seamless.service` kills
+every process in that unit's cgroup, a `setsid` child included, so the updater
+needs a unit of its own. systemd drops the unit when the updater exits
+(`--collect`) and stops it after 30 minutes at most (`RuntimeMaxSec`), along
+with anything the installer left running. The unit starts from your user
+manager's environment, not the daemon's. The daemon passes along only its
+proxy and CA settings: `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY` and `ALL_PROXY`
+in either case, `SSL_CERT_FILE` and `SSL_CERT_DIR`. No user D-Bus session is
+needed.
+
+```bash
+systemctl --user list-units 'seamless-update-*'   # an update in progress
+journalctl --user -u 'seamless-update-*'          # what it printed, if it refused before its log opened
+```
+
+Two things about the service itself matter here:
+
+- **Lingering.** Without it, your user manager stops when your last session
+  ends, and it takes the daemon and any updater with it, possibly mid-install.
+  The installer runs `loginctl enable-linger`. Where it cannot (a standard user
+  on a system without polkit), it warns, and
+  `sudo loginctl enable-linger $(id -un)` is the one-time fix.
+  `loginctl show-user $(id -un) -p Linger` shows the setting.
+- **No start limit.** The unit the installer writes sets
+  `StartLimitIntervalSec=0`, and the installer runs
+  `systemctl --user reset-failed seamless.service` before it restarts the
+  service. A burst of restarts (a crash loop, the installer's own restart, a
+  rollback) therefore never leaves the service down for good. A unit written by
+  the v0.6.0 installer or an older one keeps systemd's default limit until the
+  next install or update rewrites it. Until then,
+  `systemctl --user reset-failed seamless.service && systemctl --user restart seamless.service`
+  brings back a service that `systemctl --user status seamless` reports as
+  `start-limit-hit`.
+
+
+**Windows:**
+
+A detached process with no console window and a process group of its own,
+started outside the `Seamless` task's job where Windows allows it
+(`CREATE_NO_WINDOW`, `CREATE_NEW_PROCESS_GROUP`, `CREATE_BREAKAWAY_FROM_JOB`).
+When the job refuses the breakaway, the daemon starts it again without that
+flag. Task Scheduler's stop (`Stop-ScheduledTask`, `schtasks /End`) ends only
+the task's own process, the daemon, so the updater keeps running.
+
+The daemon falls back only when that process cannot be started at all. The
+fallback is a hidden, on-demand Scheduled Task named `SeamlessUpdate-<your SID>`:
+it has no trigger, runs as you and only while you are signed in
+(`InteractiveToken`, least privilege, no admin), and has a one-hour limit. The
+daemon registers it again for each update with `schtasks /Create /XML` and
+starts it with `schtasks /Run`. The task then stays registered, hidden, until
+`seamlessd uninstall` removes it.
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name = 'seamlessd.exe'" | Where-Object CommandLine -like '*update --auto*'   # an update in progress
+Get-ScheduledTask -TaskName 'SeamlessUpdate-*'                                                                   # only once the fallback has run
+```
+
+Only the daemon that the `Seamless` task started updates itself. On Windows,
+the last of the checks that decide whether this install updates itself asks
+whether this process is the service's own instance. It needs two things: the
+daemon's parent process is the Task Scheduler (`svchost.exe`), and the
+`Seamless` task runs as you. A `seamlessd serve` you started by hand only
+notifies, and its reason reads `not the service's own process: the parent
+process is ..., not the Task Scheduler (svchost.exe)`. Stop it and run
+`Start-ScheduledTask Seamless`. An install that fell back to a Startup-folder
+shortcut, because the installer could not register the task, has no task at
+all, so it only notifies too.
+
+
+### When an update goes wrong {#updater-recovery}
+
+Every attempt leaves a record. `seamlessd doctor` (its `updates` row) and
+`seamlessd update --check` print the last attempt with the updater's own error,
+its log and the backup it took. [An automatic update failed](/guides/troubleshooting/#an-automatic-update-failed)
+walks through the outcomes. What the service manager can tell you:
+
+- **An update that never started** is recorded at the `spawn` stage, and the
+  daemon tries again after a backoff. When the daemon could not start the
+  updater, its log says why (`could not start the updater`). On Linux the
+  reason is one of `systemd-run is not installed`, `the systemd user manager is
+  unreachable`, `this attempt's unit already exists`, `the seamlessd binary is
+  missing or not executable` and `the updater could not be executed`. On
+  Windows the error names why the detached process failed and why the update
+  task failed. When the updater started but refused before it recorded
+  anything, it said why on its standard error: in `~/.seamless/seamlessd.log` on
+  macOS, and in `journalctl --user -u 'seamless-update-*'` on Linux. On Windows
+  that output goes nowhere.
+- **An update the updater's gates refused** names the owner's action in
+  doctor's `updates` row, and every retry is refused the same way until you
+  act. A release installed without a restart (the seamlessd on disk is not
+  the one the daemon runs), or an install that no longer looks installer-made,
+  needs `seamlessd restart`. An updater that could not make sure it runs
+  outside the service needs `seamlessd update`, run by hand from a terminal.
+- **An updater that hangs** is stopped by a limit: the installer's own
+  15-minute timeout on every OS, the unit's 30 minutes on Linux, and the
+  update task's hour on Windows. You can also stop it by hand: on Linux with
+  `systemctl --user stop 'seamless-update-*'`, and on macOS and Windows by
+  ending the `seamlessd update --auto` process. The OS releases the update lock
+  however the updater dies, and the daemon settles the attempt from the release
+  that is running. An attempt stopped while the old release still runs counts
+  as interrupted and is tried again after a backoff. That run reinstalls the
+  new release and confirms it, or rolls back.
+- **A service left down** by an update that could not be rolled back cleanly:
+  the attempt's error carries the updater's recovery steps. Reinstalling the
+  release you had is the installer pinned to it:
+  `curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=<version> sh`,
+  or `$env:SEAMLESS_VERSION='<version>'; irm https://thereisnospoon.org/install.ps1 | iex`
+  on Windows. Then run `seamlessd doctor`.
+- **Putting the whole instance back** from the pre-update backup is a restore,
+  and `seamlessd import` restores only into an empty data directory (into a
+  populated one it merges). Run `seamlessd stop`, then move `~/.seamless` aside
+  (to `~/.seamless.broken`, say; the backup moves with it), then run
+  `seamlessd import --from ~/.seamless.broken/backups/pre-update-v<old>-<time>.tar.gz`,
+  then `seamlessd start`.
+
 ## Where things live {#where-things-live}
 
 Every `~` path resolves under `%USERPROFILE%` on Windows - the daemon searches
@@ -9178,6 +9760,7 @@ the same relative locations on every OS.
 | Binaries | `~/.local/bin/seamlessd`, `~/.local/bin/seam` | `SEAMLESS_INSTALL_DIR` retargets them - see [Install & deploy](/install/) |
 | Config + bearer key | `~/.config/seamless/seamless.yaml` | mode `0600`; every key in [Configuration](/reference/configuration/) |
 | Knowledge + database | `~/.seamless/` | markdown memories and notes, plus `seam.db` - see [Storage](/reference/storage/) |
+| Update records + backups | `~/.seamless/update/`, `~/.seamless/backups/` | the update check's state, each update attempt and its log, the pre-update archives - see [Storage](/reference/storage/#the-update-records) |
 | Daemon log | `~/.seamless/seamlessd.log` (macOS, Windows); journald (Linux) | `make logs` from a clone, `journalctl --user -u seamless -f` on Linux |
 | Claude Code hooks | `~/.claude/settings.json` | exactly what is written: [Hooks](/reference/hooks/) |
 | Codex hooks | `${CODEX_HOME:-~/.codex}/hooks.json` | same reference, [shell-string forms](/reference/hooks/#the-codex-profile-is-shell-strings) |
@@ -9187,16 +9770,22 @@ the same relative locations on every OS.
 ## Removing the service by hand {#removing-the-service-by-hand}
 
 [Update & uninstall](/updating/) covers `seamlessd uninstall`, which removes
-the service along with everything else. For a bare binary you never registered
-a service for - or a machine you are cleaning by hand - the native teardown is:
+the service along with everything else, including what the updater leaves
+behind. On Linux it first stops any update unit still loaded, so an updater
+caught mid-update cannot restart the service it is removing. On Windows it
+deletes your `SeamlessUpdate-<SID>` task. On macOS the updater leaves nothing
+to remove. For a bare binary you never registered a service for, or a machine
+you are cleaning by hand, the native teardown is:
 
 ```bash
 launchctl bootout gui/$(id -u)/org.thereisnospoon.seamless   # macOS
+systemctl --user stop 'seamless-update-*'                    # Linux: an update still running
 systemctl --user disable --now seamless                      # Linux
 ```
 
 ```powershell
 Unregister-ScheduledTask -TaskName Seamless                  # Windows
+Unregister-ScheduledTask -TaskName "SeamlessUpdate-$([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)"   # Windows: the update task, if it exists
 ```
 
 ---
@@ -9426,8 +10015,11 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Save optional features | `POST /console/settings/features` | Writes the feature switches as a stored **override row** in the DB. It changes what is exposed - console screens and the matching agent tools - and deletes nothing. |
 | Reset optional features | `POST /console/settings/features/reset` | Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing. |
 | Turn update checks on or off | `POST /console/settings/updates` | Stores the console's `update.check` override (`check=on` or `off`). It can always turn checks off; it cannot turn them on while the config file or environment says `update.check: false` - that is final, and the form says so. Installs nothing. |
-| Reset update checks | `POST /console/settings/updates/reset` | Clears that override, handing the switch back to the config file (or, without one, the build's default). |
+| Reset update checks | `POST /console/settings/updates/reset` | Clears that override - both switches - handing them back to the config file (or, without one, the build's default). |
 | Check for updates now | `POST /console/settings/updates/check` | Asks GitHub's release list once, right away - refused while checks are off or within a minute of the last check. Reads; installs nothing. |
+| Turn automatic updates on or off | `POST /console/settings/updates/auto` | Stores the console's `update.auto` override (`auto=on` or `off`), keeping its `update.check`. It can always turn automatic updates off; it cannot turn them on while the config file or environment says `update.auto: false`, or locks `update.check: false` (nothing installs without checks). With checks merely off, the choice is kept and applies once they are back on. Only an install the installer made acts on it. |
+| Update now | `POST /console/settings/updates/apply` | Installs the newest release at once, after a confirm: it skips the soak, the wait for idle agents, skipped releases and the backoff, and lifts a hold, whether automatic updates are on, off or paused. Refused while checks are off, on an install that does not update itself, while an update is under way, within a minute of a failed release check, when nothing newer is known, or when the release carries no signed checksums bundle. The daemon restarts to finish. |
+| Resume automatic updates | `POST /console/settings/updates/resume` | Lifts the pause automatic updates put on themselves after rollbacks, and the hold a deliberate downgrade set. Changes no setting; skipped releases stay skipped, and a running backoff runs out. |
 | Save a project family | `POST /console/settings/families/save` | Creates a family or replaces one family's name and member set - the same `project_families` setting `seamlessd family` manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member. |
 | Delete a project family | `POST /console/settings/families/delete` | Removes the whole family. Its projects lose the sibling-findings channel; nothing else about them changes. |
 | Sign in / sign out | `POST /console/login`, `POST /console/logout` | Sets or clears the console cookie. Touches no data. |
@@ -9438,9 +10030,12 @@ state are **archive a memory**, **approve a captured plan**, and the **star**
 flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
 configuration knob (briefing overrides, feature switches, project families, the
-update-check switch) that shapes future briefings, or what is exposed, without
+update switches) that shapes future briefings, or what is exposed, without
 touching any memory's content. The console level is presentation state of the same kind: it changes
-what this console shows you and nothing else.
+what this console shows you and nothing else. **Update now** and **Resume
+automatic updates** act on the install rather than on knowledge: the first
+starts the same backed-up update `seamlessd update` runs, the second lets
+automatic updates run again.
 
 This is deliberate, and it is the same principle as
 [the gardener's](/concepts/gardener/) propose-only contract. The store is written
@@ -9642,7 +10237,7 @@ What each level shows, generated from the console's own registries:
 | **Experience** - How much of the console you see, and how it looks | shown | shown | shown |
 | **Features** - Optional features, for the console and agents alike | shown | shown | shown |
 | **Your setup** - Version, files, and what is connected | shown | shown | shown |
-| **Updates** - New releases, and whether this install checks for them | shown | shown | shown |
+| **Updates** - New releases, and whether this install checks for and installs them | shown | shown | shown |
 | **Briefing** - What every new agent session starts with | - | shown | shown |
 | **Workspaces** - Projects, repo routes, and families | - | shown | shown |
 | **Knowledge engine** - Semantic index, ranking, storage, and policy | - | - | shown |
@@ -10327,29 +10922,52 @@ budgets or policy numbers: those live in Knowledge engine.
 
 `/console/settings?s=updates`
 
-The [automatic update check](/updating/#automatic-update-checks) in plain words:
-whether this install checks for new releases and why (a release build does by
-default, a build from source does not), what a check sends (one anonymous
-request to `api.github.com` every few hours; nothing when checks are off), the
-installed version and kind of build, the command that updates this install
-(with a copy button), the newest release with its date and release notes - or
-"up to date" - and when the daemon last checked and checks next, including a
-streak of failed checks and why.
+The [automatic update check](/updating/#automatic-update-checks) and
+[automatic updates](/updating/#automatic-updates) in plain words: the **Mode** -
+whether this install checks for new releases, and whether it installs them by
+itself or only tells you, and why (a release build checks by default, a build
+from source does not, and only an install the installer made updates itself) -
+what a check sends (one anonymous request to `api.github.com` every few hours;
+nothing when checks are off), the installed version and kind of build, the
+command that updates this install (with a copy button, labeled **To update by
+hand** on an install that updates itself), the newest release with its date and
+release notes - or "up to date" - and when the daemon last checked and checks
+next, including a streak of failed checks and why.
 
-The note at the top says who decided the switch: **Default for this build**,
-**Set in the config file or environment**, or **Set in this console** with
-**Reset to the config file** beside it. Turning checks off from here always
-works. Turning them on does not when the config file or `SEAMLESS_UPDATE_CHECK`
-says `false`: that is final, the switch shows locked, and the form refuses -
-`false` promises no update traffic at all. **Check now** asks GitHub once, right
-away (not more than once a minute). Nothing on this page installs anything; the
-update command is yours to run.
+The note at the top says who decided the switches: **Default for this build**,
+**Set in the config file or environment**, **Set in this console**, or
+**Automatic updates set in this console**, with **Reset to the config file**
+beside a console choice. Turning checks off from here always works. Turning them
+on does not when the config file or `SEAMLESS_UPDATE_CHECK` says `false`: that
+is final, the switch shows locked, and the form refuses - `false` promises no
+update traffic at all. **Check now** asks GitHub once, right away (not more than
+once a minute).
+
+On an install that updates itself, the section adds **Automatic updates** - on
+or off, who decided, and **Turn automatic updates off** / **on**, which
+`update.auto: false` in the config file or environment locks off - and, while
+they apply, **Next update** (the release it installs next and what it waits
+for: the soak, live agent sessions, or a lull after its deadline), **Paused**,
+**Held back**, **Skipped releases** and **Next try**. **Updating now** and
+**Last attempt** appear whenever there is one; **Last attempt** carries the
+outcome, the updater's own error and its log path - the one place in the
+console either appears - and, when the updater refused to start, the fix.
+**Update to v0.7.3 now** installs the newest release at once after a confirm -
+skipping the soak, the idle wait, skipped releases and the backoff - and the
+daemon restarts to finish. **Resume automatic updates** appears while they are
+paused or holding releases back.
 
 When a newer release is out, the Home health strip's version fact turns into
-`v0.7.2 -- v0.7.3 available` and links here, and a toast announces it if the
-console is open when the daemon finds it. For a day after the daemon starts on
-a new version, every page carries a banner - "Seamless updated to v0.7.3 (from
-v0.7.2)" - with the release notes and **Got it**, which hides it for that tab.
+`v0.7.2 -- v0.7.3 available` and links here - its hover says whether it installs
+by itself, and when - and a toast announces it if the console is open when the
+daemon finds it. While an update runs, the fact reads `v0.7.2 -- updating to
+v0.7.3`. For a day after the daemon starts on a new version, every page carries
+a banner - "Seamless updated to v0.7.3 (from v0.7.2)" - with the release notes
+and **Got it**, which hides it for that tab. It also says when Codex's hooks
+changed with the update (re-approve them in Codex's `/hooks`) or the installer
+reported warnings (run `seamlessd install-hooks`). For a week after automatic
+updates pause themselves, or after an update the daemon started does not apply,
+every page also carries a warning banner pointing here.
 
 ### Briefing
 
@@ -10489,6 +11107,7 @@ On-disk layout
 ~/.seamless/ Owner-only local data directory
 seam.db Indexes, sessions, tasks, trials, events, and embeddings
 seamlessd.lock serve's one-daemon lock; holds the holder's PID (never delete it)
+seam.db.pre-rollback-{attempt} Only after a rollback restored the database: the one the rolled-back release had migrated (with its -wal and -shm), kept until you delete it
 memory/ Durable memory tree
 _global/{name}.md Machine-wide memories
 {project}/{name}.md One project memory per file
@@ -10497,11 +11116,12 @@ _global/{slug}.md Machine-wide notes
 {project}/{slug}.md One project note per file
 backups/ Pre-update archives (pre-update-v{old}-{time}.tar.gz), the newest two
 update/ The update check's and the updater's record (release builds only)
-state.json Last check, cached release list, running daemon
+state.json Last check, cached release list, running daemon, automatic-update state
 update.lock The updater's lock; never delete it
 attempt.json The newest update attempt, live and finished
-attempts.jsonl Every finished attempt, one line each
+attempts.jsonl Finished attempts, one line each (compacted to the newest 100)
 logs/{attempt}.log Each attempt's full output, the newest 20
+test-fail-confirm Only during a rollback drill: every update rolls back while it exists
 Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.
 ```
 
@@ -10641,8 +11261,9 @@ so losing `seam.db` loses them:
   (merge, consolidate, archive, digest, reproject, rekind, split, abandon-plan,
   memory-wanted, tool-error).
 - `settings` - `repo_project_map`, project families, the runtime briefing
-  overrides the console writes, the console's update-check override, the
-  per-scope utility-activation latch, and the embedder on/off switch.
+  overrides the console writes, the console's update override (checks and
+  automatic updates), the per-scope utility-activation latch, and the embedder
+  on/off switch.
 - `jobs` - the small queue for embeds and LLM digests.
 
 The split is deliberate: durable knowledge is yours in plain markdown, and
@@ -10656,19 +11277,48 @@ to think about any of that is
 snapshot with SQLite's `VACUUM INTO` inside a read transaction and is safe to run
 against a running daemon.
 
-### The update check's record
+### The update records {#the-update-records}
 
 `update/state.json` is the [automatic update check's](/updating/#automatic-update-checks)
 memory between restarts: when it last asked GitHub, the cached release list and
 its `ETag`, when it asks next, the current error streak, the newest release it
 has told you about, the daemon that wrote it (version, install kind, process
-and instance id), and the last version change it saw. Only a daemon from a
-release build writes it - a build from source never creates the directory -
-and `seamlessd doctor` and `seamlessd update --check` only read it. It is
-private (mode `0600` in a `0700` directory) and disposable: delete it and the
-next start rebuilds it, at the cost of one "version changed" notice it can no
-longer tell. A file that does not parse is moved aside to
+and instance id), and the last version change it saw. On an install that
+[updates itself](/updating/#automatic-updates) it also keeps what automatic
+updates have decided: the pending update and when it began waiting, the update
+it started, the last attempt it settled, blocked releases, a hold, a pause, a
+backoff, and a fingerprint of Codex's `hooks.json`. Only a daemon from a release
+build writes it - a build from source never creates the directory - and
+`seamlessd doctor` and `seamlessd update --check` only read it, with
+`attempt.json` and `attempts.jsonl` beside it. It is private (mode `0600` in a
+`0700` directory) and safe to delete: the next start rebuilds it. That costs
+one "version changed" notice it can no longer tell, and everything automatic
+updates had decided. A release that rolled back here is then a candidate again,
+and a hold or a pause is gone. A file that does not parse is moved aside to
 `state.json.corrupt-<time>` and the daemon starts fresh.
+
+The updater, `seamlessd update`, keeps its own records next to it. It writes
+them; the daemon only reads them. It holds `update/update.lock` for its whole
+run, an OS lock released however the process ends. Never delete that file:
+removed while an updater holds it, it lets a second updater lock a new file of
+the same name. `attempt.json` is the newest attempt, rewritten every 30
+seconds while it runs, and `attempts.jsonl` gets each finished attempt as one
+line. A line that does not parse is skipped, never fatal. `logs/<attempt>.log`
+holds an attempt's every step and its installer's output, and the newest 20
+logs are kept. Each release reads the records of releases older and newer than
+itself, so their format only ever gains fields. The updater runs only on an
+install the installer made, so a build from source writes none of these.
+
+Before an update on such an install, the updater archives the instance to
+`backups/pre-update-v<old>-<time>.tar.gz` with
+[`seamlessd export`](/reference/cli-seamlessd/#seamlessd_export)'s machinery,
+and keeps the newest two. When an update is rolled back after the new release
+had already migrated the database, the backup's database is put back. The
+migrated one, with its `-wal` and `-shm`, stays beside it as
+`seam.db.pre-rollback-<attempt>` until you delete it. Memories and notes are
+never rolled back. Creating `update/test-fail-confirm` rehearses a rollback on
+a real install: while it exists, every update fails its confirmation on purpose
+and rolls back, and `seamlessd doctor` warns. Delete it afterwards.
 
 ### Reconciliation
 
@@ -10957,7 +11607,7 @@ If you are looking for the conceptual model rather than the code, start at
 Dependency direction
 Entry points cmd/seamlessd · cmd/seam · cmd/docsgen Wire dependencies and process boundaries.
 API surfaces internal/mcp · hooks · console Translate HTTP, MCP, hooks, and UI requests; own no domain policy.
-Domains retrieve · lifecycle · gardener · files · plans · capture · importer Business rules and reusable workflows.
+Domains retrieve · lifecycle · gardener · files · plans · capture · importer · update Business rules and reusable workflows.
 Foundations store · events · llm · markdown · core · config · validate Leaves, or nearly so; never reach upward.
 Imports move downward. Shared behavior moves into a lower layer rather than sideways through another surface.
 ```
@@ -10995,6 +11645,7 @@ violation is visible in the import block.
 | `capture` | domain | SSRF-safe URL fetch: private-IP rejection, a pinned dialer, a port allowlist, redirect validation, a size cap. | - |
 | `archive` | domain | Instance archives: `VACUUM INTO` snapshot + corpus + manifest out, guarded tar extraction and restore-or-merge back in. Never imports `config` - an archive is described by its manifest and the data dir it is handed, not by whichever process is holding it. | `core`, `files`, `llm`, `store`, `validate` |
 | `importer` | domain | One-way migration from the v1 store. Reads v1, writes v2, never modifies v1. | `core`, `files`, `store` |
+| `update` | domain | The background update check and automatic updates: the GitHub release list, install-kind detection (`Detect`, a pure function of the probe `cmd/seamlessd` gathers), the policy that picks a release and a moment (`Target`, `Decide`), folding the updater's attempt records into blocks, backoff, holds and pauses, `<data_dir>/update/state.json`, and the `Status` every surface renders. It decides and records; installing is the detached `seamlessd update --auto` that `cmd/seamlessd` starts. | `config`, `core` |
 | `mcp` | surface | The tool surface over streamable HTTP, plus session bindings (per connection, and by agent process) and scope resolution. | `agentproc`, `capture`, `core`, `events`, `files`, `gardener`, `lifecycle`, `llm`, `plans`, `retrieve`, `store`, `validate` |
 | `hooks` | surface | Shared Claude Code/Codex hook endpoints and adapters, ambient sessions, bounded injection, findings harvest, and Claude-specific plan capture. | `agentproc`, `config`, `core`, `events`, `files`, `plans`, `retrieve`, `store`, `validate` |
 | `console` | surface | The server-rendered observability UI and its SSE feed. | `config`, `core`, `events`, `files`, `gardener`, `lifecycle`, `markdown`, `plans`, `retrieve`, `store` |
@@ -11066,6 +11717,40 @@ Two orderings inside it are also deliberate. Step 9 runs *after* step 8 so that
 they are partitioned out before the trim ever sees them. And step 14 runs after
 step 13 so the recorded event contains exactly the text the agent received,
 ambient line included, rather than the briefing as it looked one step earlier.
+
+## Trace: an automatic update, from decision to restarted daemon
+
+```text
+Automatic update trace
+Checker · every minute Fold, target, decide Settle the updater's last record; pick the newest release that has soaked by GitHub's clock, carries signed checksums and is neither blocked nor held; wait for an idle daemon or a lull past max_defer .
+Spawn Record, then hand off Re-check a release list older than a minute; save the spawn and record update.started ; the OS spawner starts seamlessd update --auto outside the service.
+Updater Verify, back up, install Take update.lock ; re-run the gates; verify the release's installer and checksums against its exact tag; prove the rollback; archive the instance; run the installer, which restarts the service.
+Confirm Observe, or roll back A new daemon of the new release, the same one ten seconds later; otherwise put the database back if it was migrated and reinstall the old release. The record goes to attempt.json for the new daemon to fold.
+The daemon decides and records; a separate process, outside the service, does the installing.
+```
+
+Three things in that path are decisions, not mechanics:
+
+**The decision and the act live in different processes.** The daemon is the
+thing being replaced, so it cannot install itself: the installer's service
+restart would kill it mid-swap. It starts the updater where that restart cannot
+reach (per OS, [The updater on your OS](/reference/service/#the-updater)), and
+the two talk only through files. The daemon writes `state.json`; the updater,
+holding `update.lock`, writes `attempt.json` and `attempts.jsonl`. Every release
+reads every other release's records, so their format only ever gains fields
+(see [Domain invariants](/internals/invariants/#automatic-updates)).
+
+**There is one upgrade implementation.** The updater runs the same installer
+script a fresh install runs, after verifying its Sigstore bundle in-process.
+It fetches only installers, checksums and their signatures, and swaps no
+binary itself. A manual `seamlessd update` runs the same engine, attended.
+
+**Success is observed, not reported.** The installer's exit code decides
+nothing. The update counts only once `/healthz` answers from a new process of
+the new release, the one the update state names as running, and the same one
+ten seconds later. An installer that exits non-zero while the new release
+serves is "applied with warnings". A release that never answers is rolled back
+and blocked for automatic updates.
 
 ## The deliberate no's
 
@@ -11176,7 +11861,7 @@ which makes a stale running daemon invisible.
 make check
 ```
 
-That is the one command that must be green before work is done. It runs six steps
+That is the one command that must be green before work is done. It runs ten steps
 sequentially - as separate `$(MAKE)` invocations rather than prerequisites, so it
 stops at the first red step and stays ordered under `make -j`:
 
@@ -11184,14 +11869,18 @@ stops at the first red step and stays ordered under `make -j`:
 |---|---|---|
 | 1 | `build` | It compiles. |
 | 2 | `vet` | The stdlib's own suspicious-construct checks. |
-| 3 | `fmt-check` | gofmt drift in tracked files. |
-| 4 | `docs-check` | A committed docs site that no longer matches `docs-src/`. |
-| 5 | `lint` | golangci-lint, including the repo's custom bans. |
-| 6 | `test-race` | Everything, under the race detector. |
+| 3 | `cross-check` | `go vet` for darwin/arm64 and windows/amd64, so code behind an OS build tag type-checks before a release has to build it. |
+| 4 | `fmt-check` | gofmt drift in tracked files. |
+| 5 | `docs-check` | A committed docs site that no longer matches `docs-src/`. |
+| 6 | `installer-check` | An installer script that does not parse (`sh -n`, and PowerShell's parser when `pwsh` is installed). |
+| 7 | `site-check` | A hand-written landing page that drifted from the installer or the CLI. |
+| 8 | `lint` | golangci-lint, including the repo's custom bans. |
+| 9 | `vulncheck` | A known vulnerability in code this repo actually calls (govulncheck). |
+| 10 | `test-race` | Everything, under the race detector. |
 
-The order is cost-ascending: the cheapest and most-likely-to-fail steps run first,
-and `test-race` is last because it is by far the slowest. The individual targets
-exist for iterating; `check` is the thing you run before you claim to be done.
+The cheap, likely-to-fail steps run first, and `test-race` is last because it is
+by far the slowest. The individual targets exist for iterating; `check` is the
+thing you run before you claim to be done.
 
 `docs-check` regenerates into a temp dir and diffs, rather than rewriting your
 working tree and running `git diff`. That means it never mutates the file you are
@@ -11200,6 +11889,37 @@ deleted from `docs-src/` but still committed under `docs/docs/`. Two docs pages
 are generated from the code (the MCP tool reference reads `mcp.Catalog()`, the
 configuration reference reflects `config.Defaults()`), so changing a tool or a
 config key makes the committed output stale, and this is the step that says so.
+
+## What CI runs
+
+`.github/workflows/ci.yml` runs three jobs on every push to `main` and every
+pull request:
+
+- **`check`**, on Linux: `make check`, the gate above.
+- **`os-smoke`**, on `macos-latest` and `windows-latest`: `go test -count=1`
+  over `./cmd/seamlessd`, `./internal/update` and `./internal/agentproc`. These
+  are the packages with code behind darwin and windows build tags (file
+  locking, the detached updater, the process table), which `cross-check` only
+  vets. It builds with `CGO_ENABLED=0`, as the release does, and without
+  `-race`. Each OS reports on its own (`fail-fast: false`). Tests that fail on
+  Windows because of a known product bug are skipped there by name
+  (`known_windows_failures` in the workflow); delete a name when its fix lands.
+- **`config-lint`**: actionlint over the workflows, and `goreleaser check` over
+  `.goreleaser.yaml` with the goreleaser version range the release workflow
+  uses. Without it, a broken release config would first fail on a pushed tag.
+
+Since those packages' tests run on Windows, write them to pass there:
+
+- A test that fakes a home sets `USERPROFILE` beside `HOME`. `os.UserHomeDir`
+  reads `USERPROFILE` on Windows, so a test that sets only `HOME` writes to the
+  real profile of whoever runs it.
+- Windows reports file modes as `0666`, so an assertion on `0600` or `0700`
+  goes behind `if runtime.GOOS != "windows"`.
+- A POSIX fixture path such as `/opt/seam` is not absolute on Windows.
+  `absFixture` (`cmd/seamlessd/desktop_mcp_test.go`) makes it absolute on the
+  OS under test.
+- Expect the OS's path separator: build expected paths with `filepath.Join`,
+  never with `/`.
 
 ## Use `make fmt`, never `gofmt -w .`
 
@@ -11744,3 +12464,123 @@ best-effort with a hash-retry (a failed embed clears the recorded content hash s
 the next reconcile re-indexes and tries again). These are not oversights that
 survived review - they are the two places where the "no fake results on error"
 rule is deliberately traded for "never block the agent".
+
+## Automatic updates
+
+Enforced in `internal/update` (the checker and its policy) and in
+`cmd/seamlessd` (`update_spawn*.go`, `update_engine.go`). Concepts:
+[Automatic updates](/updating/#automatic-updates),
+[The updater on your OS](/reference/service/#the-updater).
+
+### The daemon decides; a detached updater acts
+
+The daemon never installs anything in-process. Its checker picks the release
+(`update.Target`) and the moment (`update.Decide`), then hands one attempt to
+the `update.Spawner` for its OS. The spawner starts `seamlessd update --auto`
+where stopping the service cannot reach it: a `setsid` child on macOS, a
+`systemd-run --user` transient unit on Linux, and a detached child on Windows,
+with an on-demand Scheduled Task as the fallback.
+
+Never start the updater as a plain child, and never tie it to the daemon's
+context. The installer it runs restarts the daemon, so a plain child dies with
+the daemon halfway through the install. The daemon never holds `update.lock`
+either: it only try-locks the file to see whether an updater is running, and
+lets go at once. The updater, for its part, refuses to run inside the service's
+own process tree (`outsideServiceCheck`).
+
+### The more restrictive setting wins
+
+The briefing and features overrides work simply: the console's stored row wins.
+`update.Effective` works the other way round. An explicit `false` in the file or
+environment is final and locks its console toggle. `check: false` means no
+update traffic at all and `auto: false` means nothing installs unattended, and
+neither may be one click away from untrue. `auto` is a permission, not a
+promise: only an install the installer made acts on it (`Install.NotifyOnly`),
+and it is off whenever checks are.
+
+### Never spawn without the record on disk
+
+`State.Spawn` is saved before `Spawner.Spawn`, and `update.started` is recorded
+between the two. A daemon that dies right after spawning finds the spawn in its
+state at the next start and settles it from the updater's record. If the state
+cannot be saved, nothing is spawned.
+
+### Wall time, and GitHub's clock
+
+The monotonic clock stops while a laptop sleeps, so the checker strips it from
+every reading and schedules on wall-clock deadlines. The soak (`min_age`) and
+the `max_defer` deadline run on GitHub's clock: the last response's `Date`
+header plus the time since. A spawn always rests on a release list fetched
+within the last minute. That re-check catches a release pulled in the meantime,
+and it measures the soak against a `Date` GitHub has just sent, so a local
+clock set days ahead cannot skip the soak.
+
+### Manual attempts are shown, never acted on
+
+Only the attempts a daemon started feed blocks, the backoff and the pause:
+automatic ones (`auto`) and the console's Update now (`now`). Only automatic
+rollbacks count toward the pause after two releases in a row roll back. A
+`seamlessd update` run by hand appears as the last attempt and changes nothing
+the daemon decides, since the owner watched it happen.
+
+### The attempt records are a frozen, additive format
+
+`attempt.json` and `attempts.jsonl` are read by every release from v0.7.0 on,
+whether older or newer than the one that wrote them. So a field may be added,
+but never renamed, retyped or repurposed, and there is no schema number to bump.
+Writers are strict (`ErrInvalidAttempt`). Readers ignore fields they do not
+know, and skip a history line that does not decode. Only the holder of
+`update.lock` writes either file.
+
+A gate refusal is a fixed word in `refusal` (`not_installer`, `stale_binary`,
+`self_check`, `auto_off`), written only on a finished attempt that stopped at
+`gates` and that a daemon started. A reader keeps a word it does not know and
+treats it as a plain failure. Surfaces key the owner's action on that word,
+never on the record's `error` text.
+
+## Release discipline
+
+Enforced by review. It binds every release, not one package.
+
+An automatic update rolls back to the release it replaced when the new one does
+not come up, and an owner may pin an older release with `SEAMLESS_VERSION`. A
+rollback puts the database back only when the new release had migrated it, and
+it never touches memories, notes or the config. So every release must leave an
+install that the previous release can still run. These rules keep a rollback
+working, and the last one keeps an update from breaking Codex's hooks unnoticed.
+
+### Migrations stay additive
+
+Add tables, columns and indexes. Never drop, rename or retype anything the
+previous release reads. A rollback whose database restore fails, and every
+deliberate downgrade, leaves the previous release running on the newer schema.
+`serve` logs a warning and doctor's `schema version` row warns, and the daemon
+still has to work.
+
+### Startup file rewrites stay readable by the previous release
+
+A daemon rewrites some files when it starts, the update state file among them.
+The release before it reads whatever the newer one left, so such a file only
+gains fields, and readers ignore the fields they do not know.
+
+### New frontmatter fields are optional
+
+The previous release reads the memory and note files a newer one wrote, and
+keeps the keys it does not know across a rewrite (`Extra`). It writes new files
+without the field, though, so a newer release must treat a missing field as
+its zero value.
+
+### Config keys are only ever added
+
+The updater never edits `seamless.yaml`, and the config decoder is strict
+(`KnownFields`). If a release renames or removes a key, it refuses a config
+the previous release accepted. Its daemon then never comes up, and every update
+to it rolls back.
+
+### A release that changes Codex hook definitions says so in its notes
+
+Codex runs a changed hook only after it is re-approved in Codex's `/hooks`. The
+updated daemon notices, because it fingerprints `hooks.json` before and after
+the update, and says so in the console and the briefing. But it says so only
+on that machine, and only afterwards. The release notes are where an owner
+learns it before updating.

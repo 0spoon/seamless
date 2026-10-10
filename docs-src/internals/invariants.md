@@ -1,6 +1,6 @@
 ---
 title: Domain invariants
-description: The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation - and why each exists.
+description: The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation, automatic updates and release discipline - and why each exists.
 ---
 
 These are the rules that reasonable code violates. Every one of them has a
@@ -334,3 +334,123 @@ best-effort with a hash-retry (a failed embed clears the recorded content hash s
 the next reconcile re-indexes and tries again). These are not oversights that
 survived review - they are the two places where the "no fake results on error"
 rule is deliberately traded for "never block the agent".
+
+## Automatic updates
+
+Enforced in `internal/update` (the checker and its policy) and in
+`cmd/seamlessd` (`update_spawn*.go`, `update_engine.go`). Concepts:
+[Automatic updates](/updating/#automatic-updates),
+[The updater on your OS](/reference/service/#the-updater).
+
+### The daemon decides; a detached updater acts
+
+The daemon never installs anything in-process. Its checker picks the release
+(`update.Target`) and the moment (`update.Decide`), then hands one attempt to
+the `update.Spawner` for its OS. The spawner starts `seamlessd update --auto`
+where stopping the service cannot reach it: a `setsid` child on macOS, a
+`systemd-run --user` transient unit on Linux, and a detached child on Windows,
+with an on-demand Scheduled Task as the fallback.
+
+Never start the updater as a plain child, and never tie it to the daemon's
+context. The installer it runs restarts the daemon, so a plain child dies with
+the daemon halfway through the install. The daemon never holds `update.lock`
+either: it only try-locks the file to see whether an updater is running, and
+lets go at once. The updater, for its part, refuses to run inside the service's
+own process tree (`outsideServiceCheck`).
+
+### The more restrictive setting wins
+
+The briefing and features overrides work simply: the console's stored row wins.
+`update.Effective` works the other way round. An explicit `false` in the file or
+environment is final and locks its console toggle. `check: false` means no
+update traffic at all and `auto: false` means nothing installs unattended, and
+neither may be one click away from untrue. `auto` is a permission, not a
+promise: only an install the installer made acts on it (`Install.NotifyOnly`),
+and it is off whenever checks are.
+
+### Never spawn without the record on disk
+
+`State.Spawn` is saved before `Spawner.Spawn`, and `update.started` is recorded
+between the two. A daemon that dies right after spawning finds the spawn in its
+state at the next start and settles it from the updater's record. If the state
+cannot be saved, nothing is spawned.
+
+### Wall time, and GitHub's clock
+
+The monotonic clock stops while a laptop sleeps, so the checker strips it from
+every reading and schedules on wall-clock deadlines. The soak (`min_age`) and
+the `max_defer` deadline run on GitHub's clock: the last response's `Date`
+header plus the time since. A spawn always rests on a release list fetched
+within the last minute. That re-check catches a release pulled in the meantime,
+and it measures the soak against a `Date` GitHub has just sent, so a local
+clock set days ahead cannot skip the soak.
+
+### Manual attempts are shown, never acted on
+
+Only the attempts a daemon started feed blocks, the backoff and the pause:
+automatic ones (`auto`) and the console's Update now (`now`). Only automatic
+rollbacks count toward the pause after two releases in a row roll back. A
+`seamlessd update` run by hand appears as the last attempt and changes nothing
+the daemon decides, since the owner watched it happen.
+
+### The attempt records are a frozen, additive format
+
+`attempt.json` and `attempts.jsonl` are read by every release from v0.7.0 on,
+whether older or newer than the one that wrote them. So a field may be added,
+but never renamed, retyped or repurposed, and there is no schema number to bump.
+Writers are strict (`ErrInvalidAttempt`). Readers ignore fields they do not
+know, and skip a history line that does not decode. Only the holder of
+`update.lock` writes either file.
+
+A gate refusal is a fixed word in `refusal` (`not_installer`, `stale_binary`,
+`self_check`, `auto_off`), written only on a finished attempt that stopped at
+`gates` and that a daemon started. A reader keeps a word it does not know and
+treats it as a plain failure. Surfaces key the owner's action on that word,
+never on the record's `error` text.
+
+## Release discipline
+
+Enforced by review. It binds every release, not one package.
+
+An automatic update rolls back to the release it replaced when the new one does
+not come up, and an owner may pin an older release with `SEAMLESS_VERSION`. A
+rollback puts the database back only when the new release had migrated it, and
+it never touches memories, notes or the config. So every release must leave an
+install that the previous release can still run. These rules keep a rollback
+working, and the last one keeps an update from breaking Codex's hooks unnoticed.
+
+### Migrations stay additive
+
+Add tables, columns and indexes. Never drop, rename or retype anything the
+previous release reads. A rollback whose database restore fails, and every
+deliberate downgrade, leaves the previous release running on the newer schema.
+`serve` logs a warning and doctor's `schema version` row warns, and the daemon
+still has to work.
+
+### Startup file rewrites stay readable by the previous release
+
+A daemon rewrites some files when it starts, the update state file among them.
+The release before it reads whatever the newer one left, so such a file only
+gains fields, and readers ignore the fields they do not know.
+
+### New frontmatter fields are optional
+
+The previous release reads the memory and note files a newer one wrote, and
+keeps the keys it does not know across a rewrite (`Extra`). It writes new files
+without the field, though, so a newer release must treat a missing field as
+its zero value.
+
+### Config keys are only ever added
+
+The updater never edits `seamless.yaml`, and the config decoder is strict
+(`KnownFields`). If a release renames or removes a key, it refuses a config
+the previous release accepted. Its daemon then never comes up, and every update
+to it rolls back.
+
+### A release that changes Codex hook definitions says so in its notes
+
+Codex runs a changed hook only after it is re-approved in Codex's `/hooks`. The
+updated daemon notices, because it fingerprints `hooks.json` before and after
+the update, and says so in the console and the briefing. But it says so only
+on that machine, and only afterwards. The release notes are where an owner
+learns it before updating.

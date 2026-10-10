@@ -270,11 +270,14 @@ on a shared daemon a skip is the design working, not a fault.
 The server's [automatic update check](https://thereisnospoon.org/docs/updating/#automatic-update-checks)
 covers the server: its briefing notice reaches every session, and a session on
 another machine is told that **the server** can update - an action for whoever
-runs it, not for that machine. Updating the server does not update the clients:
-each paired machine keeps its own `seam` binary (the hooks and the MCP bridge),
-and updates it by re-running the pairing commands `seamlessd client-config`
-prints on the server. A client runs no daemon, so it has no update check of its
-own.
+runs it, not for that machine. A server the installer made also
+[updates itself](https://thereisnospoon.org/docs/updating/#automatic-updates) by the same rules as any other
+install, and a live session on any paired machine counts: it waits for all of
+them to go quiet, or for its deadline. Updating the server does not update the
+clients: each paired machine keeps its own `seam` binary (the hooks and the MCP
+bridge), and updates it by re-running the pairing commands
+`seamlessd client-config` prints on the server. A client runs no daemon, so it
+has no update check of its own and never updates itself.
 
 ## Windows: a second user on one box
 

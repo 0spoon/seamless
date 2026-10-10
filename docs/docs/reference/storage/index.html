@@ -230,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#the-tree">The tree</a></li><li class="lvl-2"><a href="#memory-frontmatter">Memory frontmatter</a></li><li class="lvl-3"><a href="#the-nine-kinds">The nine kinds</a></li><li class="lvl-3"><a href="#validity">Validity</a></li><li class="lvl-2"><a href="#note-frontmatter">Note frontmatter</a></li><li class="lvl-2"><a href="#what-lives-only-in-sqlite">What lives only in SQLite</a></li><li class="lvl-3"><a href="#the-update-checks-record">The update check&#39;s record</a></li><li class="lvl-3"><a href="#reconciliation">Reconciliation</a></li><li class="lvl-2"><a href="#hand-editing-rules">Hand-editing rules</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#the-tree">The tree</a></li><li class="lvl-2"><a href="#memory-frontmatter">Memory frontmatter</a></li><li class="lvl-3"><a href="#the-nine-kinds">The nine kinds</a></li><li class="lvl-3"><a href="#validity">Validity</a></li><li class="lvl-2"><a href="#note-frontmatter">Note frontmatter</a></li><li class="lvl-2"><a href="#what-lives-only-in-sqlite">What lives only in SQLite</a></li><li class="lvl-3"><a href="#the-update-records">The update records</a></li><li class="lvl-3"><a href="#reconciliation">Reconciliation</a></li><li class="lvl-2"><a href="#hand-editing-rules">Hand-editing rules</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </details>
   <p>Seamless splits its state in two. Markdown files under the data directory are the
@@ -246,6 +246,7 @@ it by hand, and what happens if you delete it.</p>
     <div class="tree-root"><code>~/.seamless/</code><span class="tree-note">Owner-only local data directory</span></div>
     <div class="tree-branch"><code>seam.db</code><span class="tree-note">Indexes, sessions, tasks, trials, events, and embeddings</span></div>
     <div class="tree-branch"><code>seamlessd.lock</code><span class="tree-note">serve's one-daemon lock; holds the holder's PID (never delete it)</span></div>
+    <div class="tree-branch"><code>seam.db.pre-rollback-{attempt}</code><span class="tree-note">Only after a rollback restored the database: the one the rolled-back release had migrated (with its -wal and -shm), kept until you delete it</span></div>
     <div class="tree-branch"><code>memory/</code><span class="tree-note">Durable memory tree</span></div>
     <div class="tree-leaf"><code>_global/{name}.md</code><span class="tree-note">Machine-wide memories</span></div>
     <div class="tree-leaf"><code>{project}/{name}.md</code><span class="tree-note">One project memory per file</span></div>
@@ -254,11 +255,12 @@ it by hand, and what happens if you delete it.</p>
     <div class="tree-leaf"><code>{project}/{slug}.md</code><span class="tree-note">One project note per file</span></div>
     <div class="tree-branch"><code>backups/</code><span class="tree-note">Pre-update archives (pre-update-v{old}-{time}.tar.gz), the newest two</span></div>
     <div class="tree-branch"><code>update/</code><span class="tree-note">The update check's and the updater's record (release builds only)</span></div>
-    <div class="tree-leaf"><code>state.json</code><span class="tree-note">Last check, cached release list, running daemon</span></div>
+    <div class="tree-leaf"><code>state.json</code><span class="tree-note">Last check, cached release list, running daemon, automatic-update state</span></div>
     <div class="tree-leaf"><code>update.lock</code><span class="tree-note">The updater's lock; never delete it</span></div>
     <div class="tree-leaf"><code>attempt.json</code><span class="tree-note">The newest update attempt, live and finished</span></div>
-    <div class="tree-leaf"><code>attempts.jsonl</code><span class="tree-note">Every finished attempt, one line each</span></div>
+    <div class="tree-leaf"><code>attempts.jsonl</code><span class="tree-note">Finished attempts, one line each (compacted to the newest 100)</span></div>
     <div class="tree-leaf"><code>logs/{attempt}.log</code><span class="tree-note">Each attempt's full output, the newest 20</span></div>
+    <div class="tree-leaf"><code>test-fail-confirm</code><span class="tree-note">Only during a rollback drill: every update rolls back while it exists</span></div>
   </div>
   <figcaption id="storage-tree-caption">Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.</figcaption>
 </figure>
@@ -482,8 +484,9 @@ utility score with its per-signal demand breakdown, rebuilt from events.</li>
 (merge, consolidate, archive, digest, reproject, rekind, split, abandon-plan,
 memory-wanted, tool-error).</li>
 <li><code>settings</code> - <code>repo_project_map</code>, project families, the runtime briefing
-overrides the console writes, the console's update-check override, the
-per-scope utility-activation latch, and the embedder on/off switch.</li>
+overrides the console writes, the console's update override (checks and
+automatic updates), the per-scope utility-activation latch, and the embedder
+on/off switch.</li>
 <li><code>jobs</code> - the small queue for embeds and LLM digests.</li>
 </ul>
 <p>The split is deliberate: durable knowledge is yours in plain markdown, and
@@ -495,18 +498,45 @@ to think about any of that is
 <a href="../../reference/cli-seamlessd/#seamlessd_export"><code>seamlessd export</code></a>, which takes the
 snapshot with SQLite's <code>VACUUM INTO</code> inside a read transaction and is safe to run
 against a running daemon.</p>
-<h3 id="the-update-checks-record">The update check's record</h3>
+<h3 id="the-update-records">The update records</h3>
 <p><code>update/state.json</code> is the <a href="../../updating/#automatic-update-checks">automatic update check's</a>
 memory between restarts: when it last asked GitHub, the cached release list and
 its <code>ETag</code>, when it asks next, the current error streak, the newest release it
 has told you about, the daemon that wrote it (version, install kind, process
-and instance id), and the last version change it saw. Only a daemon from a
-release build writes it - a build from source never creates the directory -
-and <code>seamlessd doctor</code> and <code>seamlessd update --check</code> only read it. It is
-private (mode <code>0600</code> in a <code>0700</code> directory) and disposable: delete it and the
-next start rebuilds it, at the cost of one &quot;version changed&quot; notice it can no
-longer tell. A file that does not parse is moved aside to
+and instance id), and the last version change it saw. On an install that
+<a href="../../updating/#automatic-updates">updates itself</a> it also keeps what automatic
+updates have decided: the pending update and when it began waiting, the update
+it started, the last attempt it settled, blocked releases, a hold, a pause, a
+backoff, and a fingerprint of Codex's <code>hooks.json</code>. Only a daemon from a release
+build writes it - a build from source never creates the directory - and
+<code>seamlessd doctor</code> and <code>seamlessd update --check</code> only read it, with
+<code>attempt.json</code> and <code>attempts.jsonl</code> beside it. It is private (mode <code>0600</code> in a
+<code>0700</code> directory) and safe to delete: the next start rebuilds it. That costs
+one &quot;version changed&quot; notice it can no longer tell, and everything automatic
+updates had decided. A release that rolled back here is then a candidate again,
+and a hold or a pause is gone. A file that does not parse is moved aside to
 <code>state.json.corrupt-&lt;time&gt;</code> and the daemon starts fresh.</p>
+<p>The updater, <code>seamlessd update</code>, keeps its own records next to it. It writes
+them; the daemon only reads them. It holds <code>update/update.lock</code> for its whole
+run, an OS lock released however the process ends. Never delete that file:
+removed while an updater holds it, it lets a second updater lock a new file of
+the same name. <code>attempt.json</code> is the newest attempt, rewritten every 30
+seconds while it runs, and <code>attempts.jsonl</code> gets each finished attempt as one
+line. A line that does not parse is skipped, never fatal. <code>logs/&lt;attempt&gt;.log</code>
+holds an attempt's every step and its installer's output, and the newest 20
+logs are kept. Each release reads the records of releases older and newer than
+itself, so their format only ever gains fields. The updater runs only on an
+install the installer made, so a build from source writes none of these.</p>
+<p>Before an update on such an install, the updater archives the instance to
+<code>backups/pre-update-v&lt;old&gt;-&lt;time&gt;.tar.gz</code> with
+<a href="../../reference/cli-seamlessd/#seamlessd_export"><code>seamlessd export</code></a>'s machinery,
+and keeps the newest two. When an update is rolled back after the new release
+had already migrated the database, the backup's database is put back. The
+migrated one, with its <code>-wal</code> and <code>-shm</code>, stays beside it as
+<code>seam.db.pre-rollback-&lt;attempt&gt;</code> until you delete it. Memories and notes are
+never rolled back. Creating <code>update/test-fail-confirm</code> rehearses a rollback on
+a real install: while it exists, every update fails its confirmation on purpose
+and rolls back, and <code>seamlessd doctor</code> warns. Delete it afterwards.</p>
 <h3 id="reconciliation">Reconciliation</h3>
 <p>At startup the files layer walks both trees and reconciles them against the
 index: changed and new files are re-indexed, and index rows whose file has been
@@ -573,7 +603,7 @@ including <code>memory_write</code>'s <code>supersedes</code>.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-tree">The tree</a></li><li class="lvl-2"><a href="#memory-frontmatter">Memory frontmatter</a></li><li class="lvl-3"><a href="#the-nine-kinds">The nine kinds</a></li><li class="lvl-3"><a href="#validity">Validity</a></li><li class="lvl-2"><a href="#note-frontmatter">Note frontmatter</a></li><li class="lvl-2"><a href="#what-lives-only-in-sqlite">What lives only in SQLite</a></li><li class="lvl-3"><a href="#the-update-checks-record">The update check&#39;s record</a></li><li class="lvl-3"><a href="#reconciliation">Reconciliation</a></li><li class="lvl-2"><a href="#hand-editing-rules">Hand-editing rules</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#the-tree">The tree</a></li><li class="lvl-2"><a href="#memory-frontmatter">Memory frontmatter</a></li><li class="lvl-3"><a href="#the-nine-kinds">The nine kinds</a></li><li class="lvl-3"><a href="#validity">Validity</a></li><li class="lvl-2"><a href="#note-frontmatter">Note frontmatter</a></li><li class="lvl-2"><a href="#what-lives-only-in-sqlite">What lives only in SQLite</a></li><li class="lvl-3"><a href="#the-update-records">The update records</a></li><li class="lvl-3"><a href="#reconciliation">Reconciliation</a></li><li class="lvl-2"><a href="#hand-editing-rules">Hand-editing rules</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </aside>
   

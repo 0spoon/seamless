@@ -43,8 +43,11 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Save optional features | `POST /console/settings/features` | Writes the feature switches as a stored **override row** in the DB. It changes what is exposed - console screens and the matching agent tools - and deletes nothing. |
 | Reset optional features | `POST /console/settings/features/reset` | Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing. |
 | Turn update checks on or off | `POST /console/settings/updates` | Stores the console's `update.check` override (`check=on` or `off`). It can always turn checks off; it cannot turn them on while the config file or environment says `update.check: false` - that is final, and the form says so. Installs nothing. |
-| Reset update checks | `POST /console/settings/updates/reset` | Clears that override, handing the switch back to the config file (or, without one, the build's default). |
+| Reset update checks | `POST /console/settings/updates/reset` | Clears that override - both switches - handing them back to the config file (or, without one, the build's default). |
 | Check for updates now | `POST /console/settings/updates/check` | Asks GitHub's release list once, right away - refused while checks are off or within a minute of the last check. Reads; installs nothing. |
+| Turn automatic updates on or off | `POST /console/settings/updates/auto` | Stores the console's `update.auto` override (`auto=on` or `off`), keeping its `update.check`. It can always turn automatic updates off; it cannot turn them on while the config file or environment says `update.auto: false`, or locks `update.check: false` (nothing installs without checks). With checks merely off, the choice is kept and applies once they are back on. Only an install the installer made acts on it. |
+| Update now | `POST /console/settings/updates/apply` | Installs the newest release at once, after a confirm: it skips the soak, the wait for idle agents, skipped releases and the backoff, and lifts a hold, whether automatic updates are on, off or paused. Refused while checks are off, on an install that does not update itself, while an update is under way, within a minute of a failed release check, when nothing newer is known, or when the release carries no signed checksums bundle. The daemon restarts to finish. |
+| Resume automatic updates | `POST /console/settings/updates/resume` | Lifts the pause automatic updates put on themselves after rollbacks, and the hold a deliberate downgrade set. Changes no setting; skipped releases stay skipped, and a running backoff runs out. |
 | Save a project family | `POST /console/settings/families/save` | Creates a family or replaces one family's name and member set - the same `project_families` setting `seamlessd family` manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member. |
 | Delete a project family | `POST /console/settings/families/delete` | Removes the whole family. Its projects lose the sibling-findings channel; nothing else about them changes. |
 | Sign in / sign out | `POST /console/login`, `POST /console/logout` | Sets or clears the console cookie. Touches no data. |
@@ -55,9 +58,12 @@ state are **archive a memory**, **approve a captured plan**, and the **star**
 flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
 configuration knob (briefing overrides, feature switches, project families, the
-update-check switch) that shapes future briefings, or what is exposed, without
+update switches) that shapes future briefings, or what is exposed, without
 touching any memory's content. The console level is presentation state of the same kind: it changes
-what this console shows you and nothing else.
+what this console shows you and nothing else. **Update now** and **Resume
+automatic updates** act on the install rather than on knowledge: the first
+starts the same backed-up update `seamlessd update` runs, the second lets
+automatic updates run again.
 
 This is deliberate, and it is the same principle as
 [the gardener's](/concepts/gardener/) propose-only contract. The store is written
@@ -886,29 +892,52 @@ budgets or policy numbers: those live in Knowledge engine.
 
 `/console/settings?s=updates`
 
-The [automatic update check](/updating/#automatic-update-checks) in plain words:
-whether this install checks for new releases and why (a release build does by
-default, a build from source does not), what a check sends (one anonymous
-request to `api.github.com` every few hours; nothing when checks are off), the
-installed version and kind of build, the command that updates this install
-(with a copy button), the newest release with its date and release notes - or
-"up to date" - and when the daemon last checked and checks next, including a
-streak of failed checks and why.
+The [automatic update check](/updating/#automatic-update-checks) and
+[automatic updates](/updating/#automatic-updates) in plain words: the **Mode** -
+whether this install checks for new releases, and whether it installs them by
+itself or only tells you, and why (a release build checks by default, a build
+from source does not, and only an install the installer made updates itself) -
+what a check sends (one anonymous request to `api.github.com` every few hours;
+nothing when checks are off), the installed version and kind of build, the
+command that updates this install (with a copy button, labeled **To update by
+hand** on an install that updates itself), the newest release with its date and
+release notes - or "up to date" - and when the daemon last checked and checks
+next, including a streak of failed checks and why.
 
-The note at the top says who decided the switch: **Default for this build**,
-**Set in the config file or environment**, or **Set in this console** with
-**Reset to the config file** beside it. Turning checks off from here always
-works. Turning them on does not when the config file or `SEAMLESS_UPDATE_CHECK`
-says `false`: that is final, the switch shows locked, and the form refuses -
-`false` promises no update traffic at all. **Check now** asks GitHub once, right
-away (not more than once a minute). Nothing on this page installs anything; the
-update command is yours to run.
+The note at the top says who decided the switches: **Default for this build**,
+**Set in the config file or environment**, **Set in this console**, or
+**Automatic updates set in this console**, with **Reset to the config file**
+beside a console choice. Turning checks off from here always works. Turning them
+on does not when the config file or `SEAMLESS_UPDATE_CHECK` says `false`: that
+is final, the switch shows locked, and the form refuses - `false` promises no
+update traffic at all. **Check now** asks GitHub once, right away (not more than
+once a minute).
+
+On an install that updates itself, the section adds **Automatic updates** - on
+or off, who decided, and **Turn automatic updates off** / **on**, which
+`update.auto: false` in the config file or environment locks off - and, while
+they apply, **Next update** (the release it installs next and what it waits
+for: the soak, live agent sessions, or a lull after its deadline), **Paused**,
+**Held back**, **Skipped releases** and **Next try**. **Updating now** and
+**Last attempt** appear whenever there is one; **Last attempt** carries the
+outcome, the updater's own error and its log path - the one place in the
+console either appears - and, when the updater refused to start, the fix.
+**Update to v0.7.3 now** installs the newest release at once after a confirm -
+skipping the soak, the idle wait, skipped releases and the backoff - and the
+daemon restarts to finish. **Resume automatic updates** appears while they are
+paused or holding releases back.
 
 When a newer release is out, the Home health strip's version fact turns into
-`v0.7.2 -- v0.7.3 available` and links here, and a toast announces it if the
-console is open when the daemon finds it. For a day after the daemon starts on
-a new version, every page carries a banner - "Seamless updated to v0.7.3 (from
-v0.7.2)" - with the release notes and **Got it**, which hides it for that tab.
+`v0.7.2 -- v0.7.3 available` and links here - its hover says whether it installs
+by itself, and when - and a toast announces it if the console is open when the
+daemon finds it. While an update runs, the fact reads `v0.7.2 -- updating to
+v0.7.3`. For a day after the daemon starts on a new version, every page carries
+a banner - "Seamless updated to v0.7.3 (from v0.7.2)" - with the release notes
+and **Got it**, which hides it for that tab. It also says when Codex's hooks
+changed with the update (re-approve them in Codex's `/hooks`) or the installer
+reported warnings (run `seamlessd install-hooks`). For a week after automatic
+updates pause themselves, or after an update the daemon started does not apply,
+every page also carries a warning banner pointing here.
 
 ### Briefing
 

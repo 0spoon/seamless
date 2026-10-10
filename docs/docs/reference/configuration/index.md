@@ -32,13 +32,15 @@ That fourth layer covers three blocks where the stored row simply wins:
 | `features:` | Settings → [Features](https://thereisnospoon.org/docs/reference/console/#optional-features) | Immediately in the console; an agent sees it from its next session (tool lists and briefings alike). |
 | `console.level` | Settings → [Experience](https://thereisnospoon.org/docs/reference/console/#experience), or the Home welcome card | Immediately, in the console only. |
 
-A fourth, `update.check`, is merged the other way round: the **more
-restrictive** value wins. Settings → [Updates](https://thereisnospoon.org/docs/reference/console/#updates) can
-always turn the update check off, and can turn it on when file and env leave
-the key unset - but an explicit `check: false` in the file or
-`SEAMLESS_UPDATE_CHECK=false` is final, and the console shows the toggle locked
-with where it was set. `false` promises no update traffic at all, so it is
-never one click from untrue. See [the update block](#the-update-check).
+The `update:` block's two switches, `update.check` and `update.auto`, are merged
+the other way round: the **more restrictive** value wins. Settings →
+[Updates](https://thereisnospoon.org/docs/reference/console/#updates) can always turn either off, and can turn
+it on when file and env do not say `false` - but an explicit `check: false` or
+`auto: false` in the file (or `SEAMLESS_UPDATE_CHECK=false`,
+`SEAMLESS_UPDATE_AUTO=false`) is final, and the console shows that switch locked
+with where it was set. `check: false` promises no update traffic at all, so it
+is never one click from untrue, and with checks off nothing installs by itself
+either. See [the update block](#the-update-check).
 
 It exists so you can change what agents get injected - and what they can reach -
 while they are running, and it is the one place where the config file is not the
@@ -72,19 +74,47 @@ until **Reset** hands the level back to file/env.
 ### The update check {#the-update-check}
 
 The `update:` block drives the daemon's
-[automatic update checks](https://thereisnospoon.org/docs/updating/#automatic-update-checks):
+[automatic update checks](https://thereisnospoon.org/docs/updating/#automatic-update-checks) and
+[automatic updates](https://thereisnospoon.org/docs/updating/#automatic-updates):
 
 - `check` (`SEAMLESS_UPDATE_CHECK`) is optional. Left unset, a release build
   checks and a build from source does not; `true` or `false` decides either
-  way. `false` means no request to GitHub at all.
+  way. `false` means no request to GitHub at all, and so no automatic update
+  either.
 - `check_interval` (`SEAMLESS_UPDATE_CHECK_INTERVAL`) is the time between
   checks: a Go duration from `1h` to `720h`, default `6h`. Write the unit - a
   bare number other than `0` is refused rather than guessed at, since `6` could
   mean six seconds or six hours.
+- `auto` (`SEAMLESS_UPDATE_AUTO`) is optional, and unset means on: an install
+  made by the curl or PowerShell installer installs a newer release by itself.
+  Homebrew, builds from source, client machines and layouts the daemon cannot
+  vouch for are only told, whatever `auto` says
+  ([who updates itself](https://thereisnospoon.org/docs/updating/#who-updates-itself)). `false` keeps the
+  check and its notices and leaves installing to you (`seamlessd update`, or
+  **Update now** in the console). Like `check: false`, it is final, and the
+  console cannot turn it back on. With checks off, `auto` is off too.
+- `max_defer` (`SEAMLESS_UPDATE_MAX_DEFER`) is how long a pending automatic
+  update waits for a quiet daemon - no live agent session, no request in
+  flight - before it takes the next lull in requests instead: a Go duration from
+  `1m` to `720h`, default `24h`. `0` is refused. After 1.5 times `max_defer` it
+  installs as soon as no request is in flight, and after twice `max_defer`
+  whatever is in flight ([when it installs](https://thereisnospoon.org/docs/updating/#when-it-installs)).
+- `min_age` (`SEAMLESS_UPDATE_MIN_AGE`) is the soak: how long a release must have
+  been published before an automatic update takes it, measured on GitHub's
+  clock. A Go duration from `0` (no wait) to `720h`, default `24h`. Installing by
+  hand ignores it.
 
-Both keys are new in this release. seamlessd releases before it refuse config
-keys they do not know, so a file that sets one runs only with this release or
-newer - which is why the example file leaves `check` commented out.
+Set `auto`, `max_defer` and `min_age` in the file, not in the daemon's
+environment. Any `SEAMLESS_*` variable besides `SEAMLESS_CONFIG` in the
+daemon's environment makes the install notify-only - the installer rewrites
+the service without it - so `SEAMLESS_UPDATE_AUTO=true` can never turn
+automatic updates on, and the two durations set there switch them off rather
+than tune them.
+
+All five keys are new in v0.7.0. seamlessd releases before it refuse config
+keys they do not know, so a file that sets one runs only with v0.7.0 or newer.
+The example file spells out the keys whose default has a value and leaves
+`check` and `auto`, whose default is unset, commented out.
 
 ## Generating a key
 
@@ -486,12 +516,16 @@ plan_capture:
 # decide whether and when it also installs one by itself, which only an install
 # the curl or PowerShell installer made ever does: Homebrew, builds from source,
 # client machines and layouts the daemon cannot vouch for are only told.
+# Set auto, max_defer and min_age here, not in the daemon's environment: any
+# SEAMLESS_* variable besides SEAMLESS_CONFIG there makes the install
+# notify-only, so their env variables below can turn automatic updates off but
+# never on.
 update:
   # Unset (the default) means on for release builds and off for builds from
   # source. false means zero update traffic: no request to GitHub at all, and so
   # no automatic update either. The key is left commented out because seamlessd
-  # releases before this one reject config keys they do not know, so setting it
-  # pins this file to this release or newer.
+  # releases before v0.7.0 reject config keys they do not know, so setting it
+  # pins this file to v0.7.0 or newer.
   # env: SEAMLESS_UPDATE_CHECK
   # check: false
   # Time between checks, as a Go duration (6h, 90m, 1h30m) from 1h to 720h. A

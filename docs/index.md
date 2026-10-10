@@ -11,7 +11,7 @@
 - [Claude app chat setup](https://thereisnospoon.org/docs/claude-app/): Register the seam mcp-proxy bridge in claude_desktop_config.json, restart the app, and run the session loop explicitly - a chat has no hooks and no cwd.
 - [Codex local setup (app, CLI, and IDE)](https://thereisnospoon.org/docs/codex-cli/): Wire the shared local Codex host into Seamless - one app/CLI/IDE profile for hooks, the mcp-proxy tool bridge, skills, and reaper-driven session lifecycle.
 - [Install & deploy](https://thereisnospoon.org/docs/install/): The one-command install and every other route to the same place - Homebrew, a clone, go install - plus the override knobs and the security posture you are accepting.
-- [Update & uninstall](https://thereisnospoon.org/docs/updating/): The lifecycle journeys that are one command on every OS - seamlessd update swaps in the latest release, seamlessd uninstall reverses the install, and adding a client later is one more install-hooks run.
+- [Update & uninstall](https://thereisnospoon.org/docs/updating/): The lifecycle journeys that are one command on every OS - an installer install updates itself, seamlessd update swaps in the latest release now, seamlessd uninstall reverses the install, and adding a client later is one more install-hooks run.
 - [Changelog](https://thereisnospoon.org/docs/changelog/): Every Seamless release, newest first - what shipped and when, regenerated from the git tags at each release.
 
 ## Concepts
@@ -55,7 +55,7 @@
 - [seamlessd CLI](https://thereisnospoon.org/docs/reference/cli-seamlessd/): The daemon and operator CLI - serve, doctor, export, import, install-hooks, client-config, uninstall, update, map-repo, unmap-repo, retire-project, family, console-open, start/stop/restart/status, and version.
 - [Configuration](https://thereisnospoon.org/docs/reference/configuration/): Every configuration key, its type and default, plus the annotated example file and the four layers that resolve them.
 - [Hooks](https://thereisnospoon.org/docs/reference/hooks/): The hooks Seamless installs per client - seven for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.
-- [The service & where things live](https://thereisnospoon.org/docs/reference/service/): Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, and every path Seamless touches.
+- [The service & where things live](https://thereisnospoon.org/docs/reference/service/): Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, the detached updater behind automatic updates, and every path Seamless touches.
 - [Claude app compatibility matrix](https://thereisnospoon.org/docs/reference/claude-app-compatibility/): Versioned evidence for the Claude app's two surfaces - embedded code sessions (hooks, MCP, runtime skew) and the chat surface's stdio MCP bridge.
 - [Codex compatibility matrix](https://thereisnospoon.org/docs/reference/codex-compatibility/): Versioned, platform-specific evidence for the Codex hooks, MCP transports, trust gate, output limit, and the contract-recapture procedure.
 - [Console](https://thereisnospoon.org/docs/reference/console/): The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, the three experience levels, and what each page shows.
@@ -65,9 +65,9 @@
 ## Internals
 
 - [Internals](https://thereisnospoon.org/docs/internals/): For contributors - how the Go packages layer, what the check gate enforces, and the domain invariants that plausible-looking code breaks.
-- [Architecture](https://thereisnospoon.org/docs/internals/architecture/): The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.
-- [Contributing](https://thereisnospoon.org/docs/internals/contributing/): The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.
-- [Domain invariants](https://thereisnospoon.org/docs/internals/invariants/): The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation - and why each exists.
+- [Architecture](https://thereisnospoon.org/docs/internals/architecture/): The package layering, what each package owns, three data-flow traces through the real code, and the things Seamless deliberately does not have.
+- [Contributing](https://thereisnospoon.org/docs/internals/contributing/): The make targets, the check gate and what CI runs, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.
+- [Domain invariants](https://thereisnospoon.org/docs/internals/invariants/): The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation, automatic updates and release discipline - and why each exists.
 
 ## Scenarios
 

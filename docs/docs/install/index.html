@@ -473,8 +473,12 @@ systemd <code>--user</code> on Linux, an at-logon Scheduled Task on Windows - an
 native commands, log locations, and every path Seamless touches are on
 <a href="../reference/service/">The service &amp; where things live</a>.</p>
 <h2 id="upgrading">Upgrading</h2>
-<p><code>seamlessd update</code> upgrades in place to the newest release, on every OS -
-backed up, confirmed, and rolled back if the new release does not come up.
+<p>From v0.7.0, an install the installer made updates itself: each new release is
+installed a day after it is published, at a moment no agent is using the daemon
+(<a href="../updating/#automatic-updates">automatic updates</a>). <code>seamlessd update</code> upgrades
+in place to the newest release right now, on every OS - backed up, confirmed,
+and rolled back if the new release does not come up. An install on v0.6.0 or
+older has no update check: run <code>seamlessd update</code> once by hand.
 <a href="../updating/">Update &amp; uninstall</a> has the full procedure, the pinning knobs,
 and how the release's installer and checksums are signature-verified first.</p>
 <h2 id="uninstalling">Uninstalling</h2>
@@ -508,15 +512,19 @@ Ollama to keep model calls local), URLs an agent explicitly asks
 <code>capture_url</code> to fetch, the GitHub release check and download that an
 explicit <code>seamlessd update</code> performs, and - on a release build - the
 <a href="../updating/#automatic-update-checks">background update check</a>: one anonymous
-request to GitHub's releases API every 6 hours, carrying no identifiers.
-<code>update.check: false</code> turns it off and means no update traffic at all.</li>
+request to GitHub's releases API every 6 hours, carrying no identifiers. On
+an install the installer made, an
+<a href="../updating/#automatic-updates">automatic update</a> adds the same downloads
+<code>seamlessd update</code> makes. <code>update.check: false</code> turns both off and means no
+update traffic at all.</li>
 <li><strong>Release authenticity has two layers.</strong> Every installer verifies the
 archive's SHA-256 against <code>checksums.txt</code>. When <code>cosign</code> is installed it also
 verifies the manifest's keyless signature against this repository's release
 workflow identity; without cosign it warns clearly and continues with checksum
 integrity only - unless <code>SEAMLESS_CHECKSUMS_SHA256</code> pins the manifest to one
 its caller already verified, in which case any other manifest is refused and
-the run says the signature was verified by seamlessd. <code>seamlessd update</code>
+the run says the signature was verified by seamlessd. <code>seamlessd update</code> -
+and every automatic update -
 separately verifies the target release's installer script and <code>checksums.txt</code>
 against their Sigstore bundles, in-process and by that release's exact tag,
 before executing anything, and pins the installer to that <code>checksums.txt</code>. <code>curl | sh</code> still means trusting the bytes served by the

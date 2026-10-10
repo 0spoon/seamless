@@ -1,6 +1,6 @@
 ---
 title: Contributing
-description: The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.
+description: The make targets, the check gate and what CI runs, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.
 ---
 
 The conventions live in `AGENTS.md` at the repo root, and that file is the source
@@ -57,7 +57,7 @@ which makes a stale running daemon invisible.
 make check
 ```
 
-That is the one command that must be green before work is done. It runs six steps
+That is the one command that must be green before work is done. It runs ten steps
 sequentially - as separate `$(MAKE)` invocations rather than prerequisites, so it
 stops at the first red step and stays ordered under `make -j`:
 
@@ -65,14 +65,18 @@ stops at the first red step and stays ordered under `make -j`:
 |---|---|---|
 | 1 | `build` | It compiles. |
 | 2 | `vet` | The stdlib's own suspicious-construct checks. |
-| 3 | `fmt-check` | gofmt drift in tracked files. |
-| 4 | `docs-check` | A committed docs site that no longer matches `docs-src/`. |
-| 5 | `lint` | golangci-lint, including the repo's custom bans. |
-| 6 | `test-race` | Everything, under the race detector. |
+| 3 | `cross-check` | `go vet` for darwin/arm64 and windows/amd64, so code behind an OS build tag type-checks before a release has to build it. |
+| 4 | `fmt-check` | gofmt drift in tracked files. |
+| 5 | `docs-check` | A committed docs site that no longer matches `docs-src/`. |
+| 6 | `installer-check` | An installer script that does not parse (`sh -n`, and PowerShell's parser when `pwsh` is installed). |
+| 7 | `site-check` | A hand-written landing page that drifted from the installer or the CLI. |
+| 8 | `lint` | golangci-lint, including the repo's custom bans. |
+| 9 | `vulncheck` | A known vulnerability in code this repo actually calls (govulncheck). |
+| 10 | `test-race` | Everything, under the race detector. |
 
-The order is cost-ascending: the cheapest and most-likely-to-fail steps run first,
-and `test-race` is last because it is by far the slowest. The individual targets
-exist for iterating; `check` is the thing you run before you claim to be done.
+The cheap, likely-to-fail steps run first, and `test-race` is last because it is
+by far the slowest. The individual targets exist for iterating; `check` is the
+thing you run before you claim to be done.
 
 `docs-check` regenerates into a temp dir and diffs, rather than rewriting your
 working tree and running `git diff`. That means it never mutates the file you are
@@ -81,6 +85,37 @@ deleted from `docs-src/` but still committed under `docs/docs/`. Two docs pages
 are generated from the code (the MCP tool reference reads `mcp.Catalog()`, the
 configuration reference reflects `config.Defaults()`), so changing a tool or a
 config key makes the committed output stale, and this is the step that says so.
+
+## What CI runs
+
+`.github/workflows/ci.yml` runs three jobs on every push to `main` and every
+pull request:
+
+- **`check`**, on Linux: `make check`, the gate above.
+- **`os-smoke`**, on `macos-latest` and `windows-latest`: `go test -count=1`
+  over `./cmd/seamlessd`, `./internal/update` and `./internal/agentproc`. These
+  are the packages with code behind darwin and windows build tags (file
+  locking, the detached updater, the process table), which `cross-check` only
+  vets. It builds with `CGO_ENABLED=0`, as the release does, and without
+  `-race`. Each OS reports on its own (`fail-fast: false`). Tests that fail on
+  Windows because of a known product bug are skipped there by name
+  (`known_windows_failures` in the workflow); delete a name when its fix lands.
+- **`config-lint`**: actionlint over the workflows, and `goreleaser check` over
+  `.goreleaser.yaml` with the goreleaser version range the release workflow
+  uses. Without it, a broken release config would first fail on a pushed tag.
+
+Since those packages' tests run on Windows, write them to pass there:
+
+- A test that fakes a home sets `USERPROFILE` beside `HOME`. `os.UserHomeDir`
+  reads `USERPROFILE` on Windows, so a test that sets only `HOME` writes to the
+  real profile of whoever runs it.
+- Windows reports file modes as `0666`, so an assertion on `0600` or `0700`
+  goes behind `if runtime.GOOS != "windows"`.
+- A POSIX fixture path such as `/opt/seam` is not absolute on Windows.
+  `absFixture` (`cmd/seamlessd/desktop_mcp_test.go`) makes it absolute on the
+  OS under test.
+- Expect the OS's path separator: build expected paths with `filepath.Join`,
+  never with `/`.
 
 ## Use `make fmt`, never `gofmt -w .`
 

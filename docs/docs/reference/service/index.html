@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The service &amp; where things live - Seamless docs</title>
-<meta name="description" content="Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, and every path Seamless touches.">
+<meta name="description" content="Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, the detached updater behind automatic updates, and every path Seamless touches.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/reference/service/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/reference/service/">
 <meta property="og:title" content="The service &amp; where things live - Seamless docs">
-<meta property="og:description" content="Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, and every path Seamless touches.">
+<meta property="og:description" content="Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, the detached updater behind automatic updates, and every path Seamless touches.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - sessions end. What they learned doesn&#39;t.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"The service \u0026 where things live","item":"https://thereisnospoon.org/docs/reference/service/"}]},{"@type":"TechArticle","headline":"The service \u0026 where things live - Seamless docs","description":"Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, and every path Seamless touches.","url":"https://thereisnospoon.org/docs/reference/service/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"The service \u0026 where things live","item":"https://thereisnospoon.org/docs/reference/service/"}]},{"@type":"TechArticle","headline":"The service \u0026 where things live - Seamless docs","description":"Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, the detached updater behind automatic updates, and every path Seamless touches.","url":"https://thereisnospoon.org/docs/reference/service/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#eef1f5">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#070a13">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -226,7 +226,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 </nav>
 
   <h1>The service &amp; where things live</h1>
-  <p class="lede">Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, and every path Seamless touches.</p>
+  <p class="lede">Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, the detached updater behind automatic updates, and every path Seamless touches.</p>
   <div class="ctx-bar">
   <span class="ctx-bar-label">Steps for</span>
   <div class="ctx-seg" role="group" aria-label="Operating system">
@@ -249,7 +249,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#control-it-from-anywhere">Control it from anywhere</a></li><li class="lvl-2"><a href="#the-service-on-your-os">The service on your OS</a></li><li class="lvl-2"><a href="#where-things-live">Where things live</a></li><li class="lvl-2"><a href="#removing-the-service-by-hand">Removing the service by hand</a></li>
+      <li class="lvl-2"><a href="#control-it-from-anywhere">Control it from anywhere</a></li><li class="lvl-2"><a href="#the-service-on-your-os">The service on your OS</a></li><li class="lvl-2"><a href="#the-updater">The updater on your OS</a></li><li class="lvl-3"><a href="#updater-recovery">When an update goes wrong</a></li><li class="lvl-2"><a href="#where-things-live">Where things live</a></li><li class="lvl-2"><a href="#removing-the-service-by-hand">Removing the service by hand</a></li>
     </ul>
   </details>
   <p>The installer registers <code>seamlessd</code> as a per-user service, so the daemon
@@ -325,6 +325,147 @@ unit-tested, but it has fewer live-verified runs than macOS and Linux; the
 <a href="../../reference/codex-compatibility/">Codex compatibility matrix</a> records exactly
 which combinations have been observed working.</p>
 </div>
+<h2 id="the-updater">The updater on your OS</h2>
+<p>On an install the installer made, the daemon installs new releases by itself
+(<a href="../../updating/#automatic-updates">Automatic updates</a> covers which installs, and
+when). It never installs anything in-process. It starts the updater,
+<code>seamlessd update --auto</code>, which verifies the new release and runs that
+release's own installer, and the installer restarts the service. So the daemon
+starts the updater where stopping the service cannot reach it, which is a
+different place on each OS.</p>
+<p>The updater runs the <code>seamlessd</code> on disk and refuses unless that binary is the
+release the daemon is updating from. It also refuses to run inside the
+service's own process tree. It holds <code>~/.seamless/update/update.lock</code> for its
+whole run, so only one update runs at a time, and records itself in
+<code>~/.seamless/update/attempt.json</code>. Every step, and the installer's output,
+goes to <code>~/.seamless/update/logs/&lt;attempt&gt;.log</code>.</p>
+<div class="ctx-variant" data-ctx-os="macos">
+<p class="ctx-label"><span class="ctx-chip">macOS</span></p>
+<p>A child process in a session of its own (<code>setsid</code>). launchd stops a
+LaunchAgent by signalling its process group (on <code>bootout</code>, on <code>kickstart -k</code>,
+and when the daemon is killed), and the updater has left that group, so the
+installer's reload of the service does not reach it. The installer reloads
+with <code>launchctl bootout</code> and <code>bootstrap</code>, never by re-executing the loaded job
+in place: macOS 26 kills a job re-executed in place after its binary was
+replaced. Nothing is registered with launchd for the updater, so there is
+nothing to remove. Its standard error goes to <code>~/.seamless/seamlessd.log</code>. An
+updater that refuses before its own log opens says why there
+(<code>command failed cmd=update</code>).</p>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">pgrep -fl <span class="s1">&#39;seamlessd update --auto&#39;</span>   <span class="c1"># an update in progress</span>
+</span></span></code></pre></div>
+<p>From v0.7.0 on, the macOS release binaries are signed with the project's
+Developer ID Application certificate and notarized by Apple. macOS Background
+Items should therefore treat an updated <code>seamlessd</code> as the same background
+item. The first update away from an ad-hoc-signed binary (v0.6.0 or older, or
+a build from source) may still show one &quot;seamlessd can run in the background&quot;
+notice, possibly hours after the update.</p>
+</div>
+<div class="ctx-variant" data-ctx-os="linux">
+<p class="ctx-label"><span class="ctx-chip">Linux</span></p>
+<p>A transient user unit of its own, <code>seamless-update-&lt;attempt&gt;.service</code>, started
+with <code>systemd-run --user</code>. Stopping or restarting <code>seamless.service</code> kills
+every process in that unit's cgroup, a <code>setsid</code> child included, so the updater
+needs a unit of its own. systemd drops the unit when the updater exits
+(<code>--collect</code>) and stops it after 30 minutes at most (<code>RuntimeMaxSec</code>), along
+with anything the installer left running. The unit starts from your user
+manager's environment, not the daemon's. The daemon passes along only its
+proxy and CA settings: <code>HTTPS_PROXY</code>, <code>HTTP_PROXY</code>, <code>NO_PROXY</code> and <code>ALL_PROXY</code>
+in either case, <code>SSL_CERT_FILE</code> and <code>SSL_CERT_DIR</code>. No user D-Bus session is
+needed.</p>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">systemctl --user list-units <span class="s1">&#39;seamless-update-*&#39;</span>   <span class="c1"># an update in progress</span>
+</span></span><span class="line"><span class="cl">journalctl --user -u <span class="s1">&#39;seamless-update-*&#39;</span>          <span class="c1"># what it printed, if it refused before its log opened</span>
+</span></span></code></pre></div>
+<p>Two things about the service itself matter here:</p>
+<ul>
+<li><strong>Lingering.</strong> Without it, your user manager stops when your last session
+ends, and it takes the daemon and any updater with it, possibly mid-install.
+The installer runs <code>loginctl enable-linger</code>. Where it cannot (a standard user
+on a system without polkit), it warns, and
+<code>sudo loginctl enable-linger $(id -un)</code> is the one-time fix.
+<code>loginctl show-user $(id -un) -p Linger</code> shows the setting.</li>
+<li><strong>No start limit.</strong> The unit the installer writes sets
+<code>StartLimitIntervalSec=0</code>, and the installer runs
+<code>systemctl --user reset-failed seamless.service</code> before it restarts the
+service. A burst of restarts (a crash loop, the installer's own restart, a
+rollback) therefore never leaves the service down for good. A unit written by
+the v0.6.0 installer or an older one keeps systemd's default limit until the
+next install or update rewrites it. Until then,
+<code>systemctl --user reset-failed seamless.service &amp;&amp; systemctl --user restart seamless.service</code>
+brings back a service that <code>systemctl --user status seamless</code> reports as
+<code>start-limit-hit</code>.</li>
+</ul>
+</div>
+<div class="ctx-variant" data-ctx-os="windows">
+<p class="ctx-label"><span class="ctx-chip">Windows</span></p>
+<p>A detached process with no console window and a process group of its own,
+started outside the <code>Seamless</code> task's job where Windows allows it
+(<code>CREATE_NO_WINDOW</code>, <code>CREATE_NEW_PROCESS_GROUP</code>, <code>CREATE_BREAKAWAY_FROM_JOB</code>).
+When the job refuses the breakaway, the daemon starts it again without that
+flag. Task Scheduler's stop (<code>Stop-ScheduledTask</code>, <code>schtasks /End</code>) ends only
+the task's own process, the daemon, so the updater keeps running.</p>
+<p>The daemon falls back only when that process cannot be started at all. The
+fallback is a hidden, on-demand Scheduled Task named <code>SeamlessUpdate-&lt;your SID&gt;</code>:
+it has no trigger, runs as you and only while you are signed in
+(<code>InteractiveToken</code>, least privilege, no admin), and has a one-hour limit. The
+daemon registers it again for each update with <code>schtasks /Create /XML</code> and
+starts it with <code>schtasks /Run</code>. The task then stays registered, hidden, until
+<code>seamlessd uninstall</code> removes it.</p>
+<div class="code-block" data-lang="powershell"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">Get-CimInstance</span> <span class="n">Win32_Process</span> <span class="n">-Filter</span> <span class="s2">&#34;Name = &#39;seamlessd.exe&#39;&#34;</span> <span class="p">|</span> <span class="nb">Where-Object</span> <span class="n">CommandLine</span> <span class="o">-like</span> <span class="s1">&#39;*update --auto*&#39;</span>   <span class="c"># an update in progress</span>
+</span></span><span class="line"><span class="cl"><span class="nb">Get-ScheduledTask</span> <span class="n">-TaskName</span> <span class="s1">&#39;SeamlessUpdate-*&#39;</span>                                                                   <span class="c"># only once the fallback has run</span>
+</span></span></code></pre></div>
+<p>Only the daemon that the <code>Seamless</code> task started updates itself. On Windows,
+the last of the checks that decide whether this install updates itself asks
+whether this process is the service's own instance. It needs two things: the
+daemon's parent process is the Task Scheduler (<code>svchost.exe</code>), and the
+<code>Seamless</code> task runs as you. A <code>seamlessd serve</code> you started by hand only
+notifies, and its reason reads <code>not the service's own process: the parent process is ..., not the Task Scheduler (svchost.exe)</code>. Stop it and run
+<code>Start-ScheduledTask Seamless</code>. An install that fell back to a Startup-folder
+shortcut, because the installer could not register the task, has no task at
+all, so it only notifies too.</p>
+</div>
+<h3 id="updater-recovery">When an update goes wrong</h3>
+<p>Every attempt leaves a record. <code>seamlessd doctor</code> (its <code>updates</code> row) and
+<code>seamlessd update --check</code> print the last attempt with the updater's own error,
+its log and the backup it took. <a href="../../guides/troubleshooting/#an-automatic-update-failed">An automatic update failed</a>
+walks through the outcomes. What the service manager can tell you:</p>
+<ul>
+<li><strong>An update that never started</strong> is recorded at the <code>spawn</code> stage, and the
+daemon tries again after a backoff. When the daemon could not start the
+updater, its log says why (<code>could not start the updater</code>). On Linux the
+reason is one of <code>systemd-run is not installed</code>, <code>the systemd user manager is unreachable</code>, <code>this attempt's unit already exists</code>, <code>the seamlessd binary is missing or not executable</code> and <code>the updater could not be executed</code>. On
+Windows the error names why the detached process failed and why the update
+task failed. When the updater started but refused before it recorded
+anything, it said why on its standard error: in <code>~/.seamless/seamlessd.log</code> on
+macOS, and in <code>journalctl --user -u 'seamless-update-*'</code> on Linux. On Windows
+that output goes nowhere.</li>
+<li><strong>An update the updater's gates refused</strong> names the owner's action in
+doctor's <code>updates</code> row, and every retry is refused the same way until you
+act. A release installed without a restart (the seamlessd on disk is not
+the one the daemon runs), or an install that no longer looks installer-made,
+needs <code>seamlessd restart</code>. An updater that could not make sure it runs
+outside the service needs <code>seamlessd update</code>, run by hand from a terminal.</li>
+<li><strong>An updater that hangs</strong> is stopped by a limit: the installer's own
+15-minute timeout on every OS, the unit's 30 minutes on Linux, and the
+update task's hour on Windows. You can also stop it by hand: on Linux with
+<code>systemctl --user stop 'seamless-update-*'</code>, and on macOS and Windows by
+ending the <code>seamlessd update --auto</code> process. The OS releases the update lock
+however the updater dies, and the daemon settles the attempt from the release
+that is running. An attempt stopped while the old release still runs counts
+as interrupted and is tried again after a backoff. That run reinstalls the
+new release and confirms it, or rolls back.</li>
+<li><strong>A service left down</strong> by an update that could not be rolled back cleanly:
+the attempt's error carries the updater's recovery steps. Reinstalling the
+release you had is the installer pinned to it:
+<code>curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=&lt;version&gt; sh</code>,
+or <code>$env:SEAMLESS_VERSION='&lt;version&gt;'; irm https://thereisnospoon.org/install.ps1 | iex</code>
+on Windows. Then run <code>seamlessd doctor</code>.</li>
+<li><strong>Putting the whole instance back</strong> from the pre-update backup is a restore,
+and <code>seamlessd import</code> restores only into an empty data directory (into a
+populated one it merges). Run <code>seamlessd stop</code>, then move <code>~/.seamless</code> aside
+(to <code>~/.seamless.broken</code>, say; the backup moves with it), then run
+<code>seamlessd import --from ~/.seamless.broken/backups/pre-update-v&lt;old&gt;-&lt;time&gt;.tar.gz</code>,
+then <code>seamlessd start</code>.</li>
+</ul>
 <h2 id="where-things-live">Where things live</h2>
 <p>Every <code>~</code> path resolves under <code>%USERPROFILE%</code> on Windows - the daemon searches
 the same relative locations on every OS.</p>
@@ -352,6 +493,11 @@ the same relative locations on every OS.</p>
 <td>Knowledge + database</td>
 <td><code>~/.seamless/</code></td>
 <td>markdown memories and notes, plus <code>seam.db</code> - see <a href="../../reference/storage/">Storage</a></td>
+</tr>
+<tr>
+<td>Update records + backups</td>
+<td><code>~/.seamless/update/</code>, <code>~/.seamless/backups/</code></td>
+<td>the update check's state, each update attempt and its log, the pre-update archives - see <a href="../../reference/storage/#the-update-records">Storage</a></td>
 </tr>
 <tr>
 <td>Daemon log</td>
@@ -383,12 +529,18 @@ the same relative locations on every OS.</p>
 </div>
 <h2 id="removing-the-service-by-hand">Removing the service by hand</h2>
 <p><a href="../../updating/">Update &amp; uninstall</a> covers <code>seamlessd uninstall</code>, which removes
-the service along with everything else. For a bare binary you never registered
-a service for - or a machine you are cleaning by hand - the native teardown is:</p>
+the service along with everything else, including what the updater leaves
+behind. On Linux it first stops any update unit still loaded, so an updater
+caught mid-update cannot restart the service it is removing. On Windows it
+deletes your <code>SeamlessUpdate-&lt;SID&gt;</code> task. On macOS the updater leaves nothing
+to remove. For a bare binary you never registered a service for, or a machine
+you are cleaning by hand, the native teardown is:</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">launchctl bootout gui/<span class="k">$(</span>id -u<span class="k">)</span>/org.thereisnospoon.seamless   <span class="c1"># macOS</span>
+</span></span><span class="line"><span class="cl">systemctl --user stop <span class="s1">&#39;seamless-update-*&#39;</span>                    <span class="c1"># Linux: an update still running</span>
 </span></span><span class="line"><span class="cl">systemctl --user disable --now seamless                      <span class="c1"># Linux</span>
 </span></span></code></pre></div>
 <div class="code-block" data-lang="powershell"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">Unregister-ScheduledTask</span> <span class="n">-TaskName</span> <span class="n">Seamless</span>                  <span class="c"># Windows</span>
+</span></span><span class="line"><span class="cl"><span class="nb">Unregister-ScheduledTask</span> <span class="n">-TaskName</span> <span class="s2">&#34;SeamlessUpdate-</span><span class="p">$([</span><span class="no">Security.Principal.WindowsIdentity</span><span class="p">]::</span><span class="n">GetCurrent</span><span class="p">().</span><span class="py">User</span><span class="p">.</span><span class="n">Value</span><span class="p">)</span><span class="s2">&#34;</span>   <span class="c"># Windows: the update task, if it exists</span>
 </span></span></code></pre></div>
 
 </article>
@@ -407,7 +559,7 @@ a service for - or a machine you are cleaning by hand - the native teardown is:<
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#control-it-from-anywhere">Control it from anywhere</a></li><li class="lvl-2"><a href="#the-service-on-your-os">The service on your OS</a></li><li class="lvl-2"><a href="#where-things-live">Where things live</a></li><li class="lvl-2"><a href="#removing-the-service-by-hand">Removing the service by hand</a></li>
+      <li class="lvl-2"><a href="#control-it-from-anywhere">Control it from anywhere</a></li><li class="lvl-2"><a href="#the-service-on-your-os">The service on your OS</a></li><li class="lvl-2"><a href="#the-updater">The updater on your OS</a></li><li class="lvl-3"><a href="#updater-recovery">When an update goes wrong</a></li><li class="lvl-2"><a href="#where-things-live">Where things live</a></li><li class="lvl-2"><a href="#removing-the-service-by-hand">Removing the service by hand</a></li>
     </ul>
   </aside>
   

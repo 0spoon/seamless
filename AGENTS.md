@@ -67,8 +67,9 @@ cmd/seamlessd, cmd/seam, cmd/seambench, cmd/demoseed, cmd/docsgen
 - Migrations: numbered SQL files under `internal/store/migrations/`, embedded via
   `go:embed` and registered in the `Migrations()` list. Each runs once, inside a
   transaction, tracked in `schema_migrations`. NEVER edit an applied migration;
-  append a new numbered one. Adding a `.sql` file requires a matching `go:embed`
-  line and `Migrations()` entry, or it silently never runs.
+  append a new numbered one, and keep it additive (see "Release discipline"
+  below). Adding a `.sql` file requires a matching `go:embed` line and
+  `Migrations()` entry, or it silently never runs.
 - Files are the source of truth for durable knowledge (memory/, notes/). The
   `*_index` tables and FTS are rebuildable mirrors kept in sync by the files
   watcher + startup reconciliation; use `content_hash` to skip unchanged files.
@@ -99,6 +100,13 @@ cmd/seamlessd, cmd/seam, cmd/seambench, cmd/demoseed, cmd/docsgen
   hit a real network service in a unit test.
 - No `time.Sleep` for synchronization. Use channels, `sync.WaitGroup`, or polling
   with a deadline.
+- `cmd/seamlessd`, `internal/update` and `internal/agentproc` also run on macOS
+  and Windows in CI (`os-smoke`), so keep their tests portable: a test that
+  fakes a home sets `USERPROFILE` beside `HOME` (`os.UserHomeDir` reads it on
+  Windows, and a test that sets only `HOME` writes the real profile there);
+  file-mode assertions go behind `if runtime.GOOS != "windows"` (Windows
+  reports `0666`); POSIX fixture paths go through `absFixture`
+  (`desktop_mcp_test.go`); expected paths use the OS separator.
 
 ### Security invariants
 
@@ -242,11 +250,20 @@ the pointer is where to look, not a substitute for reading it.
   is advisory and must never block `memory_write`; indexing is best-effort with
   a hash-retry). Leave them.
 
-### Background update check (`internal/update`)
+### Background update check and automatic updates (`internal/update`)
 
-The daemon asks GitHub which releases exist and tells the owner; it installs
-nothing (applying stays `seamlessd update`, which verifies and runs the
-release's own installer). Owner decisions: memory
+The daemon asks GitHub which releases exist and tells the owner. It never
+installs in-process. On an install the installer made (`update.Detect` kind
+`installer`), with an updater spawner wired (`cmd/seamlessd/update_spawn*.go`,
+on a release build only: `updateSpawnerFor`) and `update.auto` allowed, the
+checker picks the release (`update.Target`: soaked by GitHub's clock, carrying
+the signed checksums bundle, not blocked or held) and the moment
+(`update.Decide`: idle; else past `max_defer` at a 90s lull, forced at 1.5x,
+overdue at 2x). It then hands one attempt to `seamlessd update --auto`, which
+verifies and runs the release's own installer, confirms the new daemon by
+observation and rolls back when it does not come up. The checker folds
+`attempt.json` into blocks, backoff, a hold and a pause, and never writes
+attempt files. Every other install only notifies. Owner decisions: memory
 `auto-update-architecture-and-policy`.
 
 - **Only a release build counts.** `main.distribution` is stamped `release` by
@@ -254,8 +271,8 @@ release's own installer). Owner decisions: memory
   stamps it), and `update.IsReleaseBuild` also wants a clean X.Y.Z version. A
   source build -- `make run`, `make install`, the fixtures, seambench, CI --
   never asks GitHub unless `update.check: true`, never writes
-  `<data_dir>/update/state.json`, and is never an installer install
-  (constraint `dev-and-fixture-daemons-never-self-update`).
+  `<data_dir>/update/state.json`, gets no updater spawner, and is never an
+  installer install (constraint `dev-and-fixture-daemons-never-self-update`).
 - **Text from parsed versions only.** Every notice, banner, row and event
   payload is built from `update.Version` values, `update.ReleaseURL` and the
   fixed `update.Hint` for the install kind -- never from the release API's
@@ -263,16 +280,62 @@ release's own installer). Owner decisions: memory
   `update-surfaces-render-parsed-versions-only`). The briefing line is worded
   as an owner action and must survive `sanitizeField` unchanged; the status
   tests pin both.
+- **One home for the words.** Automatic-update wording lives in
+  `internal/update/words.go` (`BlockWords`, `PauseWords`, `SpanWords`,
+  `Plural`, `HeldBack`). The console, doctor and `update --check` frame those
+  words and never keep their own copy; new wording goes there.
 - **The more restrictive setting wins.** `update.Effective` merges the
   file/env `update:` block with the console's `update_config` row the other
   way round from the briefing and features rows: an explicit file/env
   `check: false` is final and locks the console toggle; the console may always
   turn checking off. `check: false` means no update traffic at all.
-- **One writer.** The checker's loop goroutine owns the state; `CheckNow` and
-  `Refresh` are commands it serves, and readers get a copied `Status`. It
-  schedules on wall-clock deadlines saved in the state (a 1-minute tick
-  compares them), so sleep cannot stall it, and it saves a pessimistic
-  `next_check_at` BEFORE each request, so a crash loop cannot hammer GitHub.
+  `auto: false` is final the same way; `Settings.Auto` is false whenever
+  `Check` is (`SourceCheck`), and it is a permission, not a promise: only an
+  install with `Install.NotifyOnly()` false acts on it. The updater re-reads it
+  before an automatic attempt (`autoUpdateAllowed`).
+- **One writer.** The checker's loop goroutine owns the state; `CheckNow`,
+  `Refresh`, `ApplyNow` and `Resume` are commands it serves, and readers get a
+  copied `Status`. It schedules on wall-clock deadlines saved in the state (a
+  1-minute tick compares them), so sleep cannot stall it, and it saves a
+  pessimistic `next_check_at` BEFORE each request, so a crash loop cannot
+  hammer GitHub.
+- **Wall time only.** The checker strips the monotonic reading from every
+  `Now()` (`update.New`; the monotonic clock stops during sleep). The soak and
+  the `max_defer` deadline run on GitHub's clock (`serverClock`) once a check
+  has carried a `Date`, and a spawn always rests on a release list fetched
+  within the last minute (`recheckFresh`).
+- **Never spawn without the record on disk.** `State.Spawn` is saved before
+  `Spawner.Spawn` (`Checker.spawn`), and `update.started` is recorded between
+  the two. A state file that cannot be saved means no spawn (`WaitSave`).
+- **Manual attempts are shown, never acted on.** Only `WhyAuto` and `WhyNow`
+  attempts feed blocks, backoff and the pause (`spawnedByDaemon`); only
+  `WhyAuto` rollbacks count toward the two-rollback pause. A `seamlessd update`
+  run by hand (`WhyManual`) is folded as the last attempt and nothing more.
+- **Attempt files are a frozen, additive format.**
+  `<data_dir>/update/attempt.json` and `attempts.jsonl`
+  (`internal/update/attempt.go`) are read by every release from the floor
+  (v0.7.0, the first with automatic updates) on, in both directions: add a
+  field, never rename, retype or repurpose one, and there is no schema number
+  to bump. Writers validate strictly (`ErrInvalidAttempt`); readers ignore
+  unknown fields and skip a history line that does not decode. Only the holder
+  of `update.LockPath` writes them; the daemon only reads. The Codex
+  `hooks.json` fingerprint (`codexHooksFingerprint`) is frozen the same way.
+- **Act on typed reasons, never on error text.** An attempt's `Error` is the
+  updater's free text for the owner's eyes; no surface branches on it. A gate
+  refusal is `Attempt.Refusal`, a fixed word `gates()` sets through
+  `refusalError`; surfaces read it with `AttemptResult.Refused()` and render
+  `update.RefusalWords`/`update.RefusalAction`, which return "" for a word this
+  release does not know (a plain failure).
+- **The updater runs outside the service, per OS.** The daemon starts
+  `seamlessd update --auto` only through its `update.Spawner`
+  (`update_spawn_<os>.go`): a Setsid child on darwin, a `systemd-run --user`
+  transient unit on Linux, a detached `CREATE_NO_WINDOW` child on Windows with
+  the on-demand Scheduled Task `SeamlessUpdate-<SID>` as the fallback, and no
+  spawner elsewhere. Never spawn it as a plain child, never tie it to the
+  daemon's context, and never hold `update.lock` in the daemon
+  (`updaterLockHeld` only try-locks it and lets go). The updater refuses to run
+  inside the service (`outsideServiceCheck`), and `seamlessd uninstall`
+  removes what the spawners leave (`serviceTeardown`).
 - **Not `config.HTTPClient`.** The release fetcher is an anonymous request to
   a public host: default TLS, proxy from the environment, https-only
   redirects, fixed User-Agent, never a token. `config.HTTPClient` stays the
@@ -282,9 +345,40 @@ release's own installer). Owner decisions: memory
   must never describe one that lost the port. `/healthz` serves the process's
   `instance` id for the same reason.
 - **Detection is a pure function.** `update.Detect` classifies from an
-  `update.Probe`; every OS read lives in `cmd/seamlessd/install_probe.go`, whose
-  parsers (plist, systemd unit, Task Scheduler XML, cgroup) are tested on
-  Linux with fixtures. Compare paths with `os.SameFile`, never strings.
+  `update.Probe`. `cmd/seamlessd/install_probe.go` gathers it through an
+  injected `installProbeEnv`, and its parsers (plist, systemd unit, Task
+  Scheduler XML, cgroup) are tested on Linux with fixtures. The Windows system
+  calls behind gate 9 (`parentImageName`, `isCurrentUser`) live in
+  `update_selfcheck_windows.go`, with stubs in `update_selfcheck_unix.go`.
+  Compare paths with `os.SameFile`, never strings.
+
+### Release discipline: the previous release must still run
+
+An automatic update rolls back to the release it replaced when the new one does
+not come up, and an owner can pin an older release (`SEAMLESS_VERSION`). The
+rollback restores the database only when the new release had migrated it, and
+never touches memories, notes or the config. These rules exist so a rollback
+to the previous release keeps working; the last keeps an update from silently
+disabling Codex's hooks.
+
+- **Migrations stay additive.** Add tables, columns and indexes; never drop,
+  rename or retype what the previous release reads. A rollback whose database
+  restore fails, and every deliberate downgrade, leaves the previous release
+  on the newer schema (`serve` and doctor's `schema version` row warn), and it
+  must still work.
+- **Startup file rewrites stay readable by the previous release.** A file a
+  daemon rewrites at startup (`update/state.json` is one) only gains fields,
+  and its readers ignore fields they do not know.
+- **New frontmatter fields are optional.** The previous release reads files a
+  newer one wrote and keeps unknown keys across a rewrite (`Extra` in
+  `internal/files/frontmatter.go`), but writes new files without the field.
+- **Config keys are only ever added.** The updater never edits the config and
+  `config.LoadFrom` decodes with `KnownFields`, so a renamed or removed key makes
+  the new release refuse a config the previous one accepted: its daemon never
+  comes up, and every update to it rolls back.
+- **A release that changes Codex hook definitions says so in its notes.**
+  Codex runs a changed hook only once it is re-approved in Codex's `/hooks`;
+  the updated daemon says so only on its own machine, after the fact.
 
 ### Benchmark scenarios and graders (`internal/bench`, `cmd/seambench`)
 
@@ -427,6 +521,14 @@ months. Workflow and flags: `cmd/seambench/README.md`. (`make seambench`, not
 3. For any change touching a recurring pattern above, grep for siblings and fix
    them together.
 
+CI (`.github/workflows/ci.yml`) runs `make check` on Linux, plus two jobs
+`check` cannot stand in for: `os-smoke` runs `go test -count=1` over
+`./cmd/seamlessd ./internal/update ./internal/agentproc` on `macos-latest` and
+`windows-latest` (`CGO_ENABLED=0`, no `-race`, `fail-fast: false`; Windows
+skips the names in `known_windows_failures`, so delete a name when its fix
+lands), and `config-lint` runs actionlint and `goreleaser check` with the
+release workflow's goreleaser range.
+
 `make install-git-hooks` (once per clone) enables `.githooks/pre-commit`, which
 runs **`make check-fast`** -- `check` minus build, vulncheck, and test-race (~3s
 against ~39s). It is a
@@ -457,7 +559,10 @@ files; use them.
 
 The observability console is `html/template` + vanilla JS + SSE, served by
 `internal/console` -- no node, npm, React, or build step. It is read-mostly: the
-writes are the owner's overrides and curation actions -- archive a memory, approve
-a plan, force-release a task's claim lock, ask/split/apply/dismiss/retarget a
-gardener proposal, and save or reset the briefing settings. Keep pages
-self-contained and dependency-free so an agent can edit them without a toolchain.
+writes are the owner's overrides and curation actions, among them -- archive a
+memory, approve a plan, force-release a task's claim lock,
+ask/split/apply/dismiss/retarget a gardener proposal, save or reset the
+briefing settings, switch update checks and automatic updates (or hand both
+back to the config), check for updates now, update now, and resume automatic
+updates. Keep pages self-contained and dependency-free so an agent can edit
+them without a toolchain.

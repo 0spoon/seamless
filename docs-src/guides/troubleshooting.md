@@ -394,16 +394,150 @@ same error with its cause.
 
 ## The update notice will not go away
 
-**What is happening.** A newer release is out, and the daemon says so in new
-sessions' briefings for a week after it first saw it, in the console, and in
-`seamlessd doctor`. Nothing installs itself.
+**What is happening.** A newer release is out that this install will not install
+by itself, and the daemon says so in new sessions' briefings for a week after it
+first saw it, in the console, and in `seamlessd doctor`. Either the install is
+only ever told - Homebrew, a build from source, a client machine, or a layout the
+daemon cannot vouch for ([who updates itself](/updating/#who-updates-itself)) -
+or its automatic updates are off, paused, or skip that release.
 
 **Fix.** Update with the command the notice names - it depends on how Seamless
 was installed (`seamlessd update`, `brew upgrade --cask arctop/tap/seamless`, or
 `git pull && make install`); the table in
-[automatic update checks](/updating/#automatic-update-checks) lists them. To stop
-hearing about updates instead, turn checks off in **Settings -> Updates** or set
-`update.check: false`.
+[automatic update checks](/updating/#automatic-update-checks) lists them. On an
+install that updates itself, **Settings -> Updates** says why it skips the
+release, and **Update now** installs it. To stop hearing about updates instead,
+turn checks off in **Settings -> Updates** or set `update.check: false`.
+
+## An automatic update is waiting {#an-automatic-update-is-waiting}
+
+**What is happening.** This install updates itself, a newer release is out, and
+it has not been installed yet. Usually that is the design working:
+[automatic updates](/updating/#when-it-installs) wait out a soak, then wait for a
+quiet daemon. **Settings -> Updates** says what this one waits for on its
+**Next update** row (and on the Home health strip's hover);
+`seamlessd update --check` prints the release and its deadline on its `target`
+and `pending` rows.
+
+| Next update says | Why | What to do |
+|---|---|---|
+| `installs by itself once it is 24h old` | The release is younger than `update.min_age`. | Wait, or use **Update now**. |
+| `waiting for 2 live agent sessions to go idle, or at a lull in requests in 19h` | Agents are working. Past `update.max_defer` it takes the next lull instead. | Nothing. |
+| `past its 24h deadline; waiting for 90s without requests` | Something keeps calling the daemon. | Nothing: at 1.5 times `max_defer` it installs once no request is in flight. An open **Interactions** page refreshes every 15 seconds, so closing it lets the lull come sooner. |
+| `waiting for 1 request in flight to finish` | A request is being served. | Nothing: at twice `max_defer` it installs anyway. |
+| `an earlier attempt failed; trying again in 1h` | The backoff after a failed attempt. | Read **Last attempt**; **Update now** does not wait for the backoff. |
+| `an updater is already running` | A `seamlessd update` holds the update lock. | Let it finish. |
+| `re-checking the release list in 12m before installing v0.7.3`, or `could not be re-checked` | Its copy of the release list is older than a minute, and it re-checks at most every 15 minutes. | Nothing; if the check keeps failing, see [the update check keeps failing](#the-update-check-keeps-failing). |
+| `live agent sessions could not be counted` | The database did not answer the count, which never counts as idle. | Run `seamlessd doctor`. |
+| `the update state could not be saved` | `~/.seamless/update/` cannot be written - a full disk, or permissions. | Free space or fix the permissions; an update never starts without its record on disk. |
+| `v0.7.3 carries no signed checksums bundle` | Automatic updates verify that bundle, and this release has none. | Update by hand with `seamlessd update`. |
+
+No **Next update** row at all means nothing is pending: the release sits under
+**Held back** (you went back to an older release) or **Skipped releases** (an
+update to it failed), or the **Mode** row says automatic updates are off or
+paused. [Automatic updates](/updating/#automatic-updates) covers each.
+
+## An automatic update failed {#an-automatic-update-failed}
+
+**What is happening.** An update the daemon started - by itself, or through
+**Update now** - did not apply. For a week every console page says so in a
+banner ("The update to v0.7.3 rolled back."), and three places read the same
+record:
+
+- **Settings -> Updates -> Last attempt**: the outcome, the updater's own error,
+  and its log;
+- `seamlessd doctor`, on its `updates` row;
+- `seamlessd update --check`, on its `last`, `error`, `log` and `backup` rows.
+
+The log, `~/.seamless/update/logs/<attempt>.log`, has every step and the
+installer's full output; the newest 20 logs are kept. The outcome says how bad
+it is:
+
+- **rolled back**, **failed** or **interrupted**: Seamless still runs the release
+  you had, and nothing is lost. Automatic updates skip a release that rolled
+  back or failed verification, and retry the rest after a backoff
+  ([when an update fails](/updating/#when-an-update-fails)). There is nothing to
+  do unless it keeps happening; the error says why.
+- **not rolled back**: the new release did not come up, and the release you had
+  could not be confirmed either, so the daemon may be down. Automatic updates
+  paused themselves, and the banner is red.
+
+**Fix, when it was not rolled back.** The error spells out the steps. In order:
+
+1. See whether the daemon runs: `seamlessd status`. If `seamlessd doctor` warns
+   on `tls trust`, read the TLS cause below first - the release you had is
+   probably running, and only its confirmation failed.
+2. Reinstall the release you had, pinned to it:
+
+   ```bash
+   curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.7.2 sh
+   ```
+
+   ```powershell
+   $env:SEAMLESS_VERSION='0.7.2'; irm https://thereisnospoon.org/install.ps1 | iex
+   ```
+
+3. Only if the data has to go back to how it was before the update, restore the
+   backup the error names. `seamlessd import --from <backup>` merges into a data
+   dir that already holds data, so a true restore needs an empty one: stop the
+   daemon, move the data dir aside, import, start.
+
+   ```bash
+   seamlessd stop
+   mv ~/.seamless ~/.seamless.broken
+   seamlessd import --from ~/.seamless.broken/backups/pre-update-v0.7.2-20261009T141500Z.tar.gz
+   seamlessd start
+   ```
+
+   ```powershell
+   seamlessd stop
+   Move-Item $HOME\.seamless $HOME\.seamless.broken
+   seamlessd import --from $HOME\.seamless.broken\backups\pre-update-v0.7.2-20261009T141500Z.tar.gz
+   seamlessd start
+   ```
+
+   The backup lives inside the data dir, so after the move its path starts with
+   the new name. Anything written after the backup was taken stays in the moved
+   directory.
+4. Once the install is healthy, press **Resume automatic updates** in
+   **Settings -> Updates**. The release that failed stays skipped.
+
+Causes worth knowing:
+
+- **The updater refused to start it.** The attempt failed while checking it may
+  install now (the `gates` stage), before anything changed. The daemon tries
+  again after the backoff, and is refused the same way until you act.
+  **Last attempt**, the console banner, `seamlessd doctor`'s `updates` row and
+  `seamlessd update --check`'s `fix` row name the cause and, while the daemon
+  still runs the release the attempt started from, the fix:
+
+  | The cause | The fix |
+  |---|---|
+  | the installed seamlessd is not the version the daemon runs - a release was installed without restarting the service | `seamlessd restart`, so the daemon runs the release on disk |
+  | the install no longer looks like one the installer manages | `seamlessd restart`, so the service re-reads how it was installed |
+  | the updater could not make sure it runs outside the service, which the installer restarts | update by hand from a terminal: `seamlessd update` |
+  | automatic updates were turned off before it began | nothing: that was your choice |
+- **A TLS daemon this machine cannot verify.** The updater confirms an update
+  through this machine's own client - the system's roots plus `tls.ca_file`,
+  dialing `server_url` - the one its hooks use. If that client cannot verify the
+  daemon's certificate, no update can be confirmed, and neither can the rollback
+  after it, so every attempt ends "not rolled back" and pauses automatic
+  updates. `seamlessd doctor`'s `tls trust` row warns about this and names the
+  repair; fix it before you resume.
+- **The rollback drill is on.** While `~/.seamless/update/test-fail-confirm`
+  exists, every update fails its confirmation on purpose and rolls back, and
+  `seamlessd doctor` warns on `update drill`. Delete the file.
+- **`not enough free space for the backup`.** The attempt stopped before
+  changing anything; the error says how much the backup needs. Free space on
+  the data dir's disk; it is retried after the backoff.
+- **The updater never started.** Nothing changed, and it is retried after the
+  backoff. The daemon's own log says why, on its
+  `update: could not start the updater` line;
+  [The updater on your OS](/reference/service/#the-updater) has where that log
+  is and what the updater needs.
+- **applied with warnings.** Not a failure: the new release serves, but the
+  installer reported a problem after it came up, usually while wiring the agent
+  clients. Run `seamlessd install-hooks`.
 
 ## `memory_write` says the name is held by a superseded memory
 

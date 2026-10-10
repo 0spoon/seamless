@@ -227,8 +227,12 @@ native commands, log locations, and every path Seamless touches are on
 
 ## Upgrading {#upgrading}
 
-`seamlessd update` upgrades in place to the newest release, on every OS -
-backed up, confirmed, and rolled back if the new release does not come up.
+From v0.7.0, an install the installer made updates itself: each new release is
+installed a day after it is published, at a moment no agent is using the daemon
+([automatic updates](/updating/#automatic-updates)). `seamlessd update` upgrades
+in place to the newest release right now, on every OS - backed up, confirmed,
+and rolled back if the new release does not come up. An install on v0.6.0 or
+older has no update check: run `seamlessd update` once by hand.
 [Update & uninstall](/updating/) has the full procedure, the pinning knobs,
 and how the release's installer and checksums are signature-verified first.
 
@@ -267,15 +271,19 @@ What you are accepting when you run this:
   `capture_url` to fetch, the GitHub release check and download that an
   explicit `seamlessd update` performs, and - on a release build - the
   [background update check](/updating/#automatic-update-checks): one anonymous
-  request to GitHub's releases API every 6 hours, carrying no identifiers.
-  `update.check: false` turns it off and means no update traffic at all.
+  request to GitHub's releases API every 6 hours, carrying no identifiers. On
+  an install the installer made, an
+  [automatic update](/updating/#automatic-updates) adds the same downloads
+  `seamlessd update` makes. `update.check: false` turns both off and means no
+  update traffic at all.
 - **Release authenticity has two layers.** Every installer verifies the
   archive's SHA-256 against `checksums.txt`. When `cosign` is installed it also
   verifies the manifest's keyless signature against this repository's release
   workflow identity; without cosign it warns clearly and continues with checksum
   integrity only - unless `SEAMLESS_CHECKSUMS_SHA256` pins the manifest to one
   its caller already verified, in which case any other manifest is refused and
-  the run says the signature was verified by seamlessd. `seamlessd update`
+  the run says the signature was verified by seamlessd. `seamlessd update` -
+  and every automatic update -
   separately verifies the target release's installer script and `checksums.txt`
   against their Sigstore bundles, in-process and by that release's exact tag,
   before executing anything, and pins the installer to that `checksums.txt`. `curl | sh` still means trusting the bytes served by the

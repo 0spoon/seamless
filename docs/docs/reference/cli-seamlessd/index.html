@@ -407,7 +407,15 @@ Checks stop early if config or the database cannot be loaded at all.</p>
 </tr>
 <tr>
 <td><code>updates</code></td>
-<td>The <a href="../../updating/#automatic-update-checks">automatic update check</a>, read from the daemon's own record (<code>~/.seamless/update/state.json</code>) without asking GitHub: <strong>ok</strong> when up to date, a <strong>warn</strong> naming the newer release and the command for this install, an <strong>info</strong> line when checks are off (and why) or have not run yet. A check failing for a week is a <strong>warn</strong> - usually a proxy the service's environment does not know about.</td>
+<td>The <a href="../../updating/#automatic-update-checks">automatic update check</a> and <a href="../../updating/#automatic-updates">automatic updates</a>, read from the daemon's and the updater's own records (<code>~/.seamless/update/state.json</code>, <code>attempt.json</code>) without asking GitHub or the daemon. One line, the most urgent thing first. An update that could not be rolled back cleanly, and that the daemon has not settled, is a <strong>warn</strong> carrying the updater's recovery steps and its log. An update under way is <strong>info</strong>. Automatic updates that paused themselves are a <strong>warn</strong> naming why, with the way out: resume them in the console under <strong>Settings &gt; Updates</strong>. A daemon that updates itself says, as <strong>info</strong>, what it installs next and when: once its soak (<code>update.min_age</code>) is over, then when no agent session is live, or at a lull in requests after its deadline (<code>update.max_defer</code>). A newer release that automatic updates skip (blocked after a failed attempt, or published without a signed checksums bundle) is a <strong>warn</strong> with the command to install it by hand; a hold after a deliberate downgrade is <strong>info</strong>. A daemon that only notifies is <strong>ok</strong> when up to date and a <strong>warn</strong> naming the newer release and the command for this install. The last attempt is added while it concerns the running release, with the updater's own error; one that applied with warnings names <code>seamlessd install-hooks</code>. One the updater's gates refused is a <strong>warn</strong> ending in the owner's action for that refusal: <code>seamlessd restart</code> when the installed seamlessd is not the version the daemon runs (a release installed without a restart) or the install no longer looks installer-made, and <code>seamlessd update</code>, run by hand, when the updater could not make sure it runs outside the service. Automatic updates turned off before it began need no action. <strong>info</strong> when checks are off (and why) or have not run yet. A check failing for a week is a <strong>warn</strong> - usually a proxy the service's environment does not know about.</td>
+</tr>
+<tr>
+<td><code>update drill</code></td>
+<td>Only while <code>~/.seamless/update/test-fail-confirm</code> exists: a <strong>warn</strong>, because the rollback drill's switch makes every update fail its confirmation and roll back. Delete the file to end the drill.</td>
+</tr>
+<tr>
+<td><code>tls trust</code></td>
+<td>Whether this machine's own client verifies the certificate the daemon serves for <code>server_url</code>. That client is the one its hooks dial with, and the one an update confirms the new daemon through. The answer comes from the config (the system roots plus <code>tls.ca_file</code>) without a dial, so it answers while the daemon is down. <strong>ok</strong> when the client verifies it; otherwise a <strong>warn</strong> naming the repair, since every update would fail its confirmation, and so would its rollback's: the attempt ends not rolled back and automatic updates pause. A <code>tls.ca_file</code> that cannot be loaded warns on any install. Absent when TLS is off and the client is usable.</td>
 </tr>
 </tbody>
 </table>
@@ -806,7 +814,9 @@ procedure.</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall <span class="o">[</span>--client claude<span class="p">|</span>claude-desktop<span class="p">|</span>codex<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--yes<span class="o">]</span> <span class="o">[</span>--purge<span class="o">]</span>
 </span></span></code></pre></div>
 <p>Reverses a full install on any supported OS: stops and removes the per-user
-service, strips the Seamless hook entries, deregisters the MCP server
+service and what <a href="../../reference/service/#the-updater">the updater</a> leaves behind
+(a Linux update unit still running, the Windows update task), strips the
+Seamless hook entries, deregisters the MCP server
 (including the chat surface's <code>claude_desktop_config.json</code> entry - only the
 reserved <code>seamless</code> key is removed, everything else stays byte-for-byte),
 removes the installed skills, and deletes the binaries. Config and the data dir
@@ -911,8 +921,9 @@ verified manifest (<code>SEAMLESS_CHECKSUMS_SHA256</code>).</p>
 counts the update only once the new release answers <code>/healthz</code> as a freshly
 started daemon that is still the same one ten seconds later, and otherwise
 rolls back to the release you had. Each such run is recorded in
-<code>~/.seamless/update/</code>. Already on the newest release, it says so and changes
-nothing. <a href="../../updating/">Update &amp; uninstall</a> has the details.</p>
+<code>~/.seamless/update/</code>. A daemon that <a href="../../updating/#automatic-updates">updates itself</a>
+runs this same engine unattended. Already on the newest release, it says so
+and changes nothing. <a href="../../updating/">Update &amp; uninstall</a> has the details.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -926,7 +937,7 @@ nothing. <a href="../../updating/">Update &amp; uninstall</a> has the details.</
 <tr>
 <td><code>--check</code></td>
 <td><code>false</code></td>
-<td>Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's <a href="../../updating/#automatic-update-checks">update check</a> is doing: its mode and when it last checked. It asks even when <code>update.check</code> is <code>false</code>, because running it is you asking.</td>
+<td>Report installed vs the newest release and exit without changing anything. It reads GitHub's release list - the highest version that is not a draft, a prerelease, or still uploading its assets - and adds what the daemon's <a href="../../updating/#automatic-update-checks">update check</a> and <a href="../../updating/#automatic-updates">automatic updates</a> have recorded: the mode and the last check; for a daemon that updates itself, the release it installs next with its soak (<code>target</code>) and the deadline (<code>pending</code>); an update under way; the last attempt with the updater's error, log and backup (and a <code>fix</code> row: <code>seamlessd install-hooks</code> after one that applied with warnings, or the owner's action - <code>seamlessd restart</code>, or <code>seamlessd update</code> by hand - after one the updater's gates refused while the daemon still runs the release it started from); a hold, a pause, blocked releases, a backoff, and the rollback drill while it is on. These come from the records, so they print even when the release list cannot be read. It asks even when <code>update.check</code> is <code>false</code>, because running it is you asking.</td>
 </tr>
 <tr>
 <td><code>--dry-run</code></td>
@@ -949,8 +960,10 @@ nothing. <a href="../../updating/">Update &amp; uninstall</a> has the details.</
 <p>The installer's env knobs pass through, and a knob you set wins:
 <code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version (older ones too),
 <code>SEAMLESS_INSTALL_DIR=...</code> retargets, exactly as the curl installer does.
-<code>--auto</code> and its <code>--attempt</code>/<code>--from</code>/<code>--to</code>/<code>--why</code> belong to the daemon's
-unattended updater; they are not for interactive use.</p>
+<code>--auto</code> with <code>--attempt</code>, <code>--from</code>, <code>--to</code> and <code>--why</code> is the command line a
+daemon that updates itself starts its updater with, outside the service
+(<a href="../../reference/service/#the-updater">The updater on your OS</a>). It is not for
+interactive use, and it refuses <code>--check</code>, <code>--dry-run</code> and <code>--url</code>.</p>
 <h2 id="seamlessd_map_repo">seamlessd map-repo</h2>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --project SLUG <span class="o">[</span>--path DIR<span class="o">]</span>
 </span></span></code></pre></div>

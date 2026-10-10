@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Architecture - Seamless docs</title>
-<meta name="description" content="The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.">
+<meta name="description" content="The package layering, what each package owns, three data-flow traces through the real code, and the things Seamless deliberately does not have.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/internals/architecture/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/internals/architecture/">
 <meta property="og:title" content="Architecture - Seamless docs">
-<meta property="og:description" content="The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.">
+<meta property="og:description" content="The package layering, what each package owns, three data-flow traces through the real code, and the things Seamless deliberately does not have.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - sessions end. What they learned doesn&#39;t.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Internals","item":"https://thereisnospoon.org/docs/internals/"},{"@type":"ListItem","position":3,"name":"Architecture","item":"https://thereisnospoon.org/docs/internals/architecture/"}]},{"@type":"TechArticle","headline":"Architecture - Seamless docs","description":"The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.","url":"https://thereisnospoon.org/docs/internals/architecture/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Internals","item":"https://thereisnospoon.org/docs/internals/"},{"@type":"ListItem","position":3,"name":"Architecture","item":"https://thereisnospoon.org/docs/internals/architecture/"}]},{"@type":"TechArticle","headline":"Architecture - Seamless docs","description":"The package layering, what each package owns, three data-flow traces through the real code, and the things Seamless deliberately does not have.","url":"https://thereisnospoon.org/docs/internals/architecture/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#eef1f5">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#070a13">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -226,11 +226,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 </nav>
 
   <h1>Architecture</h1>
-  <p class="lede">The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.</p>
+  <p class="lede">The package layering, what each package owns, three data-flow traces through the real code, and the things Seamless deliberately does not have.</p>
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#the-layering">The layering</a></li><li class="lvl-2"><a href="#package-responsibilities">Package responsibilities</a></li><li class="lvl-2"><a href="#trace-memory-write-from-tool-call-to-file-on-disk">Trace: memory_write, from tool call to file on disk</a></li><li class="lvl-2"><a href="#trace-sessionstart-from-claude-code-to-injected-briefing">Trace: SessionStart, from Claude Code to injected briefing</a></li><li class="lvl-2"><a href="#the-deliberate-nos">The deliberate no&#39;s</a></li><li class="lvl-2"><a href="#where-to-go-next">Where to go next</a></li>
+      <li class="lvl-2"><a href="#the-layering">The layering</a></li><li class="lvl-2"><a href="#package-responsibilities">Package responsibilities</a></li><li class="lvl-2"><a href="#trace-memory-write-from-tool-call-to-file-on-disk">Trace: memory_write, from tool call to file on disk</a></li><li class="lvl-2"><a href="#trace-sessionstart-from-claude-code-to-injected-briefing">Trace: SessionStart, from Claude Code to injected briefing</a></li><li class="lvl-2"><a href="#trace-an-automatic-update-from-decision-to-restarted-daemon">Trace: an automatic update, from decision to restarted daemon</a></li><li class="lvl-2"><a href="#the-deliberate-nos">The deliberate no&#39;s</a></li><li class="lvl-2"><a href="#where-to-go-next">Where to go next</a></li>
     </ul>
   </details>
   <p>Seamless ships two Go binaries: the <code>seamlessd</code> daemon and the <code>seam</code> CLI. The
@@ -246,7 +246,7 @@ layers, who owns what, and how a write and a read actually travel through them.<
   <div class="doc-stack">
     <div class="flow-node"><span class="flow-step">Entry points</span><strong>cmd/seamlessd · cmd/seam · cmd/docsgen</strong><small>Wire dependencies and process boundaries.</small></div>
     <div class="flow-node"><span class="flow-step">API surfaces</span><strong>internal/mcp · hooks · console</strong><small>Translate HTTP, MCP, hooks, and UI requests; own no domain policy.</small></div>
-    <div class="flow-node emphasis"><span class="flow-step">Domains</span><strong>retrieve · lifecycle · gardener · files · plans · capture · importer</strong><small>Business rules and reusable workflows.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">Domains</span><strong>retrieve · lifecycle · gardener · files · plans · capture · importer · update</strong><small>Business rules and reusable workflows.</small></div>
     <div class="flow-node"><span class="flow-step">Foundations</span><strong>store · events · llm · markdown · core · config · validate</strong><small>Leaves, or nearly so; never reach upward.</small></div>
   </div>
   <figcaption id="layering-caption">Imports move downward. Shared behavior moves into a lower layer rather than sideways through another surface.</figcaption>
@@ -372,6 +372,12 @@ violation is visible in the import block.</p>
 <td><code>core</code>, <code>files</code>, <code>store</code></td>
 </tr>
 <tr>
+<td><code>update</code></td>
+<td>domain</td>
+<td>The background update check and automatic updates: the GitHub release list, install-kind detection (<code>Detect</code>, a pure function of the probe <code>cmd/seamlessd</code> gathers), the policy that picks a release and a moment (<code>Target</code>, <code>Decide</code>), folding the updater's attempt records into blocks, backoff, holds and pauses, <code>&lt;data_dir&gt;/update/state.json</code>, and the <code>Status</code> every surface renders. It decides and records; installing is the detached <code>seamlessd update --auto</code> that <code>cmd/seamlessd</code> starts.</td>
+<td><code>config</code>, <code>core</code></td>
+</tr>
+<tr>
 <td><code>mcp</code></td>
 <td>surface</td>
 <td>The tool surface over streamable HTTP, plus session bindings (per connection, and by agent process) and scope resolution.</td>
@@ -451,6 +457,36 @@ invisible, which is why <code>seamlessd doctor</code> and <code>seam doctor</cod
 they are partitioned out before the trim ever sees them. And step 14 runs after
 step 13 so the recorded event contains exactly the text the agent received,
 ambient line included, rather than the briefing as it looked one step earlier.</p>
+<h2 id="trace-an-automatic-update-from-decision-to-restarted-daemon">Trace: an automatic update, from decision to restarted daemon</h2>
+<figure class="doc-figure" aria-labelledby="update-trace-caption">
+  <span class="figure-kicker">Automatic update trace</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node"><span class="flow-step">Checker · every minute</span><strong>Fold, target, decide</strong><small>Settle the updater's last record; pick the newest release that has soaked by GitHub's clock, carries signed checksums and is neither blocked nor held; wait for an idle daemon or a lull past <code>max_defer</code>.</small></div>
+    <div class="flow-node"><span class="flow-step">Spawn</span><strong>Record, then hand off</strong><small>Re-check a release list older than a minute; save the spawn and record <code>update.started</code>; the OS spawner starts <code>seamlessd update --auto</code> outside the service.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">Updater</span><strong>Verify, back up, install</strong><small>Take <code>update.lock</code>; re-run the gates; verify the release's installer and checksums against its exact tag; prove the rollback; archive the instance; run the installer, which restarts the service.</small></div>
+    <div class="flow-node success"><span class="flow-step">Confirm</span><strong>Observe, or roll back</strong><small>A new daemon of the new release, the same one ten seconds later; otherwise put the database back if it was migrated and reinstall the old release. The record goes to <code>attempt.json</code> for the new daemon to fold.</small></div>
+  </div>
+  <figcaption id="update-trace-caption">The daemon decides and records; a separate process, outside the service, does the installing.</figcaption>
+</figure>
+<p>Three things in that path are decisions, not mechanics:</p>
+<p><strong>The decision and the act live in different processes.</strong> The daemon is the
+thing being replaced, so it cannot install itself: the installer's service
+restart would kill it mid-swap. It starts the updater where that restart cannot
+reach (per OS, <a href="../../reference/service/#the-updater">The updater on your OS</a>), and
+the two talk only through files. The daemon writes <code>state.json</code>; the updater,
+holding <code>update.lock</code>, writes <code>attempt.json</code> and <code>attempts.jsonl</code>. Every release
+reads every other release's records, so their format only ever gains fields
+(see <a href="../../internals/invariants/#automatic-updates">Domain invariants</a>).</p>
+<p><strong>There is one upgrade implementation.</strong> The updater runs the same installer
+script a fresh install runs, after verifying its Sigstore bundle in-process.
+It fetches only installers, checksums and their signatures, and swaps no
+binary itself. A manual <code>seamlessd update</code> runs the same engine, attended.</p>
+<p><strong>Success is observed, not reported.</strong> The installer's exit code decides
+nothing. The update counts only once <code>/healthz</code> answers from a new process of
+the new release, the one the update state names as running, and the same one
+ten seconds later. An installer that exits non-zero while the new release
+serves is &quot;applied with warnings&quot;. A release that never answers is rolled back
+and blocked for automatic updates.</p>
 <h2 id="the-deliberate-nos">The deliberate no's</h2>
 <p>Each of these is a thing Seamless could have and does not.</p>
 <p><strong>No CGO.</strong> The database is <code>modernc.org/sqlite</code>, a pure-Go SQLite. <code>go build</code>
@@ -509,7 +545,7 @@ a tool.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-layering">The layering</a></li><li class="lvl-2"><a href="#package-responsibilities">Package responsibilities</a></li><li class="lvl-2"><a href="#trace-memory-write-from-tool-call-to-file-on-disk">Trace: memory_write, from tool call to file on disk</a></li><li class="lvl-2"><a href="#trace-sessionstart-from-claude-code-to-injected-briefing">Trace: SessionStart, from Claude Code to injected briefing</a></li><li class="lvl-2"><a href="#the-deliberate-nos">The deliberate no&#39;s</a></li><li class="lvl-2"><a href="#where-to-go-next">Where to go next</a></li>
+      <li class="lvl-2"><a href="#the-layering">The layering</a></li><li class="lvl-2"><a href="#package-responsibilities">Package responsibilities</a></li><li class="lvl-2"><a href="#trace-memory-write-from-tool-call-to-file-on-disk">Trace: memory_write, from tool call to file on disk</a></li><li class="lvl-2"><a href="#trace-sessionstart-from-claude-code-to-injected-briefing">Trace: SessionStart, from Claude Code to injected briefing</a></li><li class="lvl-2"><a href="#trace-an-automatic-update-from-decision-to-restarted-daemon">Trace: an automatic update, from decision to restarted daemon</a></li><li class="lvl-2"><a href="#the-deliberate-nos">The deliberate no&#39;s</a></li><li class="lvl-2"><a href="#where-to-go-next">Where to go next</a></li>
     </ul>
   </aside>
   
