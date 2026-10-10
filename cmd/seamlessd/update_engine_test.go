@@ -419,7 +419,11 @@ func TestAutoUpdate_ARollbackThatFailsSaysTheDaemonMayBeDown(t *testing.T) {
 	require.Error(t, err)
 	requireRecorded(t, w, a, update.StageRollback, false)
 	require.Contains(t, a.Error, "may be down")
-	require.Contains(t, a.Error, a.BackupPath)
+	// The backup lives in <data>/backups, so the recovery text names it where
+	// it sits after the data dir moves aside.
+	data := filepath.Dir(filepath.Dir(a.BackupPath))
+	require.Contains(t, a.Error, "move the data dir aside to "+data+".broken")
+	require.Contains(t, a.Error, "seamlessd import --from "+filepath.Join(data+".broken", "backups", filepath.Base(a.BackupPath)))
 }
 
 func TestAutoUpdate_ANonZeroExitWithTheReleaseServingIsAppliedWithWarnings(t *testing.T) {
@@ -750,4 +754,22 @@ func TestAttemptRecorder_HeartbeatsFromItsTimer(t *testing.T) {
 	require.Equal(t, update.StageGates, read.Stage)
 	require.True(t, read.Finished())
 	require.Equal(t, update.RefusalSelfCheck, read.Refusal)
+}
+
+// TestMovedBackupPath: the recovery text names the backup where it sits once
+// the data dir has moved aside, since backups/ lives inside the data dir.
+func TestMovedBackupPath(t *testing.T) {
+	data := filepath.Join(t.TempDir(), "seamless")
+	moved := data + ".broken"
+	for _, tc := range []struct {
+		name, backup, want string
+	}{
+		{"inside the data dir", filepath.Join(data, "backups", "pre-update-v0.7.2.tar.gz"), filepath.Join(moved, "backups", "pre-update-v0.7.2.tar.gz")},
+		{"outside it", filepath.Join(filepath.Dir(data), "elsewhere", "b.tar.gz"), filepath.Join(filepath.Dir(data), "elsewhere", "b.tar.gz")},
+		{"a sibling sharing the prefix", data + "-old" + string(filepath.Separator) + "b.tar.gz", data + "-old" + string(filepath.Separator) + "b.tar.gz"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, movedBackupPath(data, moved, tc.backup))
+		})
+	}
 }

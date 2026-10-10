@@ -926,7 +926,7 @@ func updateDrillCheck(cfg config.Config) (check, bool) {
 // say.
 func tlsTrustCheck(cfg config.Config) (check, bool) {
 	const name = "tls trust"
-	const consequence = "this machine's hooks cannot reach the daemon, and every update would fail its confirmation and roll back"
+	const consequence = "this machine's hooks cannot reach the daemon, and every update would fail its confirmation and then its rollback's, ending not rolled back with automatic updates paused"
 	hc, err := cfg.HTTPClient(0)
 	if err != nil {
 		return check{statusWarn, name, err.Error() + " -- " + consequence + "; fix or unset tls.ca_file"}, true

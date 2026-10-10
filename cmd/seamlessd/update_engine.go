@@ -857,15 +857,28 @@ func (u *updater) rollback(ctx context.Context, target, back releaseAssets, caus
 // rollbackFailed is a rollback that could not confirm its target: the daemon
 // may be down, and the record says how to recover.
 func (u *updater) rollbackFailed(target, back releaseAssets, cause, reason string, notes []string) outcome {
+	moved := u.dataDir() + ".broken"
 	msg := fmt.Sprintf("v%s did not come up (%s), and the rollback to v%s was not confirmed (%s); the daemon may be down: "+
 		"check it with seamlessd status, reinstall v%s with SEAMLESS_VERSION=%s and the installer one-liner, "+
-		"and to bring the data back as it was, stop the daemon, move the data dir aside and run seamlessd import --from %s",
-		target.version, cause, back.version, reason, back.version, back.version, u.backup.path)
+		"and to bring the data back as it was, stop the daemon, move the data dir aside to %s and run seamlessd import --from %s",
+		target.version, cause, back.version, reason, back.version, back.version, moved, movedBackupPath(u.dataDir(), moved, u.backup.path))
 	if len(notes) > 0 {
 		msg += "; " + strings.Join(notes, "; ")
 	}
 	u.note("rollback", "%s", yellow("not confirmed")+dim(" -- "+reason))
 	return outcome{stage: update.StageRollback, err: msg}
+}
+
+// movedBackupPath is where the backup sits once the data dir has moved aside
+// to moved: the backup lives inside the data dir (backups/), so the path the
+// updater wrote it to is gone after the move. A backup outside the data dir
+// keeps its own path.
+func movedBackupPath(dataDir, moved, backup string) string {
+	rel, err := filepath.Rel(dataDir, backup)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return backup
+	}
+	return filepath.Join(moved, rel)
 }
 
 // waitDaemonGone waits until no process holds the data dir's lock, up to

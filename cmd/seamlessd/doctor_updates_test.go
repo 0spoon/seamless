@@ -194,7 +194,7 @@ func finishedRecord(t *testing.T, now time.Time, to update.Version, why string, 
 // steps, the backup path among them (update_engine.go's rollbackFailed).
 const failedRollbackError = "v0.7.3 did not come up (no answer), and the rollback to v0.7.2 was not confirmed (no answer); " +
 	"the daemon may be down: check it with seamlessd status, reinstall v0.7.2 with SEAMLESS_VERSION=0.7.2 and the installer one-liner, " +
-	"and to bring the data back as it was, stop the daemon, move the data dir aside and run seamlessd import --from /data/backups/pre-update-v0.7.2-20261009T114500Z.tar.gz"
+	"and to bring the data back as it was, stop the daemon, move the data dir aside to /data.broken and run seamlessd import --from /data.broken/backups/pre-update-v0.7.2-20261009T114500Z.tar.gz"
 
 // gateRefusal is the gates stage's refusal when the seamlessd on disk is not
 // the release the daemon runs: T on disk, F running.
@@ -919,7 +919,7 @@ func TestTLSTrustCheck(t *testing.T) {
 			require.Equal(t, tc.status, c.status, c.detail)
 			require.Contains(t, c.detail, tc.want)
 			if tc.status == statusWarn {
-				require.Contains(t, c.detail, "every update would fail its confirmation and roll back")
+				require.Contains(t, c.detail, "every update would fail its confirmation and then its rollback's")
 			}
 			if tc.fix != "" {
 				require.Contains(t, c.detail, tc.fix)
