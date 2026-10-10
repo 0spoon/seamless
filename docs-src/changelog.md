@@ -15,6 +15,14 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.7.1 {#v0-7-1}
+
+Released 2026-10-10 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.7.1)
+
+### Fixes
+
+- fix(console): the update ledger names a gate refusal; blocks say what clears them
+
 ## v0.7.0 {#v0-7-0}
 
 Released 2026-10-10 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.7.0)
