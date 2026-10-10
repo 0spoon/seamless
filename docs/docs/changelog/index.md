@@ -10,6 +10,54 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](https://thereisnospoon.org/docs/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.7.0 {#v0-7-0}
+
+Released 2026-10-10 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.7.0)
+
+### Features
+
+- feat(update): a typed reason for the updater's gate refusals
+- feat(seamlessd): wire automatic updates into the running daemon (2.13)
+- feat(release): Developer ID-sign and notarize the macOS binaries
+- feat(seamlessd): the Windows updater starts as a detached child first
+- feat(seamlessd): the daemon can start the updater outside its service, per OS
+- feat(console): Settings &gt; Updates drives automatic updates
+- feat(seamlessd): doctor and update --check report automatic updates
+- feat(seamlessd): the updater engine, and a manual update that can roll back
+- feat(update): the daemon decides when to install, and folds what happened
+- feat(seam): a hook's dial retry follows what losing it costs
+- feat(update): a why for an attended seamlessd update
+- feat(seamlessd): one daemon per data dir, and install-hooks never migrates
+- feat(seam): mcp-proxy and hooks ride out a daemon restart
+- feat(update): the attempt contract between the daemon and the updater
+- feat(config): update.auto, max_defer and min_age
+- feat(seamlessd): an activity tracker for the update decision
+- feat(seamlessd): wire the update check into the daemon and the CLIs
+- feat(console): Settings &gt; Updates, the version fact, an updated banner
+- feat(retrieve): a slot for the update notice in the briefing
+- feat(update): an anonymous check for new Seamless releases
+- feat(cli): unmap-repo --host removes another machine's mapping on a shared daemon
+- feat(cli): seamlessd retire-project retires a mistakenly minted project
+- feat(mcp): a session= handle on every tool, ready for MCP's stateless revision
+
+### Fixes
+
+- fix(seamlessd): recovery text names the backup where it sits after the move
+- fix(seamlessd): Windows stop and restart wait for the old daemon to exit
+- fix(install): retry the launchd bootstrap every 0.1s, not every second
+- fix(install): installers an unattended update can drive
+- fix(site): stop the Claude app page scrolling sideways on phones
+- fix(seamlessd): report the toolchain's version for builds no ldflags stamped
+- fix(config): define the wildcard host once, by address rather than spelling
+
+### Other
+
+- refactor(update): one home for the automatic-update wording
+- build(check): vet darwin and windows in make check
+- build(lint): pin golangci-lint v2.14.0, which reads go1.27.2's export data
+- build(release): strip cask quarantine with postflight_steps, not a Ruby postflight
+- build(deps): move to mcp-go v1.1.1, keeping clients on session-based MCP revisions
+
 ## v0.6.0 {#v0-6-0}
 
 Released 2026-10-09 - [downloads and notes](https://github.com/arctop/seamless/releases/tag/v0.6.0)
