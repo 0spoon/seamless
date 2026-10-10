@@ -11152,7 +11152,8 @@ every time, even when the rendered plist is unchanged: each build is a new
 binary, and kickstarting the loaded job in place after its binary was swapped
 runs it against the code-signing identity launchd cached, which macOS 26 kills,
 leaving the daemon down for launchd's 10s throttle. Its marginal cost over
-`make build` is two file copies and a restart of about a second.
+`make build` is two file copies and a restart of about a second and a half,
+nearly all of it the new binary starting up.
 
 ```bash
 make build      # compile only; nothing live changes

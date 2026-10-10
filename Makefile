@@ -505,9 +505,11 @@ console-chrome: build
 # retries, but only once the 10s throttle interval elapses -- so the daemon
 # returns ~10s late (blowing _wait-healthy) and every install leaves a crash
 # report. bootout/bootstrap re-registers the job against the new binary, so the
-# first spawn survives and the restart costs about a second, most of it the
-# daemon's own startup. Go binaries are adhoc linker-signed with no CMS blob,
-# which is what the constraint rejects; nothing here can be signed away.
+# first spawn survives and the restart costs about a second and a half, nearly
+# all of it the new binary's own startup (1.42s from the shutdown signal to
+# listening, measured on a make install on 2026-10-09). Go binaries are adhoc
+# linker-signed with no CMS blob, which is what the constraint rejects; nothing
+# here can be signed away.
 _reload-service:
 	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
 	@booted=0; \

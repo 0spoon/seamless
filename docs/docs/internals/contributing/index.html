@@ -257,7 +257,8 @@ every time, even when the rendered plist is unchanged: each build is a new
 binary, and kickstarting the loaded job in place after its binary was swapped
 runs it against the code-signing identity launchd cached, which macOS 26 kills,
 leaving the daemon down for launchd's 10s throttle. Its marginal cost over
-<code>make build</code> is two file copies and a restart of about a second.</p>
+<code>make build</code> is two file copies and a restart of about a second and a half,
+nearly all of it the new binary starting up.</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make build      <span class="c1"># compile only; nothing live changes</span>
 </span></span><span class="line"><span class="cl">make install    <span class="c1"># ...and now it does</span>
 </span></span><span class="line"><span class="cl">make logs       <span class="c1"># follow ~/.seamless/seamlessd.log</span>
