@@ -116,6 +116,33 @@ func TestAttempt_FieldNamesAreFrozen(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &m))
 	require.Equal(t, []string{"from", "heartbeat_at", "id", "ok", "rolled_back", "stage", "started_at", "to", "why"},
 		slices.Sorted(maps.Keys(m)))
+
+	// A refusal adds its one key, a fixed word; nothing else does.
+	refused := failedAt(runningAttempt(t, attemptNow), StageGates, attemptNow)
+	refused.Refusal = RefusalStaleBinary
+	raw, err = json.Marshal(refused)
+	require.NoError(t, err)
+	m = nil
+	require.NoError(t, json.Unmarshal(raw, &m))
+	require.Equal(t, []string{
+		"backup_path", "error", "finished_at", "from", "heartbeat_at", "id", "log_path",
+		"ok", "refusal", "rolled_back", "stage", "started_at", "to", "why",
+	}, slices.Sorted(maps.Keys(m)))
+	require.Equal(t, "stale_binary", m["refusal"])
+}
+
+// The refusal words are what every release reads every other one's records
+// by, as the stage and why words are: renaming one breaks reading across
+// versions, so they are pinned here.
+func TestRefusal_WordsAreFrozen(t *testing.T) {
+	require.Equal(t, []string{"not_installer", "stale_binary", "self_check", "auto_off"},
+		[]string{RefusalNotInstaller, RefusalStaleBinary, RefusalSelfCheck, RefusalAutoOff})
+	for _, r := range refusals {
+		require.True(t, KnownRefusal(r), r)
+	}
+	for _, r := range []string{"", "disk_full", "STALE_BINARY", "stale_binary "} {
+		require.False(t, KnownRefusal(r), "%q", r)
+	}
 }
 
 func TestReadAttempt_MissingIsNone(t *testing.T) {
@@ -155,8 +182,22 @@ func TestReadAttempt_AcrossVersions(t *testing.T) {
 			want: Attempt{ID: id, From: Version{0, 7, 1}, To: Version{0, 7, 2}, FinishedAt: start, OK: true, Stage: StageDone},
 		},
 		"nulls read as zero": {
-			body: `{"id":"` + id + `","from":null,"to":"0.7.2","finished_at":null,"error":null}`,
+			body: `{"id":"` + id + `","from":null,"to":"0.7.2","finished_at":null,"error":null,"refusal":null}`,
 			want: Attempt{ID: id, To: Version{0, 7, 2}},
+		},
+		"a gate refusal from before refusals had a word": {
+			body: `{"id":"` + id + `","from":"0.7.2","to":"0.7.3","why":"auto",` +
+				`"started_at":"2026-10-09T12:00:00Z","heartbeat_at":"2026-10-09T12:01:00Z","finished_at":"2026-10-09T12:01:00Z",` +
+				`"ok":false,"rolled_back":false,"stage":"gates","error":"gates: the installed seamlessd is not v0.7.2"}`,
+			want: Attempt{ID: id, From: Version{0, 7, 2}, To: Version{0, 7, 3}, Why: WhyAuto,
+				StartedAt: start, HeartbeatAt: start.Add(time.Minute), FinishedAt: start.Add(time.Minute),
+				Stage: StageGates, Error: "gates: the installed seamlessd is not v0.7.2"},
+		},
+		"a newer updater's refusal word": {
+			body: `{"id":"` + id + `","from":"0.7.2","to":"0.8.0","why":"auto","finished_at":"2026-10-09T12:00:00Z",` +
+				`"stage":"gates","error":"gates: the disk is full","refusal":"disk_full"}`,
+			want: Attempt{ID: id, From: Version{0, 7, 2}, To: Version{0, 8, 0}, Why: WhyAuto, FinishedAt: start,
+				Stage: StageGates, Error: "gates: the disk is full", Refusal: "disk_full"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -200,15 +241,24 @@ func TestWriteAttempt_AcceptsEveryOutcome(t *testing.T) {
 	rolledBack.RolledBack = true
 	bare := failedAt(running, StageGates, attemptNow)
 	bare.Error, bare.LogPath, bare.BackupPath = "", "", ""
+	refused := func(why, refusal string) Attempt {
+		a := failedAt(running, StageGates, attemptNow)
+		a.Why, a.Refusal = why, refusal
+		return a
+	}
 	for name, a := range map[string]Attempt{
-		"just locked":        locked,
-		"running":            running,
-		"applied":            succeeded(running, attemptNow),
-		"failed pre-swap":    failedAt(running, StageFetch, attemptNow),
-		"failed to verify":   failedAt(running, StageVerify, attemptNow),
-		"rolled back":        rolledBack,
-		"rollback failed":    failedAt(running, StageRollback, attemptNow),
-		"no paths, no error": bare,
+		"just locked":                    locked,
+		"running":                        running,
+		"applied":                        succeeded(running, attemptNow),
+		"failed pre-swap":                failedAt(running, StageFetch, attemptNow),
+		"failed to verify":               failedAt(running, StageVerify, attemptNow),
+		"rolled back":                    rolledBack,
+		"rollback failed":                failedAt(running, StageRollback, attemptNow),
+		"no paths, no error":             bare,
+		"refused: not installer":         refused(WhyAuto, RefusalNotInstaller),
+		"refused: stale binary":          refused(WhyAuto, RefusalStaleBinary),
+		"refused: self-check":            refused(WhyNow, RefusalSelfCheck),
+		"refused: automatic updates off": refused(WhyAuto, RefusalAutoOff),
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -245,6 +295,19 @@ func TestWriteAttempt_RefusesWhatThisReleaseWouldNotWrite(t *testing.T) {
 		"ok but not finished":       func(a *Attempt) { a.Stage, a.OK = StageDone, true },
 		"ok and rolled back":        func(a *Attempt) { *a = succeeded(*a, attemptNow); a.RolledBack = true },
 		"rolled back outside stage": func(a *Attempt) { a.RolledBack = true },
+		"an unknown refusal": func(a *Attempt) {
+			*a = failedAt(*a, StageGates, attemptNow)
+			a.Refusal = "disk_full"
+		},
+		"a refusal outside the gates": func(a *Attempt) {
+			*a = failedAt(*a, StageFetch, attemptNow)
+			a.Refusal = RefusalStaleBinary
+		},
+		"a refusal before it finished": func(a *Attempt) { a.Stage, a.Refusal = StageGates, RefusalStaleBinary },
+		"a refusal on an attended update": func(a *Attempt) {
+			*a = failedAt(*a, StageGates, attemptNow)
+			a.Why, a.Refusal = WhyManual, RefusalSelfCheck
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()

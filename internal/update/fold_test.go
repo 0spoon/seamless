@@ -1,6 +1,8 @@
 package update
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -58,6 +60,65 @@ func TestClassify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.want, Classify(tt.a, tt.running))
 		})
+	}
+}
+
+// A gate refusal's word is display only: an attempt.json written before
+// refusals had a word decodes and folds exactly as it always did, and the
+// same attempt with a word -- known or a newer updater's -- folds to the same
+// state, the word kept as is on the last attempt.
+func TestFold_RefusalChangesNothingButTheLastAttempt(t *testing.T) {
+	const old = `{"id":"01K7A0000000000000000000A1","from":"0.7.2","to":"0.7.3","why":"auto",` +
+		`"started_at":"2026-10-09T11:50:00Z","heartbeat_at":"2026-10-09T11:51:00Z","finished_at":"2026-10-09T11:51:00Z",` +
+		`"ok":false,"rolled_back":false,"stage":"gates","error":"gates: the installed seamlessd is not v0.7.2"}`
+	fold := func(t *testing.T, body string) State {
+		t.Helper()
+		dir := t.TempDir()
+		require.NoError(t, os.MkdirAll(StateDir(dir), 0o700))
+		require.NoError(t, os.WriteFile(AttemptPath(dir), []byte(body), 0o600))
+		a, err := ReadAttempt(dir)
+		require.NoError(t, err)
+		var st State
+		outcome := Classify(a, a.From)
+		require.True(t, applyOutcome(&st, resultOf(a, outcome, attemptNow), attemptNow, true))
+		return st
+	}
+
+	before := fold(t, old)
+	require.Equal(t, &AttemptResult{
+		ID: "01K7A0000000000000000000A1", From: ver("0.7.2"), To: ver("0.7.3"), Why: WhyAuto,
+		Outcome: OutcomeFailed, Stage: StageGates, Error: "gates: the installed seamlessd is not v0.7.2",
+		StartedAt: attemptNow.Add(-10 * time.Minute), FinishedAt: attemptNow.Add(-9 * time.Minute), FoldedAt: attemptNow,
+	}, before.LastAttempt)
+	require.Empty(t, before.LastAttempt.Refused())
+	require.Equal(t, &Backoff{Until: attemptNow.Add(time.Hour), Count: 1, Version: ver("0.7.3"), Reason: OutcomeFailed}, before.Backoff,
+		"a failure before anything changed backs off")
+	require.Empty(t, before.Blocks)
+	require.Nil(t, before.Paused)
+
+	for word, refused := range map[string]string{RefusalStaleBinary: RefusalStaleBinary, "disk_full": ""} {
+		t.Run(word, func(t *testing.T) {
+			with := fold(t, strings.TrimSuffix(old, "}")+`,"refusal":"`+word+`"}`)
+			require.Equal(t, word, with.LastAttempt.Refusal, "kept as is")
+			require.Equal(t, refused, with.LastAttempt.Refused(), "a word this release does not know reads as a plain failure")
+			with.LastAttempt.Refusal = ""
+			require.Equal(t, before, with, "the word changes nothing the fold decides")
+		})
+	}
+}
+
+func TestAttemptResult_Refused(t *testing.T) {
+	for name, tc := range map[string]struct {
+		res  AttemptResult
+		want string
+	}{
+		"a known refusal on a failure": {AttemptResult{Outcome: OutcomeFailed, Stage: StageGates, Refusal: RefusalSelfCheck}, RefusalSelfCheck},
+		"none":                         {AttemptResult{Outcome: OutcomeFailed, Stage: StageGates}, ""},
+		"a newer updater's word":       {AttemptResult{Outcome: OutcomeFailed, Stage: StageGates, Refusal: "disk_full"}, ""},
+		"on an outcome that is not a failure": {
+			AttemptResult{Outcome: OutcomeApplied, Stage: StageDone, Refusal: RefusalStaleBinary}, ""},
+	} {
+		require.Equal(t, tc.want, tc.res.Refused(), name)
 	}
 }
 

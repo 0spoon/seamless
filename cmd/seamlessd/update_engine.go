@@ -90,7 +90,8 @@ type updaterDeps struct {
 	// tree (outsideServiceCheck).
 	selfCheck func() error
 	// autoAllowed refuses an unattended run once the owner has turned
-	// automatic updates off (autoUpdateAllowed).
+	// automatic updates off (autoUpdateAllowed), with an error wrapping
+	// errAutoOff; any other error is a failure to read the settings.
 	autoAllowed func(ctx context.Context, cfg config.Config) error
 	// service runs one lifecycle verb on the installed service.
 	service func(action serviceAction) (bool, string)
@@ -258,10 +259,29 @@ func autoUpdateAllowed(ctx context.Context, cfg config.Config) error {
 		return fmt.Errorf("read the update settings: %w", err)
 	}
 	if s := update.Effective(cfg.Update, override, true); !s.Auto {
-		return fmt.Errorf("automatic updates are off (set by %s)", s.AutoSource)
+		return fmt.Errorf("%w (set by %s)", errAutoOff, s.AutoSource)
 	}
 	return nil
 }
+
+// errAutoOff is autoUpdateAllowed finding automatic updates turned off -- as
+// opposed to failing to read whether they are, which refuses too but is no
+// refusal of the owner's.
+var errAutoOff = errors.New("automatic updates are off")
+
+// refusalError is a gate refusing an unattended attempt: refusal is the
+// update.Refusal* word the record carries, and err the reason, which reads
+// in the record's Error exactly as it did before refusals had a word.
+type refusalError struct {
+	refusal string
+	err     error
+}
+
+func (e *refusalError) Error() string { return e.err.Error() }
+func (e *refusalError) Unwrap() error { return e.err }
+
+// refused marks err as the gates' refusal with word refusal.
+func refused(refusal string, err error) error { return &refusalError{refusal: refusal, err: err} }
 
 // updaterProbe adapts Detect's probe to the updater, which is by design not
 // the service's own process: gate 9 ("this process is the service's
@@ -303,6 +323,8 @@ type outcome struct {
 	ok         bool
 	rolledBack bool
 	err        string
+	// refusal is the gates' refusal word (refusalError), "" for anything else.
+	refusal string
 }
 
 // updater is one engine run.
@@ -418,7 +440,12 @@ func runRecorded(ctx context.Context, d updaterDeps, job updateJob) (update.Atte
 func (u *updater) run(ctx context.Context) outcome {
 	u.stage(update.StageGates)
 	if err := u.gates(ctx); err != nil {
-		return u.fail(update.StageGates, err)
+		o := u.fail(update.StageGates, err)
+		var r *refusalError
+		if errors.As(err, &r) {
+			o.refusal = r.refusal
+		}
+		return o
 	}
 
 	u.stage(update.StageFetch)
@@ -474,23 +501,35 @@ func fetchFailureStage(err error) update.Stage {
 // re-reads whether automatic updates are still allowed -- for an automatic
 // attempt (WhyAuto) only: one the owner asked the daemon for runs whatever
 // update.auto says -- and observes the install's shape. An attended one
-// passed Detect before it took the lock and has its install dir already.
+// passed Detect before it took the lock and has its install dir already, and
+// never refuses here.
+//
+// Each refusal is a refusalError carrying its update.Refusal* word, so the
+// record says why in a word the surfaces can act on. Two failures here carry
+// none and stay plain failures at StageGates: settings that could not be read
+// (no owner's decision to report), and an install shape the updater cannot
+// agree on (errShapeMismatch: what disagrees varies -- the service's program,
+// a client's hooks -- and no one fixed action resolves it; the record's Error
+// names it).
 func (u *updater) gates(ctx context.Context) error {
 	if u.job.attended {
 		u.shape = installShape{dir: u.job.installDir}
 		return nil
 	}
 	if inst := update.Detect(u.job.probe); inst.Kind != update.KindInstaller {
-		return fmt.Errorf("not an installer-managed install (%s): %s", inst.Kind, inst.Reason)
+		return refused(update.RefusalNotInstaller, fmt.Errorf("not an installer-managed install (%s): %s", inst.Kind, inst.Reason))
 	}
 	if cur, ok := update.Parse(u.d.version); !ok || cur != u.job.req.From {
-		return fmt.Errorf("the installed seamlessd is not v%s, the release this attempt updates from; restart the service so it runs the installed release", u.job.req.From)
+		return refused(update.RefusalStaleBinary, fmt.Errorf("the installed seamlessd is not v%s, the release this attempt updates from; restart the service so it runs the installed release", u.job.req.From))
 	}
 	if err := u.d.selfCheck(); err != nil {
-		return err
+		return refused(update.RefusalSelfCheck, err)
 	}
 	if u.job.req.Why == update.WhyAuto {
-		if err := u.d.autoAllowed(ctx, u.job.cfg); err != nil {
+		switch err := u.d.autoAllowed(ctx, u.job.cfg); {
+		case errors.Is(err, errAutoOff):
+			return refused(update.RefusalAutoOff, err)
+		case err != nil:
 			return err
 		}
 	}
@@ -950,7 +989,7 @@ func (r *attemptRecorder) finish(o outcome, timing updaterTiming) (update.Attemp
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	t := r.now().UTC()
-	r.a.Stage, r.a.OK, r.a.RolledBack, r.a.Error = o.stage, o.ok, o.rolledBack, o.err
+	r.a.Stage, r.a.OK, r.a.RolledBack, r.a.Error, r.a.Refusal = o.stage, o.ok, o.rolledBack, o.err, o.refusal
 	r.a.FinishedAt, r.a.HeartbeatAt = t, t
 	var werr error
 	for try := range max(timing.finalTries, 1) {

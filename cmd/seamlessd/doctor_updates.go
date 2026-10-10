@@ -335,8 +335,19 @@ func recordResult(a update.Attempt) update.AttemptResult {
 	return update.AttemptResult{
 		ID: a.ID, From: a.From, To: a.To, Why: a.Why, Outcome: outcome, Stage: a.Stage,
 		RolledBack: a.RolledBack, Warnings: outcome == update.OutcomeApplied && a.Error != "",
-		Error: a.Error, LogPath: a.LogPath, StartedAt: a.StartedAt, FinishedAt: a.FinishedAt,
+		Error: a.Error, Refusal: a.Refusal, LogPath: a.LogPath, StartedAt: a.StartedAt, FinishedAt: a.FinishedAt,
 	}
+}
+
+// refusalAction is the owner's action for the gate refusal behind a
+// (update.RefusalAction), while it still concerns this install -- the daemon
+// runs a's From, cur -- else "". It is keyed on the refusal's word, never on
+// the record's error text.
+func refusalAction(a update.AttemptResult, cur update.Version) string {
+	if a.From != cur {
+		return ""
+	}
+	return update.RefusalAction(a.Refused())
 }
 
 // fromHistory finds attempt id in attempts.jsonl, newest line first. An
@@ -431,10 +442,17 @@ func updatesCheck(ctx context.Context, cfg config.Config, db *sql.DB, now time.T
 	default:
 		r = updatesRow{statusOK, fmt.Sprintf("up to date at v%s (%s; %s install)", cur, checked, v.install.Kind), ""}
 	}
-	if clause := v.lastClause(cur, now); clause != "" {
+	if clause, action := v.lastClause(cur, now); clause != "" {
 		r.text += clause
 		if r.status == statusOK {
 			r.status = statusInfo // a clause is something to read, or to do
+		}
+		if action != "" {
+			// Until the owner acts, every retry is refused the same way.
+			if r.action != "" {
+				action += "; " + r.action
+			}
+			r.status, r.action = max(r.status, statusWarn), action
 		}
 	}
 	return r.check()
@@ -549,27 +567,28 @@ func causedPause(a shownAttempt, p *update.Pause) bool {
 // concerns this install and the row has not said it already: a failure on
 // the way from the running version, with the updater's own error -- the
 // owner's to read, so the CLI shows it -- or an update to it that applied
-// with warnings, with the command that finishes it.
-func (v updateView) lastClause(cur update.Version, now time.Time) string {
+// with warnings, with the command that finishes it. action is the owner's
+// action for a gate refusal (refusalAction), "" for anything else.
+func (v updateView) lastClause(cur update.Version, now time.Time) (clause, action string) {
 	a, ok := v.lastAttempt()
 	if !ok {
-		return ""
+		return "", ""
 	}
 	switch a.Outcome {
 	case update.OutcomeApplied:
 		if a.Warnings && a.To == cur {
-			return fmt.Sprintf("; the update to v%s applied with warnings: finish wiring the clients with seamlessd install-hooks", a.To)
+			return fmt.Sprintf("; the update to v%s applied with warnings: finish wiring the clients with seamlessd install-hooks", a.To), ""
 		}
 	case update.OutcomeRolledBack, update.OutcomeFailed, update.OutcomeInterrupted:
 		if a.From == cur {
-			return "; the last attempt " + attemptSummary(a, now)
+			return "; the last attempt " + attemptSummary(a, now), refusalAction(a.AttemptResult, cur)
 		}
 	case update.OutcomeBroken:
 		if a.From == cur || a.To == cur {
-			return "; " + brokenText(a, now)
+			return "; " + brokenText(a, now), ""
 		}
 	}
-	return ""
+	return "", ""
 }
 
 // attemptSummary is one attempt for a doctor row, after "the last attempt":
@@ -809,8 +828,8 @@ func (v updateView) targetRows(w io.Writer, cur update.Version, now time.Time) {
 }
 
 // lastRows prints the last attempt: how it ended, the updater's error, the
-// command an update that applied with warnings still needs, its log and the
-// backup it took.
+// command an update that applied with warnings -- or a gate refusal that
+// still concerns this install -- still needs, its log and the backup it took.
 func (v updateView) lastRows(w io.Writer, now time.Time) {
 	if v.attemptErr != nil {
 		fieldRowTo(w, "record", yellow("unreadable")+dim(" -- "+v.attemptErr.Error()))
@@ -833,6 +852,11 @@ func (v updateView) lastRows(w io.Writer, now time.Time) {
 	}
 	if a.Warnings {
 		fieldRowTo(w, "fix", "seamlessd install-hooks"+dim(" -- the update applied, but the installer did not finish wiring the clients"))
+	}
+	if cur, ok := v.current(); ok {
+		if act := refusalAction(a.AttemptResult, cur); act != "" {
+			fieldRowTo(w, "fix", act)
+		}
 	}
 	if a.LogPath != "" {
 		fieldRowTo(w, "log", tildePath(a.LogPath)+gone(a.LogPath, fmt.Sprintf("removed; the newest %d logs are kept", updateLogKeep)))

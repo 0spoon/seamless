@@ -131,6 +131,34 @@ var Stages = []Stage{
 // not know as is: a newer release may have added it.
 func (s Stage) Valid() bool { return slices.Contains(Stages, s) }
 
+// Why the updater's gates refused an attempt the daemon started (Refusal). A
+// refusal is a fixed word, never free text, so it may sit in an event payload
+// as is, and a surface keys its own fixed words on it (RefusalWords,
+// RefusalAction) -- never on the record's Error. The attended `seamlessd
+// update` runs no gates and never records one. A refusal a reader does not
+// know (a newer updater's) reads as a plain failure at StageGates.
+const (
+	// RefusalNotInstaller: Detect, re-run by the updater, no longer finds an
+	// install the installer manages -- it changed since the daemon started.
+	RefusalNotInstaller = "not_installer"
+	// RefusalStaleBinary: the installed seamlessd is not the release the
+	// daemon runs (From), so the service runs a binary the disk no longer
+	// holds -- a release installed without a restart.
+	RefusalStaleBinary = "stale_binary"
+	// RefusalSelfCheck: the updater could not make sure it runs outside the
+	// service's process tree, which the installer restarts.
+	RefusalSelfCheck = "self_check"
+	// RefusalAutoOff: the owner turned automatic updates off after the daemon
+	// decided to start this one (WhyAuto only).
+	RefusalAutoOff = "auto_off"
+)
+
+// refusals lists every refusal this release writes.
+var refusals = []string{RefusalNotInstaller, RefusalStaleBinary, RefusalSelfCheck, RefusalAutoOff}
+
+// KnownRefusal reports whether this release knows refusal.
+func KnownRefusal(refusal string) bool { return slices.Contains(refusals, refusal) }
+
 // PreSwap reports whether s comes before StageInstall, so an attempt that
 // stopped there left the install untouched. A stage this release does not
 // know is not pre-swap: nothing vouches that the install was not touched.
@@ -188,8 +216,14 @@ type Attempt struct {
 	// Error says why the attempt failed: the updater's own summary, capped at
 	// attemptErrorMax runes on write, with the full output in LogPath. It is
 	// for the owner's eyes (console, doctor); notices and event payloads name
-	// versions and stages only.
+	// versions, stages and refusals only, and no surface branches on its
+	// content (Refusal is the typed reason).
 	Error string `json:"error,omitempty"`
+	// Refusal is set when the gates refused the attempt: a Refusal* word, on a
+	// finished record that stopped at StageGates, for an attempt the daemon
+	// started. Empty for every other outcome, and in every record a release
+	// before it wrote.
+	Refusal string `json:"refusal,omitempty"`
 	// LogPath is the updater's log of this attempt, and BackupPath where
 	// StageBackup put the install it replaces: absolute paths the updater
 	// chose, empty until it has them.
@@ -198,7 +232,7 @@ type Attempt struct {
 }
 
 // Finished reports whether the updater recorded an outcome: OK, RolledBack,
-// Stage and Error are then final.
+// Stage, Error and Refusal are then final.
 func (a Attempt) Finished() bool { return !a.FinishedAt.IsZero() }
 
 // Live reports whether the attempt is still running at now: not Finished,
@@ -348,6 +382,12 @@ func (a Attempt) check() error {
 		problem = "a successful attempt is finished"
 	case a.RolledBack && a.Stage != StageRollback:
 		problem = "rolled_back is set only in the rollback stage"
+	case a.Refusal != "" && !KnownRefusal(a.Refusal):
+		problem = fmt.Sprintf("refusal %q: valid values are %s", a.Refusal, strings.Join(refusals, ", "))
+	case a.Refusal != "" && (a.Stage != StageGates || !a.Finished()):
+		problem = "refusal is set only on a finished attempt that stopped at the gates"
+	case a.Refusal != "" && !spawnedByDaemon(a.Why):
+		problem = "refusal is set only on an attempt the daemon started: an attended update runs no gates"
 	default:
 		return nil
 	}

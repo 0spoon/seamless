@@ -104,15 +104,29 @@ func Classify(a Attempt, running Version) string {
 	}
 }
 
-// resultOf is the AttemptResult for a record classified as outcome.
+// resultOf is the AttemptResult for a record classified as outcome. The
+// refusal is copied as is; Refused decides what a reader makes of it.
 func resultOf(a Attempt, outcome string, now time.Time) AttemptResult {
 	return AttemptResult{
 		ID: a.ID, From: a.From, To: a.To, Why: a.Why,
 		Outcome: outcome, Stage: a.Stage, RolledBack: a.RolledBack,
 		Warnings: outcome == OutcomeApplied && a.Error != "",
-		Error:    a.Error, LogPath: a.LogPath,
+		Error:    a.Error, Refusal: a.Refusal, LogPath: a.LogPath,
 		StartedAt: a.StartedAt, FinishedAt: a.FinishedAt, FoldedAt: now,
 	}
+}
+
+// Refused is the gate refusal behind a failed attempt, a Refusal* word, or ""
+// when there is none this release knows: no refusal, an outcome other than
+// failed, or a newer updater's word -- every one of which reads as a plain
+// failure. The fold itself never reads it: a refused attempt backs off like
+// any other failure before anything changed, so blocks, backoff and the pause
+// come out the same on every release.
+func (r AttemptResult) Refused() string {
+	if r.Outcome != OutcomeFailed || !KnownRefusal(r.Refusal) {
+		return ""
+	}
+	return r.Refusal
 }
 
 // applyOutcome records res as the last attempt and applies what follows from

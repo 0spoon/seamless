@@ -197,6 +197,31 @@ func TestState_AutomaticUpdateFieldsRoundTrip(t *testing.T) {
 	require.Equal(t, 1, stateSchema, "additions keep the schema: an older reader ignores them")
 }
 
+// The last attempt's refusal is saved under its own key, an addition that
+// keeps the schema; a state file from before it reads as no refusal.
+func TestState_LastAttemptRefusal(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	want := State{LastAttempt: &AttemptResult{ID: "01K7A0000000000000000000A0", From: Version{0, 7, 2}, To: Version{0, 7, 3},
+		Why: WhyAuto, Outcome: OutcomeFailed, Stage: StageGates, Error: "gates: x", Refusal: RefusalStaleBinary, FoldedAt: now}}
+	require.NoError(t, SaveState(dir, want))
+	raw, err := os.ReadFile(StatePath(dir))
+	require.NoError(t, err)
+	require.Contains(t, string(raw), `"refusal": "stale_binary"`)
+	got, err := ReadState(dir)
+	require.NoError(t, err)
+	want.Schema = stateSchema
+	require.Equal(t, want, got)
+
+	require.NoError(t, os.WriteFile(StatePath(dir), []byte(`{"schema":1,"last_attempt":{"id":"01K7A0000000000000000000A0",`+
+		`"from":"0.7.2","to":"0.7.3","why":"auto","outcome":"failed","stage":"gates","error":"gates: x","folded_at":"2026-10-09T12:00:00Z"}}`), 0o600))
+	got, err = ReadState(dir)
+	require.NoError(t, err)
+	require.Empty(t, got.LastAttempt.Refusal)
+	require.Equal(t, OutcomeFailed, got.LastAttempt.Outcome)
+	require.Equal(t, 1, stateSchema, "additions keep the schema: an older reader ignores them")
+}
+
 func TestState_ClampAutomaticUpdateTimes(t *testing.T) {
 	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
 	ahead := now.Add(48 * time.Hour)

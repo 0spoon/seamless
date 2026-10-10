@@ -127,7 +127,8 @@ type Spawn struct {
 // AttemptResult is an attempt as the checker folded it. Every field but
 // Error and LogPath is a parsed version, an id or a fixed word; Error is the
 // updater's own summary, for the owner's eyes only (console, doctor), never
-// a notice or an event payload.
+// a notice or an event payload, and no surface branches on its content:
+// Refusal is the typed reason a surface may act on.
 type AttemptResult struct {
 	ID   string  `json:"id"`
 	From Version `json:"from"`
@@ -143,7 +144,10 @@ type AttemptResult struct {
 	// new version serves, and some client wiring may be stale.
 	Warnings bool   `json:"warnings,omitempty"`
 	Error    string `json:"error,omitempty"`
-	LogPath  string `json:"log_path,omitempty"`
+	// Refusal is the record's Refusal, kept as is: a word this release does
+	// not know is a newer updater's. Read it through Refused.
+	Refusal string `json:"refusal,omitempty"`
+	LogPath string `json:"log_path,omitempty"`
 	// SpawnedAt is when this daemon spawned it (zero for one it did not),
 	// StartedAt and FinishedAt what the record says, FoldedAt when the
 	// checker settled it.

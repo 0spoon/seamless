@@ -2,6 +2,7 @@ package update
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -44,17 +45,59 @@ func PauseWords(reason string) string {
 	return "two updates in a row rolled back"
 }
 
+// RefusalWords says why the updater's gates refused an attempt
+// (AttemptResult.Refused), in words that read after "it stopped while
+// checking it may install now: ". A refusal this release does not know (a
+// newer updater's), and none, read "": a plain failure.
+func RefusalWords(refusal string) string {
+	switch refusal {
+	case RefusalNotInstaller:
+		return "the install no longer looks like one the installer manages"
+	case RefusalStaleBinary:
+		return "the installed seamlessd is not the version the daemon runs"
+	case RefusalSelfCheck:
+		return "the updater could not make sure it runs outside the service, which the installer restarts"
+	case RefusalAutoOff:
+		return "automatic updates were turned off before it began"
+	default:
+		return ""
+	}
+}
+
+// RefusalAction is the owner's action for a gate refusal, ending in the
+// command to run, or "" when there is none: automatic updates turned off are
+// the owner's own answer, and a refusal this release does not know names no
+// action. A surface sets it as the owner's action only while the daemon still
+// runs the attempt's From -- once it runs another version, the refusal no
+// longer describes this install.
+func RefusalAction(refusal string) string {
+	switch refusal {
+	case RefusalNotInstaller:
+		return "restart the service so it re-reads how it was installed: seamlessd restart"
+	case RefusalStaleBinary:
+		return "restart the service so it runs the installed release: seamlessd restart"
+	case RefusalSelfCheck:
+		return "update by hand from a terminal: seamlessd update"
+	default:
+		return ""
+	}
+}
+
 // SpanWords renders a configured duration -- update.min_age, update.max_defer
-// -- for prose, in its largest whole unit: "24h", "90m", "90s"; anything finer
-// is Go's own spelling ("1m30.5s").
+// -- for prose: in its largest whole unit while that stays short ("24h",
+// "90m", "90s"), otherwise in Go's units with the zero tail dropped
+// ("25h30m", not "1530m"); anything finer than a second is Go's own spelling
+// ("1m30.5s").
 func SpanWords(d time.Duration) string {
 	switch {
 	case d >= time.Hour && d%time.Hour == 0:
 		return fmt.Sprintf("%dh", d/time.Hour)
-	case d >= time.Minute && d%time.Minute == 0:
+	case d >= time.Minute && d < 2*time.Hour && d%time.Minute == 0:
 		return fmt.Sprintf("%dm", d/time.Minute)
-	case d >= time.Second && d%time.Second == 0:
+	case d >= time.Second && d < 2*time.Minute && d%time.Second == 0:
 		return fmt.Sprintf("%ds", d/time.Second)
+	case d >= time.Hour && d%time.Minute == 0:
+		return strings.TrimSuffix(d.String(), "0s") // "25h30m0s"
 	default:
 		return d.String()
 	}

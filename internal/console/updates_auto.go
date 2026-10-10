@@ -215,6 +215,9 @@ func attemptRow(a update.AttemptResult) *updatesAttempt {
 	case update.OutcomeFailed:
 		r.Outcome, r.Tone = "failed", "warn"
 		r.Detail = failedDetail(a.Stage, from)
+		if words := update.RefusalWords(a.Refused()); words != "" {
+			r.Detail = "It stopped while " + stageWords(update.StageGates) + ": " + words + ", so nothing changed."
+		}
 	case update.OutcomeBroken:
 		r.Outcome, r.Tone = "not rolled back", "danger"
 		r.Detail = "It failed after installing, and " + from + " could not be restored cleanly, so automatic updates paused themselves."
@@ -231,6 +234,16 @@ func attemptRow(a update.AttemptResult) *updatesAttempt {
 		r.Outcome = "unknown outcome"
 	}
 	return r
+}
+
+// refusalAction is the owner's action for the gate refusal behind a
+// (update.RefusalAction), while it still concerns this install -- the daemon
+// runs a's From -- else "". Keyed on the refusal's word, never on a's Error.
+func refusalAction(st update.Status, a update.AttemptResult) string {
+	if cur, ok := st.Current(); !ok || cur != a.From {
+		return ""
+	}
+	return update.RefusalAction(a.Refused())
 }
 
 // failedDetail says where a failed attempt stopped: every failed attempt left
@@ -297,6 +310,9 @@ func autoRows(p *updatesPanel, st update.Status, now time.Time) {
 	}
 	if a := st.LastAttempt; a != nil {
 		p.LastAttempt = attemptRow(*a)
+		if act := refusalAction(st, *a); act != "" {
+			p.LastAttempt.Detail += " " + capitalize(act) + "."
+		}
 	}
 	if !p.SelfUpdating {
 		return
@@ -364,7 +380,9 @@ type updateAlert struct {
 // and automatic updates on for anything but the owner's own Update now -- and
 // says nothing while an update is under way (it may fix the trouble) or once
 // the install reached the failed release some other way. A pause outranks a
-// failed attempt; an update the owner ran by hand is theirs to watch.
+// failed attempt; an update the owner ran by hand is theirs to watch. A
+// failure the updater's gates refused says why, and while the daemon still
+// runs the release the attempt started from, the owner's action.
 func updateAlertFor(st update.Status, now time.Time) *updateAlert {
 	if st.Applying != nil || !st.Settings.Check {
 		return nil
@@ -419,6 +437,15 @@ func updateAlertFor(st update.Status, now time.Time) *updateAlert {
 	case update.OutcomeFailed:
 		alert.Head = "The update to " + to + " failed."
 		alert.Line = "Seamless stays on v" + stays.String() + next
+		// A gate refusal says why, and what the owner does about it, in
+		// update's fixed words for its refusal word.
+		if words := update.RefusalWords(a.Refused()); words != "" {
+			alert.Line += " " + capitalize(words)
+			if act := refusalAction(st, *a); act != "" {
+				alert.Line += "; " + act
+			}
+			alert.Line += "."
+		}
 	case update.OutcomeInterrupted:
 		alert.Head = "The update to " + to + " did not finish."
 		alert.Line = "The updater stopped before it was done; Seamless stays on v" + stays.String() + next

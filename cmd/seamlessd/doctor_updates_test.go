@@ -314,6 +314,96 @@ func TestUpdatesCheck_Automatic(t *testing.T) {
 			not: []string{"gates: gates:", ": gates: the installed"},
 		},
 		{
+			name: "a stale-binary refusal names the restart as the owner's action",
+			state: autoRecord(now, func(s *update.State) {
+				s.Releases = append(s.Releases, signed(v073, now.Add(-48*time.Hour)))
+				s.Backoff = &update.Backoff{Until: now.Add(time.Hour), Count: 2, Version: v073, Reason: update.OutcomeFailed}
+				s.LastAttempt = &update.AttemptResult{
+					ID: "01ATTEMPT", From: v072, To: v073, Why: update.WhyAuto, Outcome: update.OutcomeFailed,
+					Stage: update.StageGates, Error: gateRefusal, Refusal: update.RefusalStaleBinary,
+					FinishedAt: now.Add(-20 * time.Minute), FoldedAt: now.Add(-19 * time.Minute),
+				}
+			}),
+			status: statusWarn,
+			want: []string{
+				"; the last attempt (v0.7.2 -> v0.7.3, automatic, 20m ago) failed at gates, leaving the install as it was: " +
+					"the installed seamlessd is not v0.7.2, the release this attempt updates from; restart the service so it runs the installed release" +
+					" -- restart the service so it runs the installed release: seamlessd restart",
+			},
+		},
+		{
+			name: "a refusal word from a newer updater reads as a plain failure",
+			state: autoRecord(now, func(s *update.State) {
+				s.Releases = append(s.Releases, signed(v073, now.Add(-48*time.Hour)))
+				s.Backoff = &update.Backoff{Until: now.Add(time.Hour), Count: 1, Version: v073, Reason: update.OutcomeFailed}
+				s.LastAttempt = &update.AttemptResult{
+					ID: "01ATTEMPT", From: v072, To: v073, Why: update.WhyAuto, Outcome: update.OutcomeFailed,
+					Stage: update.StageGates, Error: "gates: the disk is full", Refusal: "disk_full",
+					FinishedAt: now.Add(-20 * time.Minute), FoldedAt: now.Add(-19 * time.Minute),
+				}
+			}),
+			status: statusInfo,
+			want:   []string{"; the last attempt (v0.7.2 -> v0.7.3, automatic, 20m ago) failed at gates, leaving the install as it was: the disk is full"},
+			not:    []string{" -- ", "disk_full", "seamlessd restart"},
+		},
+		{
+			name: "a refusal on the way from another version names no action",
+			state: autoRecord(now, func(s *update.State) {
+				s.Releases = append(s.Releases, signed(v073, now.Add(-48*time.Hour)))
+				s.LastAttempt = &update.AttemptResult{
+					ID: "01ATTEMPT", From: v071, To: v073, Why: update.WhyAuto, Outcome: update.OutcomeFailed,
+					Stage: update.StageGates, Error: "gates: the installed seamlessd is not v0.7.1", Refusal: update.RefusalStaleBinary,
+					FinishedAt: now.Add(-time.Hour), FoldedAt: now.Add(-time.Hour),
+				}
+			}),
+			status: statusInfo, not: []string{"last attempt", "seamlessd restart"},
+		},
+		{
+			name: "a refusal the daemon has not settled yet, read from attempt.json",
+			state: autoRecord(now, func(s *update.State) {
+				s.Releases = append(s.Releases, signed(v073, now.Add(-48*time.Hour)))
+			}),
+			attempt: func(t *testing.T) *update.Attempt {
+				a := finishedRecord(t, now, v073, update.WhyAuto, func(a *update.Attempt) {
+					a.Stage, a.Error, a.Refusal = update.StageGates, "gates: not an installer-managed install (unknown): moved", update.RefusalNotInstaller
+				})
+				return &a
+			},
+			status: statusWarn,
+			want: []string{
+				"failed at gates, leaving the install as it was: not an installer-managed install (unknown): moved (not yet settled by the daemon)" +
+					" -- restart the service so it re-reads how it was installed: seamlessd restart",
+			},
+		},
+		{
+			name: "a refusal's action comes first, the row's own after it",
+			state: autoRecord(now, func(s *update.State) {
+				s.Releases = append(s.Releases, signed(v073, now.Add(-48*time.Hour)))
+				s.Blocks = []update.Block{{Version: v073, Reason: update.BlockVerify, At: now.Add(-2 * time.Hour)}}
+				s.LastAttempt = &update.AttemptResult{
+					ID: "01ATTEMPT", From: v072, To: v073, Why: update.WhyNow, Outcome: update.OutcomeFailed,
+					Stage: update.StageGates, Error: "gates: the updater must run outside the service's process tree", Refusal: update.RefusalSelfCheck,
+					FinishedAt: now.Add(-time.Hour), FoldedAt: now.Add(-time.Hour),
+				}
+			}),
+			status: statusWarn,
+			want:   []string{" -- update by hand from a terminal: seamlessd update; update with: seamlessd update"},
+		},
+		{
+			name: "automatic updates turned off before it began: words only, no action",
+			state: autoRecord(now, func(s *update.State) {
+				s.Releases = append(s.Releases, signed(v073, now.Add(-48*time.Hour)))
+				s.LastAttempt = &update.AttemptResult{
+					ID: "01ATTEMPT", From: v072, To: v073, Why: update.WhyAuto, Outcome: update.OutcomeFailed,
+					Stage: update.StageGates, Error: "gates: automatic updates are off (set by console)", Refusal: update.RefusalAutoOff,
+					FinishedAt: now.Add(-time.Hour), FoldedAt: now.Add(-time.Hour),
+				}
+			}),
+			status: statusInfo,
+			want:   []string{"failed at gates, leaving the install as it was: automatic updates are off (set by console)"},
+			not:    []string{" -- "},
+		},
+		{
 			name: "applied with warnings names install-hooks",
 			state: autoRecord(now, func(s *update.State) {
 				s.LastAttempt = &update.AttemptResult{
@@ -570,6 +660,48 @@ func TestUpdateCheckRows_Automatic(t *testing.T) {
 	}
 	require.NotContains(t, out, "v0.7.1 (", "a block at or below the running version is inert")
 	require.NotContains(t, out, "fix ", "only an update that applied with warnings needs install-hooks")
+}
+
+// TestUpdateCheckRows_GateRefusal: a gate refusal that still concerns this
+// install -- the daemon runs the release it started from -- gets a fix row
+// with the owner's action, keyed on the refusal's word; once the daemon runs
+// another version, or for a word this release does not know, there is none.
+func TestUpdateCheckRows_GateRefusal(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name    string
+		from    update.Version
+		refusal string
+		fix     string
+	}{
+		{"stale binary", v072, update.RefusalStaleBinary, "fix      restart the service so it runs the installed release: seamlessd restart\n"},
+		{"self-check", v072, update.RefusalSelfCheck, "fix      update by hand from a terminal: seamlessd update\n"},
+		{"automatic updates off: no action", v072, update.RefusalAutoOff, ""},
+		{"a newer updater's word", v072, "disk_full", ""},
+		{"from another version", v071, update.RefusalStaleBinary, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, update.SaveState(dir, autoRecord(now, func(s *update.State) {
+				s.LastAttempt = &update.AttemptResult{
+					ID: "01ATTEMPT", From: tc.from, To: v073, Why: update.WhyAuto, Outcome: update.OutcomeFailed,
+					Stage: update.StageGates, Error: "gates: refused", Refusal: tc.refusal,
+					FinishedAt: now.Add(-time.Hour), FoldedAt: now.Add(-time.Hour),
+				}
+			})))
+			cfg := config.Defaults()
+			cfg.DataDir = dir
+			var buf bytes.Buffer
+			updateCheckRows(&buf, loadUpdateView(context.Background(), cfg, nil), now)
+			out := buf.String()
+			require.Contains(t, out, "error    refused\n")
+			if tc.fix == "" {
+				require.NotContains(t, out, "fix ")
+				return
+			}
+			require.Contains(t, out, tc.fix)
+		})
+	}
 }
 
 // TestUpdateCheckRows_PauseHoldAndWarnings: the rows that show whatever the

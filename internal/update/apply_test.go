@@ -2,6 +2,7 @@ package update
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -631,6 +632,57 @@ func TestAuto_ALateFailureDoesNotCountTwice(t *testing.T) {
 	require.Equal(t, 1, a.state().Backoff.Count)
 	require.Equal(t, until, st.Backoff.Until)
 	require.Len(t, a.rec.of(core.EventUpdateFailed), 2, "the interruption, then what it really came to")
+}
+
+// A gate refusal reaches the last attempt and the update.failed payload as
+// its fixed word, and folds like any failure before anything changed: a
+// backoff, no block, no notice. A newer updater's word is kept on the last
+// attempt but left out of the payload, a plain failure.
+func TestAuto_AGateRefusalIsAFixedWord(t *testing.T) {
+	for _, tc := range []struct {
+		word    string
+		payload bool
+	}{
+		{RefusalStaleBinary, true},
+		{"disk_full", false},
+	} {
+		t.Run(tc.word, func(t *testing.T) {
+			a := newAutoHarness(t)
+			a.soakedList()
+			a.start()
+			a.firstCheck()
+			req := a.m.spawned()[0]
+
+			a.clock.Add(time.Minute)
+			rec := a.finish(a.recordFor(req, StageGates), StageGates, false, false)
+			rec.Refusal = tc.word
+			// WriteAttempt refuses a word this release does not write: put a
+			// newer updater's record in place by hand.
+			raw, err := json.Marshal(rec)
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(AttemptPath(a.dir), raw, 0o600))
+			st := a.tick()
+
+			require.Equal(t, OutcomeFailed, st.LastAttempt.Outcome)
+			require.Equal(t, StageGates, st.LastAttempt.Stage)
+			require.Equal(t, tc.word, st.LastAttempt.Refusal, "kept as is")
+			require.Equal(t, tc.word, a.state().LastAttempt.Refusal, "and saved")
+			require.NotNil(t, st.Backoff)
+			require.Empty(t, st.Blocked)
+			require.Empty(t, st.Notice("", "studio", a.clock.Now()), "a backoff is retried, not a briefing line")
+
+			failed := a.rec.of(core.EventUpdateFailed)
+			require.Len(t, failed, 1)
+			want := map[string]any{
+				"from": "0.7.2", "to": "0.7.3", "outcome": "failed", "stage": "gates", "why": "auto",
+				"rolled_back": false, "attempt": req.AttemptID,
+			}
+			if tc.payload {
+				want["refusal"] = tc.word
+			}
+			require.Equal(t, want, failed[0].Payload, "versions and fixed words only; never the updater's error text")
+		})
+	}
 }
 
 func TestAuto_HeldLockKeepsTheSpawnPending(t *testing.T) {

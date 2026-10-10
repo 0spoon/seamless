@@ -29,11 +29,49 @@ func TestPauseWords(t *testing.T) {
 }
 
 func TestSpanWords(t *testing.T) {
-	require.Equal(t, "24h", SpanWords(24*time.Hour))
-	require.Equal(t, "90m", SpanWords(90*time.Minute))
-	require.Equal(t, "90s", SpanWords(90*time.Second))
-	require.Equal(t, "1.5s", SpanWords(1500*time.Millisecond))
-	require.Equal(t, "1m30.5s", SpanWords(90*time.Second+500*time.Millisecond))
+	for d, want := range map[time.Duration]string{
+		24 * time.Hour:   "24h",
+		36 * time.Hour:   "36h",
+		90 * time.Minute: "90m",
+		90 * time.Second: "90s",
+		2 * time.Minute:  "2m",
+		// Past what the largest whole unit says briefly: hours and the rest,
+		// not "1530m" or "150s".
+		25*time.Hour + 30*time.Minute: "25h30m",
+		2*time.Hour + 30*time.Minute:  "2h30m",
+		150 * time.Second:             "2m30s",
+		// Finer than the units above: Go's own spelling.
+		1500 * time.Millisecond:               "1.5s",
+		90*time.Second + 500*time.Millisecond: "1m30.5s",
+		time.Hour + 30*time.Second:            "1h0m30s",
+		0:                                     "0s",
+	} {
+		require.Equal(t, want, SpanWords(d), d.String())
+	}
+}
+
+// The refusal words, pinned like the rest: the console's Last attempt row and
+// banner and the CLI's doctor row render them. Each action ends in the
+// command to run; a refusal this release does not know reads as a plain
+// failure, with neither words nor an action.
+func TestRefusalWordsAndAction(t *testing.T) {
+	for refusal, want := range map[string][2]string{
+		RefusalNotInstaller: {"the install no longer looks like one the installer manages",
+			"restart the service so it re-reads how it was installed: seamlessd restart"},
+		RefusalStaleBinary: {"the installed seamlessd is not the version the daemon runs",
+			"restart the service so it runs the installed release: seamlessd restart"},
+		RefusalSelfCheck: {"the updater could not make sure it runs outside the service, which the installer restarts",
+			"update by hand from a terminal: seamlessd update"},
+		RefusalAutoOff: {"automatic updates were turned off before it began", ""},
+		"disk_full":    {"", ""},
+		"":             {"", ""},
+	} {
+		require.Equal(t, want[0], RefusalWords(refusal), refusal)
+		require.Equal(t, want[1], RefusalAction(refusal), refusal)
+	}
+	for _, r := range refusals {
+		require.NotEmpty(t, RefusalWords(r), "every refusal this release writes has words: %s", r)
+	}
 }
 
 func TestPlural(t *testing.T) {

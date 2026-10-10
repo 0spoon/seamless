@@ -447,7 +447,8 @@ func lastSeen(a *AttemptResult) time.Time {
 
 // settle applies res (applyOutcome), records update.failed for a failure of
 // an attempt a daemon started, and logs it. The payload carries versions and
-// fixed words only, never the updater's error text.
+// fixed words only -- a known gate refusal among them -- never the updater's
+// error text.
 //
 // An attempt reported applied while this daemon, running cur, is still below
 // its To cannot happen with one daemon per data dir -- the updater confirms
@@ -466,14 +467,21 @@ func (c *Checker) settle(ctx context.Context, res AttemptResult, now time.Time, 
 		"outcome", res.Outcome, "stage", string(res.Stage), "attempt", res.ID}
 	switch {
 	case failed:
+		payload := map[string]any{
+			"from": res.From.String(), "to": res.To.String(), "outcome": res.Outcome,
+			"stage": string(res.Stage), "why": res.Why, "rolled_back": res.RolledBack, "attempt": res.ID,
+		}
+		// A gate refusal this release knows, as its fixed word; a newer
+		// updater's word is left out, as a plain failure.
+		if r := res.Refused(); r != "" {
+			payload["refusal"] = r
+			attrs = append(attrs, "refusal", r)
+		}
 		c.log.Warn("update: an update attempt did not apply", attrs...)
 		c.record(ctx, core.Event{
-			Kind:   core.EventUpdateFailed,
-			ItemID: res.To.String(),
-			Payload: map[string]any{
-				"from": res.From.String(), "to": res.To.String(), "outcome": res.Outcome,
-				"stage": string(res.Stage), "why": res.Why, "rolled_back": res.RolledBack, "attempt": res.ID,
-			},
+			Kind:    core.EventUpdateFailed,
+			ItemID:  res.To.String(),
+			Payload: payload,
 		})
 	default:
 		c.log.Info("update: an update attempt finished", attrs...)

@@ -450,7 +450,7 @@ const (
 	EventUpdateAvailable EventKind = "update.available" // a newer installable release was seen (item_id: the version; payload: version, current, kind); latched once per version via RecordOnce
 	EventUpdateApplied   EventKind = "update.applied"   // the daemon started on a different version than the last one (item_id: the new version; payload: from, to, direction, plus codex_hooks_changed when Codex's hooks.json changed with it); recorded after the state file is written
 	EventUpdateStarted   EventKind = "update.started"   // the daemon handed an update attempt to its updater (item_id: the version it installs; payload: from, to, why, path, attempt); recorded after the attempt is saved, before the spawn
-	EventUpdateFailed    EventKind = "update.failed"    // an update attempt the daemon started did not apply (item_id: the version it tried; payload: from, to, outcome, stage, why, rolled_back, attempt); never the updater's error text
+	EventUpdateFailed    EventKind = "update.failed"    // an update attempt the daemon started did not apply (item_id: the version it tried; payload: from, to, outcome, stage, why, rolled_back, attempt, plus refusal -- a fixed word -- when the updater's gates refused it); never the updater's error text
 )
 
 // Event is one entry in the append-only log. Payload carries kind-specific

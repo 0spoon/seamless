@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -235,6 +236,64 @@ func TestAutoUpdate_RefusesWhenTheInstalledBinaryIsNotFrom(t *testing.T) {
 	require.NoError(t, err)
 	requireRecorded(t, w, a, update.StageGates, false)
 	require.Contains(t, a.Error, "not v0.7.2")
+	require.Equal(t, update.RefusalStaleBinary, a.Refusal, "the word the surfaces key the owner's restart on")
+	hist, _, err := update.ReadAttemptHistory(w.dataDir)
+	require.NoError(t, err)
+	require.Equal(t, update.RefusalStaleBinary, hist[0].Refusal)
+}
+
+// Each gate that refuses an unattended attempt records its refusal word next
+// to the error, which reads as it always did; a failure in the gates that is
+// no refusal -- settings that could not be read, an install shape the
+// updater cannot agree on -- records none, and every other stage none either.
+func TestAutoUpdate_GateRefusalsRecordTheirWord(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(w *world)
+		stage   update.Stage
+		refusal string
+		errText string
+	}{
+		{"not an installer install", func(w *world) {
+			w.probeEdits = func(p *update.Probe) { p.Service.Marker = false }
+		}, update.StageGates, update.RefusalNotInstaller, "gates: not an installer-managed install"},
+		{"inside the service's process tree", func(w *world) {
+			w.selfErr = fmt.Errorf("%w: this process is in the seamless.service unit", errInsideService)
+		}, update.StageGates, update.RefusalSelfCheck, "gates: the updater must run outside the service's process tree: this process is in the seamless.service unit"},
+		{"a self-check that cannot read its answer fails closed, refused the same", func(w *world) {
+			w.selfErr = fmt.Errorf("%w: cannot read /proc/self/cgroup: no such file", errInsideService)
+		}, update.StageGates, update.RefusalSelfCheck, "gates: the updater must run outside the service's process tree: cannot read"},
+		{"automatic updates were turned off", func(w *world) {
+			w.autoErr = fmt.Errorf("%w (set by console)", errAutoOff)
+		}, update.StageGates, update.RefusalAutoOff, "gates: automatic updates are off (set by console)"},
+		{"the settings could not be read", func(w *world) {
+			w.autoErr = errors.New("read the update settings: database is locked")
+		}, update.StageGates, "", "gates: read the update settings: database is locked"},
+		{"the service runs a binary elsewhere (the install's shape)", func(w *world) {
+			other := filepath.Join(w.home, "elsewhere", "seamlessd")
+			require.NoError(t, os.MkdirAll(filepath.Dir(other), 0o700))
+			require.NoError(t, os.WriteFile(other, []byte("x"), 0o755))
+			w.probeEdits = func(p *update.Probe) { p.Service.Program = other }
+		}, update.StageGates, "", "gates: "},
+		{"a later stage", func(w *world) { w.freeSpace = 1 }, update.StageBackup, "", "backup: "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := newWorld(t, "linux", "amd64", "0.7.2")
+			w.publish("0.7.2", releaseOpts{})
+			w.publish("0.7.3", releaseOpts{})
+			tt.setup(w)
+			a, err := w.runAuto("0.7.3")
+			require.Error(t, err)
+			requireRecorded(t, w, a, tt.stage, false)
+			require.Equal(t, tt.refusal, a.Refusal)
+			require.True(t, strings.HasPrefix(a.Error, tt.errText), "error: %s", a.Error)
+			hist, _, err := update.ReadAttemptHistory(w.dataDir)
+			require.NoError(t, err)
+			require.Equal(t, tt.refusal, hist[0].Refusal, "the history line carries the same word")
+			require.Empty(t, w.installs)
+		})
+	}
 }
 
 func TestAutoUpdate_InstallerFailureBeforeTheSwapIsInstallNotRollback(t *testing.T) {
@@ -516,14 +575,38 @@ func requireNothingRecorded(t *testing.T, w *world) {
 // task 2.11 adds) runs whatever update.auto says.
 func TestGates_TheSettingsGateIsForAutomaticAttemptsOnly(t *testing.T) {
 	w := newWorld(t, "linux", "amd64", "0.7.2")
-	w.autoErr = errors.New("automatic updates are off (set by console)")
+	w.autoErr = fmt.Errorf("%w (set by console)", errAutoOff)
 	u := &updater{d: w.deps(nil), job: updateJob{
 		req: update.SpawnRequest{AttemptID: testAttemptID(t), From: mustVersion(t, "0.7.2"), To: mustVersion(t, "0.7.3"), Why: "now"},
 		cfg: w.cfg, configPath: w.cfgPath, probe: updaterProbe(w.probe(w.cfgPath, false), false),
 	}}
 	require.NoError(t, u.gates(context.Background()))
 	u.job.req.Why = update.WhyAuto
-	require.ErrorContains(t, u.gates(context.Background()), "automatic updates are off")
+	err := u.gates(context.Background())
+	require.ErrorContains(t, err, "automatic updates are off")
+	var r *refusalError
+	require.ErrorAs(t, err, &r)
+	require.Equal(t, update.RefusalAutoOff, r.refusal)
+	require.ErrorIs(t, err, errAutoOff, "the refusal wraps the gate's own error")
+}
+
+// An attended `seamlessd update` passed Detect before it took the lock: its
+// gates never refuse, so it never records a refusal -- whatever every gate an
+// unattended run checks would say.
+func TestGates_AttendedNeverRefuses(t *testing.T) {
+	w := newWorld(t, "linux", "amd64", "0.7.2")
+	w.selfErr = errInsideService
+	w.autoErr = errAutoOff
+	d := w.deps(nil)
+	d.version = "0.7.1"
+	p := w.probe(w.cfgPath, false)
+	p.Service.Marker = false
+	u := &updater{d: d, job: updateJob{
+		req: update.SpawnRequest{AttemptID: testAttemptID(t), From: mustVersion(t, "0.7.2"), To: mustVersion(t, "0.7.3"), Why: update.WhyManual},
+		cfg: w.cfg, configPath: w.cfgPath, probe: updaterProbe(p, true), attended: true, installDir: w.installDir,
+	}}
+	require.NoError(t, u.gates(context.Background()))
+	require.Equal(t, w.installDir, u.shape.dir)
 }
 
 func TestUpdaterProbe(t *testing.T) {
@@ -616,17 +699,22 @@ func TestAutoUpdateAllowed(t *testing.T) {
 	require.NoError(t, autoUpdateAllowed(context.Background(), cfg), "unset auto is on")
 
 	require.NoError(t, store.SetUpdateOverride(context.Background(), db, config.UpdateOverride{Auto: &off}))
-	require.ErrorContains(t, autoUpdateAllowed(context.Background(), cfg), "automatic updates are off")
+	err = autoUpdateAllowed(context.Background(), cfg)
+	require.ErrorContains(t, err, "automatic updates are off (set by console)")
+	require.ErrorIs(t, err, errAutoOff)
 	require.NoError(t, db.Close())
 
 	fileOff := cfg
 	fileOff.Update.Check = &off
-	require.ErrorContains(t, autoUpdateAllowed(context.Background(), fileOff), "automatic updates are off",
-		"check: false means no update traffic, so no update")
+	err = autoUpdateAllowed(context.Background(), fileOff)
+	require.ErrorContains(t, err, "automatic updates are off", "check: false means no update traffic, so no update")
+	require.ErrorIs(t, err, errAutoOff)
 
 	missing := cfg
 	missing.DataDir = filepath.Join(dataDir, "absent")
-	require.Error(t, autoUpdateAllowed(context.Background(), missing), "an unreadable setting fails closed")
+	err = autoUpdateAllowed(context.Background(), missing)
+	require.Error(t, err, "an unreadable setting fails closed")
+	require.NotErrorIs(t, err, errAutoOff, "but is no owner's decision: a plain failure, not a refusal")
 }
 
 // The heartbeat rewrites attempt.json from its timer, not only between steps.
@@ -653,11 +741,13 @@ func TestAttemptRecorder_HeartbeatsFromItsTimer(t *testing.T) {
 		return err == nil && a.HeartbeatAt.After(first.HeartbeatAt)
 	}, 5*time.Second, 5*time.Millisecond)
 
-	final, err := rec.finish(outcome{stage: update.StageGates, err: "gates: no"}, updaterTiming{finalTries: 1})
+	final, err := rec.finish(outcome{stage: update.StageGates, err: "gates: no", refusal: update.RefusalSelfCheck}, updaterTiming{finalTries: 1})
 	require.NoError(t, err)
 	require.True(t, final.Finished())
+	require.Equal(t, update.RefusalSelfCheck, final.Refusal)
 	read, err := update.ReadAttempt(dataDir)
 	require.NoError(t, err)
 	require.Equal(t, update.StageGates, read.Stage)
 	require.True(t, read.Finished())
+	require.Equal(t, update.RefusalSelfCheck, read.Refusal)
 }

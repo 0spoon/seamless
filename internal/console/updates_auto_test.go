@@ -227,6 +227,46 @@ func TestUpdatesSection_AutomaticUpdates(t *testing.T) {
 			},
 		},
 		{
+			name: "refused at the gates: a stale binary, with the owner's restart",
+			base: autoBase,
+			mutate: func(st *update.Status) {
+				withNewer(st, now)
+				st.LastAttempt = &update.AttemptResult{From: ver(0, 7, 2), To: ver(0, 7, 3), Why: update.WhyAuto,
+					Outcome: update.OutcomeFailed, Stage: update.StageGates, Refusal: update.RefusalStaleBinary,
+					Error: "gates: the installed seamlessd is not v0.7.2", FoldedAt: now.Add(-20 * time.Minute)}
+			},
+			want: []string{
+				`<span class="badge warn">failed</span>`,
+				"<small>It stopped while checking it may install now: the installed seamlessd is not the version the daemon runs, so nothing changed. " +
+					"Restart the service so it runs the installed release: seamlessd restart.</small>",
+				"gates: the installed seamlessd is not v0.7.2",
+			},
+		},
+		{
+			name: "refused at the gates from another version: what happened, no action",
+			base: autoBase,
+			mutate: func(st *update.Status) {
+				withNewer(st, now)
+				st.LastAttempt = &update.AttemptResult{From: ver(0, 7, 1), To: ver(0, 7, 3), Why: update.WhyAuto,
+					Outcome: update.OutcomeFailed, Stage: update.StageGates, Refusal: update.RefusalStaleBinary,
+					Error: "gates: the installed seamlessd is not v0.7.1", FoldedAt: now.Add(-20 * time.Minute)}
+			},
+			want:   []string{"<small>It stopped while checking it may install now: the installed seamlessd is not the version the daemon runs, so nothing changed.</small>"},
+			absent: []string{"seamlessd restart"},
+		},
+		{
+			name: "a refusal word from a newer updater reads as a plain failure",
+			base: autoBase,
+			mutate: func(st *update.Status) {
+				withNewer(st, now)
+				st.LastAttempt = &update.AttemptResult{From: ver(0, 7, 2), To: ver(0, 7, 3), Why: update.WhyAuto,
+					Outcome: update.OutcomeFailed, Stage: update.StageGates, Refusal: "disk_full",
+					Error: "gates: the disk is full", FoldedAt: now.Add(-20 * time.Minute)}
+			},
+			want:   []string{"<small>It stopped while checking it may install now, before anything changed.</small>"},
+			absent: []string{"disk_full", "seamlessd restart"},
+		},
+		{
 			name: "applied with warnings",
 			base: autoBase,
 			mutate: func(st *update.Status) {
@@ -667,6 +707,9 @@ func TestUpdateAlert(t *testing.T) {
 	blocked := func(st *update.Status) {
 		st.Blocked = []update.Block{{Version: ver(0, 7, 3), Reason: update.BlockRolledBack, At: now}}
 	}
+	refusal := func(word string) func(st *update.Status) {
+		return func(st *update.Status) { st.LastAttempt.Stage, st.LastAttempt.Refusal = update.StageGates, word }
+	}
 	backoff := func(st *update.Status) {
 		st.Backoff = &update.Backoff{Until: now.Add(time.Hour), Count: 1, Version: ver(0, 7, 3), Reason: update.OutcomeInterrupted}
 	}
@@ -693,6 +736,27 @@ func TestUpdateAlert(t *testing.T) {
 			wantHead: "The update to v0.7.3 rolled back.", wantLine: "Seamless is back on v0.7.2, and automatic updates skip v0.7.3.",
 			wantKey: fmt.Sprintf("failed-0.7.3-%d", now.Add(-time.Hour).Unix())},
 		{name: "failed, backing off", mutate: []func(*update.Status){failed(update.WhyAuto, update.OutcomeFailed, time.Hour), backoff},
+			wantHead: "The update to v0.7.3 failed.", wantLine: "Seamless stays on v0.7.2, and tries again in 1h."},
+		{name: "refused, a stale binary: the owner's restart", mutate: []func(*update.Status){
+			failed(update.WhyAuto, update.OutcomeFailed, time.Hour), refusal(update.RefusalStaleBinary), backoff},
+			wantHead: "The update to v0.7.3 failed.",
+			wantLine: "Seamless stays on v0.7.2, and tries again in 1h. The installed seamlessd is not the version the daemon runs; " +
+				"restart the service so it runs the installed release: seamlessd restart."},
+		{name: "refused, not an installer install: Update now", mutate: []func(*update.Status){
+			failed(update.WhyNow, update.OutcomeFailed, time.Hour), refusal(update.RefusalNotInstaller)},
+			wantHead: "The update to v0.7.3 failed.",
+			wantLine: "Seamless stays on v0.7.2. The install no longer looks like one the installer manages; " +
+				"restart the service so it re-reads how it was installed: seamlessd restart."},
+		{name: "refused, automatic updates were off: what happened, no action", mutate: []func(*update.Status){
+			failed(update.WhyAuto, update.OutcomeFailed, time.Hour), refusal(update.RefusalAutoOff)},
+			wantHead: "The update to v0.7.3 failed.",
+			wantLine: "Seamless stays on v0.7.2. Automatic updates were turned off before it began."},
+		{name: "refused while the daemon ran another version: no action", mutate: []func(*update.Status){
+			failed(update.WhyAuto, update.OutcomeFailed, time.Hour), refusal(update.RefusalStaleBinary), func(st *update.Status) { st.Version = "0.7.1" }},
+			wantHead: "The update to v0.7.3 failed.",
+			wantLine: "Seamless stays on v0.7.1. The installed seamlessd is not the version the daemon runs."},
+		{name: "a refusal word from a newer updater: a plain failure", mutate: []func(*update.Status){
+			failed(update.WhyAuto, update.OutcomeFailed, time.Hour), refusal("disk_full"), backoff},
 			wantHead: "The update to v0.7.3 failed.", wantLine: "Seamless stays on v0.7.2, and tries again in 1h."},
 		{name: "interrupted", mutate: []func(*update.Status){failed(update.WhyAuto, update.OutcomeInterrupted, time.Hour)},
 			wantHead: "The update to v0.7.3 did not finish.", wantLine: "The updater stopped before it was done; Seamless stays on v0.7.2."},
