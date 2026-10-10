@@ -65,3 +65,143 @@ jobs:
       # shipped binary's deps, not the test toolchain.
       - name: make check
         run: make check
+
+  # `check` above stays the only full gate. This job runs the packages with
+  # OS-specific code on the two OSes Linux CI cannot stand in for. Files
+  # behind a windows or darwin build tag compile into the test binary only on
+  # that OS: Windows file locking, the detached updater child, the job
+  # self-check, the process table. Some tests run only there, for example
+  # TestWindowsConstantsMatchTheOS and TestTaskArguments; `make cross-check`
+  # only vets those files. Many more tests reach the OS-specific code
+  # indirectly, through the data-dir lock and the update state files, and the
+  # shared code meets each OS's own paths, permission bits and file
+  # semantics. So this job runs whole packages, not a -run filter: a name
+  # filter misses those tests, and every new test would have to be added to
+  # it by hand.
+  os-smoke:
+    strategy:
+      # Each OS reports on its own: a red Windows run must not cancel the
+      # macOS run that would have shown whether the change is Windows-only.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    # A full run took about 25s on macOS and 20s on Windows (the owner's test
+    # NUC, test binaries prebuilt). A cold CI run also compiles the test
+    # binaries on 3-4 vCPUs and restores the setup-go cache, which is slow on
+    # Windows runners. go test's own 10-minute -timeout stops a hung test;
+    # this caps the whole job, setup included, far below the 6-hour default.
+    timeout-minutes: 20
+    defaults:
+      run:
+        # Git Bash on Windows, so every step below is one script on both OSes.
+        shell: bash
+    steps:
+      # Git for Windows installs with core.autocrlf=true and the runner image
+      # keeps that default, so a plain checkout hands Windows CRLF files.
+      # Release binaries embed the LF bytes goreleaser checks out on Linux, and
+      # `go install` builds from the LF module zip. Test those bytes. At
+      # aaefd58 the results were identical either way (pre-flight on an LF
+      # tree and a CRLF-converted one); this step stops a future test that
+      # compares bytes from failing over line endings no shipped binary
+      # contains. It runs before checkout, which reads the global config.
+      - name: Keep LF line endings (Windows)
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+
+      # Same pins as `check`. The default shallow checkout is enough: these
+      # tests read repo files (docs/install, .goreleaser.yaml, ...) but no git
+      # history.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # CGO_ENABLED=0 matches how .goreleaser.yaml builds every release binary,
+      # so the OS code under test is the code that ships. On darwin, cgo would
+      # replace the pure-Go os/user and net code with libc calls. It also keeps
+      # the job off the runner's C toolchain.
+      #
+      # No -race on either OS. `check` already runs -race over every package
+      # on Linux, and a data race in shared code is detected on any OS. The
+      # OS-specific files this job exists for share no memory between
+      # goroutines: their only goroutines reap the updater child, in
+      # update_spawn_unix.go (which Linux already races) and
+      # update_spawn_windows.go. On macOS -race made the same packages take
+      # 86s instead of 25s locally. On Windows it needs cgo, which means
+      # building with the runner's gcc (the windows-2025 image lists gcc
+      # 15.2.0) instead of the CGO_ENABLED=0 build that ships.
+      #
+      # -count=1: setup-go caches GOCACHE, which holds test results, and that
+      # cache key covers go.sum but not the runner image. A cached pass would
+      # report on an older Windows or macOS build than the one this job is
+      # meant to test.
+      - name: go test (OS-facing packages)
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          skip=
+          if [ "$RUNNER_OS" = Windows ]; then
+            # Tests that fail on every Windows host for a reason unrelated to
+            # the OS code above, found by the 2026-10-09 pre-flight of this
+            # job (Windows 11, go1.26.9). Delete a name when its fix lands; a
+            # name left here after its fix just stays skipped.
+            known_windows_failures=(
+              # A product bug, not a test bug: a Windows daemon rewrites another
+              # host's POSIX path (/elsewhere/app becomes \elsewhere\app) and
+              # unmap-repo --host refuses it as not absolute.
+              TestRetireProject_RefusesWhileInUse
+              TestUnmapTargets
+            )
+            skip=$(IFS='|'; printf '^(%s)$' "${known_windows_failures[*]}")
+          fi
+          go test -count=1 -skip "$skip" ./cmd/seamlessd ./internal/update ./internal/agentproc
+
+  # Nothing else parses the workflows or .goreleaser.yaml before a tag push,
+  # so a broken release config otherwise shows up when the release job fails
+  # on a pushed tag. This job runs on every push instead of behind a path
+  # filter: a path-filter action would be one more third-party dependency,
+  # and the job is cheap. Each tool ran in well under a second, a cold
+  # actionlint install took about 10s, and goreleaser-action downloads a
+  # prebuilt binary (building goreleaser from source pulls 2.2 GB of modules).
+  config-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # `goreleaser check` needs a git repository; a shallow, tagless one is
+      # enough.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # No cache: this job would save under the same key as `check` (same OS,
+      # Go version and go.sum). It finishes first, so its small cache would
+      # win the save, and `check` would then restore that cache instead of
+      # its own.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # Pinned like golangci-lint in `check`, and bumped by hand: dependabot
+      # bumps only `uses:` pins. actionlint picks up the runner's shellcheck
+      # (the ubuntu-24.04 image ships 0.9.0), so `run:` scripts are
+      # shellchecked too. A newer shellcheck in a later runner image can add
+      # findings with no repo change.
+      - name: actionlint
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          "$(go env GOPATH)/bin/actionlint"
+
+      # The same action, pin and version range as release.yml, so this checks
+      # the config with the goreleaser the next tag would release with. An
+      # exact pin here would validate a binary the release never runs. As a
+      # result, a goreleaser release that rejects the config turns this job
+      # red with no repo change; the next tag would have failed the same way.
+      # It needs no secrets: the notarize block is disabled when
+      # MACOS_SIGN_P12 is unset, and check does not sign anything.
+      - name: goreleaser check
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: "~> v2"
+          args: check

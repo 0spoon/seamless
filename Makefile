@@ -141,7 +141,7 @@ help:
 	@echo "  check-fast the pre-commit subset: same minus build and test-race"
 	@echo "  lint       run golangci-lint"
 	@echo "  vet        run go vet"
-	@echo "  cross-check  go vet for $(CROSS_TARGETS) (part of check; CI only runs Linux)"
+	@echo "  cross-check  go vet for $(CROSS_TARGETS) (part of check; CI tests only three packages on macOS/Windows)"
 	@echo "  vulncheck  run govulncheck against the vuln DB (part of check; needs network)"
 	@echo "  fmt        gofmt tracked files"
 	@echo "  fmt-check  fail if tracked files have gofmt drift"
