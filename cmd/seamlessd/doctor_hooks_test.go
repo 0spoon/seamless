@@ -49,6 +49,7 @@ func TestCodexChecksAppOnlyMarksMCPSetupIncomplete(t *testing.T) {
 func TestDoctorClientChecksClaudeOnlyRemainDeterministic(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("CODEX_HOME", filepath.Join(home, "absent-codex-home"))
 	t.Chdir(t.TempDir())
 	binDir := t.TempDir()

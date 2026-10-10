@@ -53,7 +53,7 @@ func TestParseCodexMCPState_VersionedFixtures(t *testing.T) {
 }
 
 func TestParseCodexMCPState_RejectsMissingAndWrongTypeRequiredFields(t *testing.T) {
-	want, err := desiredCodexMCPState("/opt/seam", "/etc/seamless.yaml")
+	want, err := desiredCodexMCPState(absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.NoError(t, err)
 	valid := marshalCodexMCPState(t, want)
 
@@ -93,7 +93,7 @@ func TestParseCodexMCPState_RejectsMissingAndWrongTypeRequiredFields(t *testing.
 }
 
 func TestCodexMCPComparator_ClassifiesExactOwnedDriftAndForeign(t *testing.T) {
-	want, err := desiredCodexMCPState("/new/bin/seam", "/new/config/seamless.yaml")
+	want, err := desiredCodexMCPState(absFixture("/new/bin/seam"), absFixture("/new/config/seamless.yaml"))
 	require.NoError(t, err)
 	disabledReason := "disabled in config"
 

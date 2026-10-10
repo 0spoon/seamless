@@ -21,6 +21,7 @@ func TestFeatureSkillsCheck_InfoOnlyWhenAnInstalledSkillOutlivesItsFeature(t *te
 	home := t.TempDir()
 	codexHome := filepath.Join(t.TempDir(), "codex")
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("CODEX_HOME", codexHome)
 	t.Setenv("SEAMLESS_NO_RESEARCH_SKILL", "")
 

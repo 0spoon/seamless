@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +35,7 @@ func TestRunInstallHooks_SkillFailureDegradesAndContinues(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfgPath, []byte("mcp:\n  api_key: \"test-key\"\n"), 0o600))
 	t.Setenv("SEAMLESS_CONFIG", cfgPath)
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("CODEX_HOME", codexHome)
 	// This test is about the failure degrading, not about feature gating: with
 	// research on, both skills have work to do for the second client.
@@ -550,6 +552,7 @@ func TestAgentSkillClient_FollowsHookSelection(t *testing.T) {
 func clientInstallEnv(t *testing.T, home string) {
 	t.Helper()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
 	for _, key := range []string{"SEAMLESS_CONFIG", "SEAMLESS_MCP_API_KEY", "SEAMLESS_SERVER_URL", "SEAMLESS_ROLE"} {
 		if v, ok := os.LookupEnv(key); ok {
@@ -587,7 +590,9 @@ func TestRunInstallHooks_ServerURLWritesTheClientConfigAndOpensNoDatabase(t *tes
 	require.NotContains(t, body, "\ndata_dir:")
 	info, err := os.Stat(cfgPath)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	}
 
 	// The hooks point at the server, not at a loopback daemon.
 	hookFile, err := os.ReadFile(settings)
@@ -633,7 +638,7 @@ func TestRunInstallHooks_HTTPSClientWiresExecFormHooks(t *testing.T) {
 	out := captureStdout(t, func() error {
 		return runInstallHooks([]string{
 			"--client", "claude", "--settings", settings, "--mcp=false", "--skills=false",
-			"--seam", "/opt/seam", "--server-url", "https://seam.example:8443", "--api-key", "server-key",
+			"--seam", absFixture("/opt/seam"), "--server-url", "https://seam.example:8443", "--api-key", "server-key",
 		})
 	})
 
@@ -648,7 +653,7 @@ func TestRunInstallHooks_HTTPSClientWiresExecFormHooks(t *testing.T) {
 		require.Equal(t, "command", handler["type"], "%s must be exec-form under https", event)
 	}
 	ups := hooksObj["UserPromptSubmit"].([]any)[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
-	require.Equal(t, "/opt/seam", ups["command"])
+	require.Equal(t, absFixture("/opt/seam"), ups["command"])
 	require.Contains(t, ups["args"], "user-prompt-submit")
 	// No http hook means no bearer key in settings.json.
 	require.NotContains(t, string(raw), "Bearer")

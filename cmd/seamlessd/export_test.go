@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -75,7 +76,9 @@ func TestRunExport_WritesAnArchiveAndRefusesToClobberIt(t *testing.T) {
 
 	info, err := os.Stat(dest)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o600), info.Mode().Perm(), "an archive carries the corpus; it stays owner-only")
+	if runtime.GOOS != "windows" {
+		require.Equal(t, os.FileMode(0o600), info.Mode().Perm(), "an archive carries the corpus; it stays owner-only")
+	}
 	require.Greater(t, info.Size(), int64(0))
 
 	_, err = os.Stat(dest + exportTmpSuffix)

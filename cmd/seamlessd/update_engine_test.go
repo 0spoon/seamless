@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -76,12 +77,14 @@ func TestAutoUpdate_InstallsConfirmsAndRecords(t *testing.T) {
 	// The backup: 0600 in a 0700 directory, named for the release it replaces.
 	require.FileExists(t, a.BackupPath)
 	require.True(t, strings.HasPrefix(filepath.Base(a.BackupPath), "pre-update-v0.7.2-"))
-	fi, err := os.Stat(a.BackupPath)
-	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o600), fi.Mode().Perm())
-	di, err := os.Stat(filepath.Dir(a.BackupPath))
-	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o700), di.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		fi, err := os.Stat(a.BackupPath)
+		require.NoError(t, err)
+		require.Equal(t, os.FileMode(0o600), fi.Mode().Perm())
+		di, err := os.Stat(filepath.Dir(a.BackupPath))
+		require.NoError(t, err)
+		require.Equal(t, os.FileMode(0o700), di.Mode().Perm())
+	}
 
 	logged, err := os.ReadFile(a.LogPath)
 	require.NoError(t, err)

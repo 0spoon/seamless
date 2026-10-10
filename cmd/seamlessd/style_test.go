@@ -17,7 +17,7 @@ func TestTildePath(t *testing.T) {
 	require.NotEmpty(t, home)
 
 	require.Equal(t, "~", tildePath(home))
-	require.Equal(t, "~/.claude/settings.json",
+	require.Equal(t, filepath.Join("~", ".claude", "settings.json"),
 		tildePath(filepath.Join(home, ".claude", "settings.json")))
 	// A path outside home is returned verbatim.
 	require.Equal(t, "/etc/seamless.yaml", tildePath("/etc/seamless.yaml"))

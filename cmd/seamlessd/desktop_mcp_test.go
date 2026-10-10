@@ -4,10 +4,20 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// absFixture makes a POSIX fixture path absolute on this OS: a bare /opt/seam
+// is drive-relative on Windows, which portableAbsolutePath rightly refuses.
+func absFixture(p string) string {
+	if runtime.GOOS == "windows" {
+		return `C:` + filepath.FromSlash(p)
+	}
+	return p
+}
 
 func TestClaudeDesktopConfigPathFor(t *testing.T) {
 	path, err := claudeDesktopConfigPathFor("darwin", "/Users/o", "")
@@ -29,22 +39,22 @@ func TestClaudeDesktopConfigPathFor(t *testing.T) {
 }
 
 func TestDesiredClaudeDesktopMCPServer(t *testing.T) {
-	want, err := desiredClaudeDesktopMCPServer("/opt/seam", "/etc/seamless.yaml")
+	want, err := desiredClaudeDesktopMCPServer(absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, claudeDesktopMCPServer{
-		Command: "/opt/seam",
-		Args:    []string{"mcp-proxy", "--config", "/etc/seamless.yaml"},
+		Command: absFixture("/opt/seam"),
+		Args:    []string{"mcp-proxy", "--config", absFixture("/etc/seamless.yaml")},
 	}, want)
 
 	// No config path -> no trailing --config, matching codexMCPAddArgs.
-	want, err = desiredClaudeDesktopMCPServer("/opt/seam", "")
+	want, err = desiredClaudeDesktopMCPServer(absFixture("/opt/seam"), "")
 	require.NoError(t, err)
 	require.Equal(t, []string{"mcp-proxy"}, want.Args)
 
 	// The app starts servers with an undefined cwd: relative paths never work.
-	_, err = desiredClaudeDesktopMCPServer("seam", "/etc/seamless.yaml")
+	_, err = desiredClaudeDesktopMCPServer("seam", absFixture("/etc/seamless.yaml"))
 	require.ErrorContains(t, err, "not absolute")
-	_, err = desiredClaudeDesktopMCPServer("/opt/seam", "seamless.yaml")
+	_, err = desiredClaudeDesktopMCPServer(absFixture("/opt/seam"), "seamless.yaml")
 	require.ErrorContains(t, err, "not absolute")
 }
 
@@ -52,7 +62,7 @@ func TestDesiredClaudeDesktopMCPServer(t *testing.T) {
 // kind, the bearer key stays in the 0600 config the bridge reads at connect
 // time, never in another tool's config file.
 func TestDesiredClaudeDesktopMCPServer_CarriesNoSecret(t *testing.T) {
-	want, err := desiredClaudeDesktopMCPServer("/opt/seam", "/etc/seamless.yaml")
+	want, err := desiredClaudeDesktopMCPServer(absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.NoError(t, err)
 	blob, err := json.Marshal(want)
 	require.NoError(t, err)
@@ -92,11 +102,11 @@ func TestParseClaudeDesktopMCPServer(t *testing.T) {
 }
 
 func TestClassifyClaudeDesktopMCP(t *testing.T) {
-	want, err := desiredClaudeDesktopMCPServer("/opt/seam", "/etc/seamless.yaml")
+	want, err := desiredClaudeDesktopMCPServer(absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.NoError(t, err)
 
 	class, drift := classifyClaudeDesktopMCP(claudeDesktopMCPEntry{
-		Command: "/opt/seam", Args: []string{"mcp-proxy", "--config", "/etc/seamless.yaml"},
+		Command: absFixture("/opt/seam"), Args: []string{"mcp-proxy", "--config", absFixture("/etc/seamless.yaml")},
 	}, want)
 	require.Equal(t, mcpRegExact, class)
 	require.Empty(t, drift)
@@ -117,7 +127,7 @@ func TestClassifyClaudeDesktopMCP(t *testing.T) {
 
 func TestReconcileClaudeDesktopMCP_CreatesFilePreservingNothing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "Claude", "claude_desktop_config.json")
-	res, err := reconcileClaudeDesktopMCP(path, "/opt/seam", "/etc/seamless.yaml")
+	res, err := reconcileClaudeDesktopMCP(path, absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, mcpRegAdded, res.Action)
 
@@ -125,15 +135,17 @@ func TestReconcileClaudeDesktopMCP_CreatesFilePreservingNothing(t *testing.T) {
 	// later carry secrets in env.
 	info, err := os.Stat(path)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	}
 
 	var top map[string]map[string]claudeDesktopMCPServer
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &top))
 	require.Equal(t, claudeDesktopMCPServer{
-		Command: "/opt/seam",
-		Args:    []string{"mcp-proxy", "--config", "/etc/seamless.yaml"},
+		Command: absFixture("/opt/seam"),
+		Args:    []string{"mcp-proxy", "--config", absFixture("/etc/seamless.yaml")},
 	}, top["mcpServers"]["seamless"])
 
 	// No pre-existing file means no backup to take.
@@ -156,7 +168,7 @@ func TestReconcileClaudeDesktopMCP_PreservesUnknownKeysAndServers(t *testing.T) 
 }`
 	require.NoError(t, os.WriteFile(path, []byte(original), 0o644))
 
-	res, err := reconcileClaudeDesktopMCP(path, "/opt/seam", "/etc/seamless.yaml")
+	res, err := reconcileClaudeDesktopMCP(path, absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, mcpRegAdded, res.Action)
 
@@ -183,18 +195,20 @@ func TestReconcileClaudeDesktopMCP_PreservesUnknownKeysAndServers(t *testing.T) 
 	require.Equal(t, original, string(backup))
 	info, err := os.Stat(path)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o644), info.Mode().Perm(), "an existing file keeps its mode")
+	if runtime.GOOS != "windows" {
+		require.Equal(t, os.FileMode(0o644), info.Mode().Perm(), "an existing file keeps its mode")
+	}
 }
 
 func TestReconcileClaudeDesktopMCP_Idempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "claude_desktop_config.json")
-	res, err := reconcileClaudeDesktopMCP(path, "/opt/seam", "/etc/seamless.yaml")
+	res, err := reconcileClaudeDesktopMCP(path, absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, mcpRegAdded, res.Action)
 	first, err := os.ReadFile(path)
 	require.NoError(t, err)
 
-	res, err = reconcileClaudeDesktopMCP(path, "/opt/seam", "/etc/seamless.yaml")
+	res, err = reconcileClaudeDesktopMCP(path, absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, mcpRegUnchanged, res.Action)
 	second, err := os.ReadFile(path)
@@ -211,7 +225,7 @@ func TestReconcileClaudeDesktopMCP_RepairsOwnedDrift(t *testing.T) {
 	stale := `{"mcpServers":{"seamless":{"command":"/old/bin/seam","args":["mcp-proxy"],"env":{"X":"1"}}}}`
 	require.NoError(t, os.WriteFile(path, []byte(stale), 0o600))
 
-	res, err := reconcileClaudeDesktopMCP(path, "/opt/seam", "/etc/seamless.yaml")
+	res, err := reconcileClaudeDesktopMCP(path, absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.NoError(t, err)
 	require.Equal(t, mcpRegRepaired, res.Action)
 	require.Contains(t, res.Drift, "bridge command differs")
@@ -222,8 +236,8 @@ func TestReconcileClaudeDesktopMCP_RepairsOwnedDrift(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &top))
 	require.Equal(t, claudeDesktopMCPServer{
-		Command: "/opt/seam",
-		Args:    []string{"mcp-proxy", "--config", "/etc/seamless.yaml"},
+		Command: absFixture("/opt/seam"),
+		Args:    []string{"mcp-proxy", "--config", absFixture("/etc/seamless.yaml")},
 	}, top["mcpServers"]["seamless"], "repair rewrites the entry to the canonical desired form")
 }
 
@@ -232,7 +246,7 @@ func TestReconcileClaudeDesktopMCP_RefusesForeignEntry(t *testing.T) {
 	foreign := `{"mcpServers":{"seamless":{"command":"npx","args":["-y","other-server"]}}}`
 	require.NoError(t, os.WriteFile(path, []byte(foreign), 0o600))
 
-	_, err := reconcileClaudeDesktopMCP(path, "/opt/seam", "/etc/seamless.yaml")
+	_, err := reconcileClaudeDesktopMCP(path, absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.ErrorContains(t, err, "incompatible configuration")
 	require.ErrorContains(t, err, "Settings > Developer > Edit Config")
 
@@ -246,7 +260,7 @@ func TestReconcileClaudeDesktopMCP_RefusesUnparseableEntry(t *testing.T) {
 	odd := `{"mcpServers":{"seamless":"http://127.0.0.1:8081/api/mcp"}}`
 	require.NoError(t, os.WriteFile(path, []byte(odd), 0o600))
 
-	_, err := reconcileClaudeDesktopMCP(path, "/opt/seam", "/etc/seamless.yaml")
+	_, err := reconcileClaudeDesktopMCP(path, absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.ErrorContains(t, err, "unrecognized shape")
 
 	data, readErr := os.ReadFile(path)
@@ -257,7 +271,7 @@ func TestReconcileClaudeDesktopMCP_RefusesUnparseableEntry(t *testing.T) {
 func TestReconcileClaudeDesktopMCP_RefusesNonObjectMCPServers(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "claude_desktop_config.json")
 	require.NoError(t, os.WriteFile(path, []byte(`{"mcpServers":[]}`), 0o600))
-	_, err := reconcileClaudeDesktopMCP(path, "/opt/seam", "/etc/seamless.yaml")
+	_, err := reconcileClaudeDesktopMCP(path, absFixture("/opt/seam"), absFixture("/etc/seamless.yaml"))
 	require.ErrorIs(t, err, errMCPServersNotObject)
 }
 
@@ -351,10 +365,11 @@ func TestRunInstallHooks_ClaudeDesktop(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfgPath, []byte("mcp:\n  api_key: \"test-key\"\n"), 0o600))
 	t.Setenv("SEAMLESS_CONFIG", cfgPath)
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	desktopConfig := filepath.Join(tmp, "claude_desktop_config.json")
 	err := runInstallHooks([]string{
-		"--client", "claude-desktop", "--desktop-config", desktopConfig, "--seam", "/opt/seam",
+		"--client", "claude-desktop", "--desktop-config", desktopConfig, "--seam", absFixture("/opt/seam"),
 	})
 	require.NoError(t, err)
 
@@ -363,7 +378,7 @@ func TestRunInstallHooks_ClaudeDesktop(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &top))
 	require.Equal(t, claudeDesktopMCPServer{
-		Command: "/opt/seam",
+		Command: absFixture("/opt/seam"),
 		Args:    []string{"mcp-proxy", "--config", cfgPath},
 	}, top["mcpServers"]["seamless"])
 	require.NotContains(t, string(data), "test-key", "no secret may reach the app config")
@@ -424,7 +439,7 @@ func TestRunInstallHooks_MixedSelectionIncludesDesktop(t *testing.T) {
 
 func TestReconcileClaudeDesktopMCP_RejectsRelativePaths(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "claude_desktop_config.json")
-	_, err := reconcileClaudeDesktopMCP(path, "seam", "/etc/seamless.yaml")
+	_, err := reconcileClaudeDesktopMCP(path, "seam", absFixture("/etc/seamless.yaml"))
 	require.ErrorContains(t, err, "not absolute")
 	require.NoFileExists(t, path)
 }

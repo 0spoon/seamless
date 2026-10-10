@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -79,7 +80,9 @@ func TestTakeBackup(t *testing.T) {
 
 	fi, err := os.Stat(res.path)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0o600), fi.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		require.Equal(t, os.FileMode(0o600), fi.Mode().Perm())
+	}
 	entries, err := os.ReadDir(filepath.Dir(res.path))
 	require.NoError(t, err)
 	require.Len(t, entries, 1, "the staging directory and the temp file are gone")

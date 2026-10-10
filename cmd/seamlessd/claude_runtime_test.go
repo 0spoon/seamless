@@ -38,6 +38,7 @@ func TestDiscoverClaudeAppRuntimesMissingDirIsQuiet(t *testing.T) {
 func TestClaudeAppSharesSelectedHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	tests := []struct {
 		name  string
